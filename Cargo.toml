@@ -61,6 +61,7 @@ itertools = "0.11.0" # for msggen
 bstr = "1.6.2"
 widestring = "1.0" # msggen
 libc = "0.2.153"
+tracing = "0.1.41"
 
 [dev-dependencies]
 log = "0.4"
