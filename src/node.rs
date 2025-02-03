@@ -1228,6 +1228,10 @@ impl Node {
 
     let tracing_msg = format!("[rosout] ({log_name}) {log_msg}");
 
+    // make a span to filter out all the other stuff this lib puts out
+    let span = tracing::span!(tracing::Level::ERROR, "rosout_raw");
+    let _guard = span.enter();
+
     match level {
       ros_log::LogLevel::Fatal | ros_log::LogLevel::Error => tracing::error!("{tracing_msg}"),
       ros_log::LogLevel::Warn => tracing::warn!("{tracing_msg}"),
