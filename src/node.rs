@@ -37,7 +37,7 @@ use crate::{
   service::{Client, Server, Service, ServiceMapping},
 };
 
-type ParameterFunc = dyn Fn(&str, &ParameterValue) -> SetParametersResult + Send;
+type ParameterFunc = dyn Fn(&str, &ParameterValue) -> SetParametersResult + Send + Sync;
 
 /// Configuration of [Node]
 /// This is a builder-like struct.
@@ -1651,7 +1651,6 @@ macro_rules! rosout {
 // This is implemented as a separate struct instead of just async function in
 // Node so that it does not borrow the node and thus can be Send.
 //use pin_project::pin_project;
-
 pub enum ReaderWait<'a> {
   // We need to wait for an event that is for us
   Wait {
