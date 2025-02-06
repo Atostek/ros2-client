@@ -1764,25 +1764,6 @@ impl Future for WriterWait<'_> {
 #[cfg(test)]
 mod tests {
   use crate::Context;
-  use super::{Node, NodeName, NodeOptions};
-
-  #[test]
-  fn node_is_sync() {
-    let node = Node::new(
-      NodeName::new("/", "base_name").unwrap(),
-      NodeOptions::new(),
-      Context::new().unwrap(),
-    )
-    .unwrap();
-
-    fn requires_send_sync<T: Send + Sync>(_t: T) {}
-    requires_send_sync(node);
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use crate::Context;
 
   use super::{Node, NodeName, NodeOptions};
 
