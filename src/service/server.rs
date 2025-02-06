@@ -160,7 +160,10 @@ where
       response,
     )?;
     debug!("async_send_response: rmw_req_id = {rmw_req_id:?}");
-    debug!("async_send_response: related_sample_identity = {:?}", SampleIdentity::from(rmw_req_id));
+    debug!(
+      "async_send_response: related_sample_identity = {:?}",
+      SampleIdentity::from(rmw_req_id)
+    );
     let write_opts = WriteOptionsBuilder::new()
       .source_timestamp(Timestamp::now()) // always add source timestamp
       .related_sample_identity(SampleIdentity::from(rmw_req_id))

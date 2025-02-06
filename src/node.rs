@@ -10,8 +10,7 @@ use std::{
 };
 
 use futures::{
-  pin_mut, stream::FusedStream, task, task::Poll, Future, FutureExt, Stream, StreamExt,
-  stream,
+  pin_mut, stream, stream::FusedStream, task, task::Poll, Future, FutureExt, Stream, StreamExt,
 };
 use async_channel::Receiver;
 #[allow(unused_imports)]
@@ -466,9 +465,9 @@ impl Spinner {
           closed.push(i) // mark for deletion
         }
         Err(e) => {
-         debug!("send_status_event: Send error for {i}: {e:?}");
-         // We do not do anything about the error. It may be that the receiver
-         // is not interested and the channel is full.
+          debug!("send_status_event: Send error for {i}: {e:?}");
+          // We do not do anything about the error. It may be that the receiver
+          // is not interested and the channel is full.
         }
       }
     }
@@ -601,7 +600,6 @@ pub enum ParameterError {
   AlreadyDeclared,
   InvalidName,
 }
-
 
 // TODO: We should notify ROS discovery when readers or writers are removed, but
 // now we do not do that.
@@ -1643,13 +1641,11 @@ pub enum ReaderWait<'a> {
   // We need to wait for an event that is for us
   Wait {
     this_writer: GUID, // Writer who is waiting for Readers to appear
-    status_event_stream: stream::BoxStream<'a,NodeEvent>,
-
+    status_event_stream: stream::BoxStream<'a, NodeEvent>,
   },
   // No need to wait, can resolve immediately.
   Ready,
 }
-
 
 impl Future for ReaderWait<'_> {
   type Output = ();
@@ -1666,13 +1662,17 @@ impl Future for ReaderWait<'_> {
         loop {
           match status_event_stream.poll_next_unpin(cx) {
             // Check if we have RemoteReaderMatched event and it is for this_writer
-            Poll::Ready(Some(NodeEvent::DDS(DomainParticipantStatusEvent::RemoteReaderMatched {
-              local_writer, remote_reader
-            })))
-              if local_writer == this_writer => {
-                debug!("wait_for_reader: Matched remote reader {remote_reader:?}.");
-                return Poll::Ready(())
-              }
+            Poll::Ready(Some(NodeEvent::DDS(
+              DomainParticipantStatusEvent::RemoteReaderMatched {
+                local_writer,
+                remote_reader,
+              },
+            )))
+              if local_writer == this_writer =>
+            {
+              debug!("wait_for_reader: Matched remote reader {remote_reader:?}.");
+              return Poll::Ready(());
+            }
 
             Poll::Ready(_) => {
               // Received something else, such as other event or error
@@ -1698,7 +1698,7 @@ pub enum WriterWait<'a> {
   // We need to wait for an event that is for us
   Wait {
     this_reader: GUID,
-    status_event_stream: stream::BoxStream<'a,NodeEvent>,
+    status_event_stream: stream::BoxStream<'a, NodeEvent>,
   },
   // No need to wait, can resolve immediately.
   Ready,
@@ -1722,18 +1722,19 @@ impl Future for WriterWait<'_> {
           // installed and we are stuck.
           match status_event_stream.poll_next_unpin(cx) {
             // Check if we have RemoteWriterMatched event and it is for this_writer
-            Poll::Ready(Some(NodeEvent::DDS(DomainParticipantStatusEvent::RemoteWriterMatched {
-              local_reader,
-              remote_writer,
-            })))
+            Poll::Ready(Some(NodeEvent::DDS(
+              DomainParticipantStatusEvent::RemoteWriterMatched {
+                local_reader,
+                remote_writer,
+              },
+            )))
               if local_reader == this_reader =>
             {
               debug!("wait_for_writer: Matched remote writer {remote_writer:?}.");
-              return Poll::Ready(())
+              return Poll::Ready(());
             }
 
-            Poll::Ready(_) =>
-            {
+            Poll::Ready(_) => {
               // Received something else, such as other event or error
               trace!("=== other writer. Continue polling.");
               // No return, go to next iteration.
@@ -1750,7 +1751,6 @@ impl Future for WriterWait<'_> {
 #[cfg(test)]
 mod tests {
   use crate::Context;
-
   use super::{Node, NodeName, NodeOptions};
 
   #[test]
