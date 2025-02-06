@@ -10,7 +10,7 @@ use std::{
 };
 
 use futures::{
-  pin_mut, stream::FusedStream, task, task::Poll, Future, FutureExt, Stream, StreamExt, stream,
+  pin_mut, stream, stream::FusedStream, task, task::Poll, Future, FutureExt, Stream, StreamExt,
 };
 use async_channel::Receiver;
 #[allow(unused_imports)]
@@ -38,7 +38,6 @@ use crate::{
 };
 
 type ParameterFunc = dyn Fn(&str, &ParameterValue) -> SetParametersResult + Send + Sync;
-
 /// Configuration of [Node]
 /// This is a builder-like struct.
 ///
@@ -602,13 +601,13 @@ pub enum ParameterError {
   InvalidName,
 }
 
+// TODO: We should notify ROS discovery when readers or writers are removed, but
+// now we do not do that.
+
 /// Node in ROS2 network. Holds necessary readers and writers for rosout and
 /// parameter events topics internally.
 ///
 /// These are produced by a [`Context`].
-
-// TODO: We should notify ROS discovery when readers or writers are removed, but
-// now we do not do that.
 pub struct Node {
   node_name: NodeName,
   options: NodeOptions,
@@ -1759,6 +1758,25 @@ impl Future for WriterWait<'_> {
         }
       }
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::Context;
+  use super::{Node, NodeName, NodeOptions};
+
+  #[test]
+  fn node_is_sync() {
+    let node = Node::new(
+      NodeName::new("/", "base_name").unwrap(),
+      NodeOptions::new(),
+      Context::new().unwrap(),
+    )
+    .unwrap();
+
+    fn requires_send_sync<T: Send + Sync>(_t: T) {}
+    requires_send_sync(node);
   }
 }
 

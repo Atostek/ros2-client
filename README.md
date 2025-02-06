@@ -41,6 +41,10 @@ This is what is expected to work. There are no routine tests against older relea
 | Jazzy | Yes. Requires `ros2-client` 0.7.5 or newer | 
 
 
+## Version 0.8:
+* API change: `ParameterFunc` must now implement `Sync`, so that `Node` is also `Sync`. This helps in using multithreaded async executors.
+
+
 ## New in Version 0.7:
 * `NodeName` namespace is no longer allowed to be the empty string, because it confuses ROS 2 tools. Minimum namespace is "/".
 * Parameter support, incl. Paramater services
