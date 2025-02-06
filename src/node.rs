@@ -602,13 +602,14 @@ pub enum ParameterError {
   InvalidName,
 }
 
+
+// TODO: We should notify ROS discovery when readers or writers are removed, but
+// now we do not do that.
+
 /// Node in ROS2 network. Holds necessary readers and writers for rosout and
 /// parameter events topics internally.
 ///
 /// These are produced by a [`Context`].
-
-// TODO: We should notify ROS discovery when readers or writers are removed, but
-// now we do not do that.
 pub struct Node {
   node_name: NodeName,
   options: NodeOptions,
@@ -1638,7 +1639,6 @@ macro_rules! rosout {
 // This is implemented as a separate struct instead of just async function in
 // Node so that it does not borrow the node and thus can be Send.
 //use pin_project::pin_project;
-
 pub enum ReaderWait<'a> {
   // We need to wait for an event that is for us
   Wait {

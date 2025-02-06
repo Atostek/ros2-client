@@ -54,7 +54,6 @@ pub struct OutOfRangeError {}
 /// function returns None on an out of range DateTime. The dates that can be
 /// represented as nanoseconds are between 1677-09-21T00:12:43.145224192 and
 /// 2262-04-11T23:47:16.854775807"
-
 impl TryFrom<chrono::DateTime<Utc>> for ROSTime {
   type Error = OutOfRangeError;
 

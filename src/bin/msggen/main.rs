@@ -229,10 +229,10 @@ fn print_struct_definition<W: io::Write>(
 
   let not_yet = lines
     .iter()
-    .take_while(|p| p.0.as_ref().map_or(true, is_not_field));
+    .take_while(|p| p.0.as_ref().is_none_or(is_not_field));
   let got_field = lines
     .iter()
-    .skip_while(|p| p.0.as_ref().map_or(true, is_not_field));
+    .skip_while(|p| p.0.as_ref().is_none_or(is_not_field));
 
   for (item, comment) in not_yet {
     match (item, comment) {
