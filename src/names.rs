@@ -469,6 +469,6 @@ fn test_name_parse() {
     Name::new("/a/b/c", "nn").unwrap()
   );
 
-  assert_eq!(Name::parse("a/nn").unwrap().is_absolute(), false);
-  assert_eq!(Name::parse("/a/nn").unwrap().is_absolute(), true);
+  assert!(!Name::parse("a/nn").unwrap().is_absolute());
+  assert!(Name::parse("/a/nn").unwrap().is_absolute());
 }
