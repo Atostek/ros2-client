@@ -15,6 +15,7 @@ use futures::{
 use async_channel::Receiver;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
+use logging::NodeLoggingHandle;
 use serde::Serialize;
 use rustdds::{
   dds::{CreateError, CreateResult},
@@ -27,7 +28,6 @@ use crate::{
   context::{Context, DEFAULT_SUBSCRIPTION_QOS},
   entities_info::{NodeEntitiesInfo, ParticipantEntitiesInfo},
   gid::Gid,
-  log as ros_log,
   log::Log,
   names::*,
   parameters::*,
@@ -36,6 +36,8 @@ use crate::{
   ros_time::ROSTime,
   service::{Client, Server, Service, ServiceMapping},
 };
+
+pub mod logging;
 
 type ParameterFunc = dyn Fn(&str, &ParameterValue) -> SetParametersResult + Send + Sync;
 /// Configuration of [Node]
@@ -637,7 +639,7 @@ pub struct Node {
   status_event_senders: Arc<Mutex<Vec<async_channel::Sender<NodeEvent>>>>,
 
   // builtin writers and readers
-  rosout_writer: Option<Publisher<Log>>,
+  rosout_writer: Arc<Option<Publisher<Log>>>,
   rosout_reader: Option<Subscription<Log>>,
 
   // Parameter events (rcl_interfaces)
@@ -703,7 +705,7 @@ impl Node {
       suppress_node_info_updates: Arc::new(AtomicBool::new(false)),
       stop_spin_sender: None,
       status_event_senders: Arc::new(Mutex::new(Vec::new())),
-      rosout_writer: None, // Set below
+      rosout_writer: Arc::new(None), // Set below
       rosout_reader: None,
       parameter_events_writer: Arc::new(parameter_events_writer),
       parameters: Arc::new(Mutex::new(parameters)),
@@ -716,12 +718,12 @@ impl Node {
     node.suppress_node_info_updates(true);
 
     node.rosout_writer = if enable_rosout {
-      Some(
+      Arc::new(Some(
         // topic already has QoS defined
         node.create_publisher(&rosout_topic, None)?,
-      )
+      ))
     } else {
-      None
+      Arc::new(None) // FIXME: we already set that above!
     };
     node.rosout_reader = if rosout_reader {
       Some(node.create_subscription(&rosout_topic, None)?)
@@ -887,7 +889,7 @@ impl Node {
     let mut node_info = NodeEntitiesInfo::new(self.node_name.clone());
 
     node_info.add_writer(Gid::from(self.parameter_events_writer.guid()));
-    if let Some(row) = &self.rosout_writer {
+    if let Some(ref row) = *self.rosout_writer {
       node_info.add_writer(Gid::from(row.guid()));
     }
 
@@ -925,10 +927,6 @@ impl Node {
     if !self.suppress_node_info_updates.load(Ordering::SeqCst) {
       self.ros_context.update_node(self.generate_node_info());
     }
-  }
-
-  pub fn base_name(&self) -> &str {
-    self.node_name.base_name()
   }
 
   pub fn namespace(&self) -> &str {
@@ -1195,48 +1193,6 @@ impl Node {
   /// Availability depends on Node configuration.
   pub fn rosout_subscription(&self) -> Option<&Subscription<Log>> {
     self.rosout_reader.as_ref()
-  }
-
-  #[allow(clippy::too_many_arguments)]
-  pub fn rosout_raw(
-    &self,
-    timestamp: Timestamp,
-    level: crate::ros2::LogLevel,
-    log_name: &str,
-    log_msg: &str,
-    source_file: &str,
-    source_function: &str,
-    source_line: u32,
-  ) {
-    match &self.rosout_writer {
-      None => debug!("Rosout not enabled. msg: {log_msg}"),
-      Some(writer) => {
-        writer
-          .publish(ros_log::Log {
-            timestamp,
-            level: level as u8,
-            name: log_name.to_string(),
-            msg: log_msg.to_string(),
-            file: source_file.to_string(),
-            function: source_function.to_string(),
-            line: source_line,
-          })
-          .unwrap_or_else(|e| debug!("Rosout publish failed: {e:?}"));
-      }
-    };
-
-    let tracing_msg = format!("[rosout] ({log_name}) {log_msg}");
-
-    // make a span to filter out all the other stuff this lib puts out
-    let span = tracing::span!(tracing::Level::ERROR, "rosout_raw");
-    let _guard = span.enter();
-
-    match level {
-      ros_log::LogLevel::Fatal | ros_log::LogLevel::Error => tracing::error!("{tracing_msg}"),
-      ros_log::LogLevel::Warn => tracing::warn!("{tracing_msg}"),
-      ros_log::LogLevel::Info => tracing::info!("{tracing_msg}"),
-      ros_log::LogLevel::Debug => tracing::debug!("{tracing_msg}"),
-    };
   }
 
   /// Creates ROS2 topic and handles necessary conversions from DDS to ROS2
@@ -1592,6 +1548,16 @@ impl Node {
       my_action_name: action_name.clone(),
     })
   }
+
+  /// Makes a handle to the `rosout` logging publisher.
+  ///
+  /// You can send these across threads
+  pub fn logging_handle(&self) -> NodeLoggingHandle {
+    NodeLoggingHandle {
+      rosout_writer: Arc::clone(&self.rosout_writer),
+      base_name: self.node_name.base_name().to_string(),
+    }
+  }
 } // impl Node
 
 impl Drop for Node {
@@ -1628,13 +1594,12 @@ impl Drop for Node {
 /// ```
 #[macro_export]
 macro_rules! rosout {
-    // rosout!(node, Level::Info, "a {} event", event.kind);
-
     ($node:expr, $lvl:expr, $($arg:tt)+) => (
-        $node.rosout_raw(
+        $crate::logging::RosoutRaw::rosout_raw(
+            &$node,
             $crate::ros2::Timestamp::now(),
             $lvl,
-            $node.base_name(),
+            $crate::logging::RosoutRaw::base_name(&$node),
             &std::format!($($arg)+), // msg
             std::file!(),
             "<unknown_func>", // is there a macro to get current function name? (Which may be undefined)
