@@ -93,3 +93,77 @@ impl RosoutRaw for Node {
     self.node_name.base_name()
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use crate::{log::LogLevel, rosout, Context, NodeName};
+
+  mod new_namespace {
+    use crate::{log::LogLevel, rosout, Context, NodeName};
+
+    #[test]
+    fn logging_works_without_import() {
+      let ctx = Context::new().unwrap();
+
+      let node = ctx
+        .new_node(
+          NodeName::new("/", "logging_works_without_import_node").unwrap(),
+          Default::default(),
+        )
+        .unwrap();
+
+      rosout!(node, LogLevel::Warn, "log call works!");
+    }
+
+    #[test]
+    fn logging_handle_works_without_import() {
+      let ctx = Context::new().unwrap();
+
+      let node = ctx
+        .new_node(
+          NodeName::new("/", "logging_works_without_import_node").unwrap(),
+          Default::default(),
+        )
+        .unwrap();
+      let node_logging_handle = node.logging_handle();
+
+      rosout!(node, LogLevel::Warn, "log call works!");
+
+      std::thread::spawn(move || {
+        rosout!(node_logging_handle, LogLevel::Debug, "works here too");
+      })
+      .join()
+      .unwrap();
+    }
+  }
+
+  #[test]
+  fn log_across_threads() {
+    let ctx = Context::new().unwrap();
+
+    let node = ctx
+      .new_node(
+        NodeName::new("/", "log_across_threads_node").unwrap(),
+        Default::default(),
+      )
+      .unwrap();
+
+    // log some stuff on two threads at once
+    let node_logging_handle = node.logging_handle();
+    let handle = std::thread::spawn(move || {
+      for i in 0..50 {
+        rosout!(
+          node_logging_handle,
+          LogLevel::Debug,
+          "hey! system thread on {i}"
+        );
+      }
+    });
+
+    for j in 0..50 {
+      rosout!(node, LogLevel::Debug, "hi! main thread on {j}");
+    }
+
+    handle.join().unwrap();
+  }
+}
