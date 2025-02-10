@@ -129,7 +129,7 @@ pub mod ros2 {
 
 pub mod prelude {
   pub use crate::node::{
-    Node,
     logging::{NodeLoggingHandle, RosoutRaw},
+    Node,
   };
 }

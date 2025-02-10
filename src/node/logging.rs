@@ -5,7 +5,6 @@ use crate::{
   ros2::Timestamp,
   Publisher,
 };
-
 use super::Node;
 
 pub trait RosoutRaw {

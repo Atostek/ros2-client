@@ -1729,7 +1729,6 @@ impl Future for WriterWait<'_> {
 #[cfg(test)]
 mod tests {
   use crate::Context;
-
   use super::{Node, NodeName, NodeOptions};
 
   #[test]
