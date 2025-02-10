@@ -126,3 +126,10 @@ pub mod ros2 {
   pub use crate::names::Name; // import Name as ros2::Name if there is clash
                               // otherwise
 }
+
+pub mod prelude {
+  pub use crate::node::{
+    Node,
+    logging::{NodeLoggingHandle, RosoutRaw},
+  };
+}

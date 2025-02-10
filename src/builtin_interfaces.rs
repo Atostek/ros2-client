@@ -321,7 +321,7 @@ mod test {
 
   #[test]
   fn repr_conversion() {
-    repr_conv_test(Time::from_nanos(0_999_999_999));
+    repr_conv_test(Time::from_nanos(999_999_999));
     repr_conv_test(Time::from_nanos(1_000_000_000));
     repr_conv_test(Time::from_nanos(1_000_000_001));
 
@@ -329,7 +329,7 @@ mod test {
     repr_conv_test(Time::from_nanos(2_000_000_000));
     repr_conv_test(Time::from_nanos(2_000_000_001));
 
-    repr_conv_test(Time::from_nanos(-0_999_999_999));
+    repr_conv_test(Time::from_nanos(-999_999_999));
     repr_conv_test(Time::from_nanos(-1_000_000_000));
     repr_conv_test(Time::from_nanos(-1_000_000_001));
 
