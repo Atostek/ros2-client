@@ -26,7 +26,7 @@ fn main() {
 
   let chatter_topic = node
     .create_topic(
-      &Name::new("/", "topic").unwrap(),
+      &Name::new("/", "chatter").unwrap(),
       MessageTypeName::new("std_msgs", "String"),
       &topic_qos,
     )

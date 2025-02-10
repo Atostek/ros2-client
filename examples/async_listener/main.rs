@@ -19,12 +19,12 @@ pub fn main() {
     .reliability(policy::Reliability::Reliable {
       max_blocking_time: ros2::Duration::from_millis(100),
     })
-    .durability(policy::Durability::TransientLocal)
+    //.durability(policy::Durability::TransientLocal)
     .build();
 
   let chatter_topic = node
     .create_topic(
-      &Name::new("/", "topic").unwrap(),
+      &Name::new("/", "chatter").unwrap(),
       MessageTypeName::new("std_msgs", "String"),
       &ros2_client::DEFAULT_SUBSCRIPTION_QOS,
     )
