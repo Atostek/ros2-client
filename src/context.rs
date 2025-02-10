@@ -202,7 +202,7 @@ impl Context {
   /// Get a (handle to) the ROSOut logging Topic.
   ///
   /// Note: The recommended way to write log messages to ROSOut is via the
-  /// [`crate::rosout`] macro.
+  /// [`crate::rosout!`] macro.
   pub fn get_rosout_topic(&self) -> Topic {
     self.inner.lock().unwrap().ros_rosout_topic.clone()
   }

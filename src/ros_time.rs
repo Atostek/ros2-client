@@ -1,3 +1,10 @@
+//! ROS timing abstractions [`ROSTime`] and [`SystemTime`]
+//!
+//! See the ROS 2 design article [Clock and Time](https://design.ros2.org/articles/clock_and_time.html).
+//!
+//! The abstaction Steady Time is not implemented here, because it is not
+//! intended to be communicated over interfaces, but kept internal to a
+//! component.
 use std::{
   convert::TryFrom,
   ops::{Add, Sub},
@@ -92,11 +99,17 @@ impl From<ROSTime> for Timestamp {
   }
 }
 
-/// failure to convert DDS Timestamp to ROSTime
+/// Failure to convert DDS/RTPS Timestamp (`Time_t`) to `ROSTime`.
+///
+/// See DDS Specification v1.4 Sections "2.3.2 PIM to PSM Mapping Rules"
+/// and "2.3.3 DCPS PSM : IDL" for DDS `Time_t` type definitions and RTPS
+/// Specification v2.5 Section "8.3.2 Type Definitions" for RTPS view of
+/// `Time_t`.
 pub enum TimestampConversionError {
-  Overflow, // Timestap is too far in the future
-  Invalid,  // Timestamp indicates an invalid value
-  Infinite, // Timestamp indicates infinitiy
+  /// DDS Timestamp indicates an invalid value
+  Invalid,
+  /// DDS Timestamp indicates "infinity"  
+  Infinite,
 }
 
 impl TryFrom<Timestamp> for ROSTime {

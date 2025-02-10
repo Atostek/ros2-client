@@ -1,3 +1,4 @@
+//! Helpers for rosout logging
 use std::sync::Arc;
 
 use crate::{
@@ -5,13 +6,13 @@ use crate::{
   ros2::Timestamp,
   Publisher,
 };
-use super::Node;
 
+/// Ability to write to rosout log.
 pub trait RosoutRaw {
   /// Returns the `rosout` writer from `self`.
   fn rosout_writer(&self) -> Arc<Option<Publisher<Log>>>;
 
-  /// Grabs the "base name" of the node.
+  /// Returns the base name of the Node.
   fn base_name(&self) -> &str;
 
   /// Logs to `rosout`.
@@ -63,14 +64,14 @@ pub trait RosoutRaw {
   }
 }
 
-/// A "handle" to log from any node without moving it between threads.
+/// A handle to log from any node without moving it between threads.
 pub struct NodeLoggingHandle {
   /// Writes to the `rosout` topic. Shared with all other instances of the
   /// parent node.
-  pub(super) rosout_writer: Arc<Option<Publisher<Log>>>,
+  pub(crate) rosout_writer: Arc<Option<Publisher<Log>>>,
 
   /// The base name of the represented node.
-  pub base_name: String,
+  pub(crate) base_name: String,
 }
 
 impl RosoutRaw for NodeLoggingHandle {
@@ -80,16 +81,6 @@ impl RosoutRaw for NodeLoggingHandle {
 
   fn base_name(&self) -> &str {
     &self.base_name
-  }
-}
-
-impl RosoutRaw for Node {
-  fn rosout_writer(&self) -> Arc<Option<Publisher<Log>>> {
-    Arc::clone(&self.rosout_writer)
-  }
-
-  fn base_name(&self) -> &str {
-    self.node_name.base_name()
   }
 }
 

@@ -83,6 +83,7 @@ pub mod parameters;
 pub mod pubsub;
 pub mod rcl_interfaces;
 pub mod ros_time;
+pub mod rosout;
 pub mod service;
 
 pub mod steady_time;
@@ -114,6 +115,8 @@ pub use action::{Action, ActionTypes};
 pub use wide_string::WString;
 #[doc(inline)]
 pub use ros_time::{ROSTime, SystemTime};
+#[doc(inline)]
+pub use rosout::{NodeLoggingHandle, RosoutRaw};
 
 /// Module for stuff we do not want to export from top level;
 pub mod ros2 {
@@ -125,11 +128,4 @@ pub mod ros2 {
   // TODO: What to do about SecurityError (exists based on feature "security")
   pub use crate::names::Name; // import Name as ros2::Name if there is clash
                               // otherwise
-}
-
-pub mod prelude {
-  pub use crate::node::{
-    logging::{NodeLoggingHandle, RosoutRaw},
-    Node,
-  };
 }

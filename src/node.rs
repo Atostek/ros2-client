@@ -15,7 +15,6 @@ use futures::{
 use async_channel::Receiver;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use logging::NodeLoggingHandle;
 use serde::Serialize;
 use rustdds::{
   dds::{CreateError, CreateResult},
@@ -34,10 +33,9 @@ use crate::{
   pubsub::{Publisher, Subscription},
   rcl_interfaces,
   ros_time::ROSTime,
+  rosout::{NodeLoggingHandle, RosoutRaw},
   service::{Client, Server, Service, ServiceMapping},
 };
-
-pub mod logging;
 
 type ParameterFunc = dyn Fn(&str, &ParameterValue) -> SetParametersResult + Send + Sync;
 /// Configuration of [Node]
@@ -1574,6 +1572,16 @@ impl Drop for Node {
   }
 }
 
+impl RosoutRaw for Node {
+  fn rosout_writer(&self) -> Arc<Option<Publisher<Log>>> {
+    Arc::clone(&self.rosout_writer)
+  }
+
+  fn base_name(&self) -> &str {
+    self.node_name.base_name()
+  }
+}
+
 /// Macro for writing to [rosout](https://wiki.ros.org/rosout) topic.
 ///
 /// # Example
@@ -1595,11 +1603,11 @@ impl Drop for Node {
 #[macro_export]
 macro_rules! rosout {
     ($node:expr, $lvl:expr, $($arg:tt)+) => (
-        $crate::logging::RosoutRaw::rosout_raw(
+        $crate::rosout::RosoutRaw::rosout_raw(
             &$node,
             $crate::ros2::Timestamp::now(),
             $lvl,
-            $crate::logging::RosoutRaw::base_name(&$node),
+            $crate::rosout::RosoutRaw::base_name(&$node),
             &std::format!($($arg)+), // msg
             std::file!(),
             "<unknown_func>", // is there a macro to get current function name? (Which may be undefined)
