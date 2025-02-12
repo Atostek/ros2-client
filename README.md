@@ -1,5 +1,9 @@
 # ROS2 Client
 
+![CI / static checks](https://github.com/Atostek/ros2-client/actions/workflows/static-checks.yml/badge.svg)
+![CI / tests](https://github.com/Atostek/ros2-client/actions/workflows/tests.yml/badge.svg)
+
+
 This is a Rust native client library for [ROS2](https://docs.ros.org/en/galactic/index.html). 
 It does not link to [rcl](https://github.com/ros2/rcl), 
 [rclcpp](https://docs.ros2.org/galactic/api/rclcpp/index.html), or any non-Rust DDS library. 
