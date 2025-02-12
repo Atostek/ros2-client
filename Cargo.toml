@@ -66,7 +66,7 @@ tracing = "0.1.41"
 
 [dev-dependencies]
 log = "0.4"
-termion = "1.5.5"
+termion = "4.0.3"
 pretty_env_logger = "0.5.0"
 # turle_teleop
 log4rs = "1.2"
