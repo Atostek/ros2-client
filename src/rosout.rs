@@ -16,7 +16,7 @@ pub trait RosoutRaw {
   fn base_name(&self) -> &str;
 
   /// Logs to `rosout`.
-  #[expect(clippy::too_many_arguments)]
+  #[allow(clippy::too_many_arguments)]
   #[tracing::instrument(skip_all)]
   fn rosout_raw(
     &self,

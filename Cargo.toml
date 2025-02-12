@@ -2,6 +2,7 @@
 name = "ros2-client"
 version = "0.8.0" 
 edition = "2018"
+rust-version = "1.82.0"
 authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>"]
 description = "ROS2 client library based on RustDDS"
 readme = "README.md"
