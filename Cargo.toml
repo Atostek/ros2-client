@@ -77,4 +77,4 @@ smol = "1.3"
 async-io = "2.2.0"
 
 # tests
-tokio = { version = "1", features=["rt", "macros", "time"]}
+tokio = { version = "1", features=["rt", "macros", "time", "sync"]}
