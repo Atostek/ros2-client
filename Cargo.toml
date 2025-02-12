@@ -69,7 +69,7 @@ termion = "1.5.5"
 pretty_env_logger = "0.4.0"
 # turle_teleop
 log4rs = "1.2"
-test-case = "1.2.0"
+test-case = "3.3.1"
 ctrlc = "3.1.6"
 
 # async examples
