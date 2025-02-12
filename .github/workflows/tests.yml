@@ -1,0 +1,22 @@
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+name: Continuous Integration / Tests
+
+jobs:
+
+  test-on-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo test -- --test-threads=1
+
+  test-security-on-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo test --features=security -- --test-threads=1
