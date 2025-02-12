@@ -3,7 +3,7 @@ on:
     branches: [master]
   pull_request:
 
-name: Continuous Integration / Tests
+name: CI / Tests
 
 jobs:
 
