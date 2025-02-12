@@ -58,7 +58,7 @@ chrono = { version = ">=0.4.35" } # actions need timestamps
 
 nom = {version = "7.1.3", features = ["alloc"] } # for msggen
 clap = "4.4.3" # for msggen
-itertools = "0.11.0" # for msggen
+itertools = "0.14.0" # for msggen
 bstr = "1.6.2"
 widestring = "1.0" # msggen
 libc = "0.2.153"
