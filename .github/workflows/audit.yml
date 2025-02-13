@@ -5,16 +5,11 @@ on:
     paths: 
       - '**/Cargo.toml'
       - '**/Cargo.lock'
+      - '.github/workflows/audit.yml'
       
-github-token:
-  action-input:
-    input: token
-    is-default: false
-  permissions:
-    issues: write
-    issues-reason: to create issues
-    checks: write
-    checks-reason: to create check
+permissions:
+  issues: write
+  checks: write
 
 jobs:
   security_audit:

@@ -5,6 +5,8 @@ on:
 
 name: CI / Tests on macOS
 
+permissions: read-all
+
 jobs:
 
   test-on-macos:

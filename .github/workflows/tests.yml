@@ -5,6 +5,8 @@ on:
 
 name: CI / Tests
 
+permissions: read-all
+
 jobs:
 
   test-on-ubuntu:

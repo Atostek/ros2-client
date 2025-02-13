@@ -5,6 +5,8 @@ on:
 
 name: CI / Static Checks
 
+permissions: read-all
+
 jobs:
 
   fmt:
