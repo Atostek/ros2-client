@@ -1,9 +1,9 @@
 # ROS2 Client
 
-![static checks](https://github.com/Atostek/ros2-client/actions/workflows/static-checks.yml/badge.svg)
-![tests on Ubuntu](https://github.com/Atostek/ros2-client/actions/workflows/tests.yml/badge.svg)
-![tests on macOS](https://github.com/Atostek/ros2-client/actions/workflows/tests-macos.yml/badge.svg)
-![audit](https://github.com/Atostek/ros2-client/actions/workflows/audit.yml/badge.svg)
+[![Static Checks](https://github.com/Atostek/ros2-client/actions/workflows/static-checks.yml/badge.svg)](https://github.com/Atostek/ros2-client/actions/workflows/static-checks.yml)
+[![Tests on Ubuntu](https://github.com/Atostek/ros2-client/actions/workflows/tests.yml/badge.svg)](https://github.com/Atostek/ros2-client/actions/workflows/tests.yml)
+[![Tests on macOS](https://github.com/Atostek/ros2-client/actions/workflows/tests-macos.yml/badge.svg)](https://github.com/Atostek/ros2-client/actions/workflows/tests-macos.yml)
+[![Security audit](https://github.com/Atostek/ros2-client/actions/workflows/audit.yml/badge.svg)](https://github.com/Atostek/ros2-client/actions/workflows/audit.yml)
 
 
 This is a Rust native client library for [ROS2](https://docs.ros.org/en/galactic/index.html). 
