@@ -1623,6 +1623,7 @@ macro_rules! rosout {
 // This is implemented as a separate struct instead of just async function in
 // Node so that it does not borrow the node and thus can be Send.
 //use pin_project::pin_project;
+#[must_use = "futures do nothing unless you `.await` or poll them"]
 pub enum ReaderWait<'a> {
   // We need to wait for an event that is for us
   Wait {
@@ -1680,6 +1681,7 @@ impl Future for ReaderWait<'_> {
 //
 // This is implemented as a separate struct instead of just async function in
 // Node so that it does not borrow the node and thus can be Send.
+#[must_use = "futures do nothing unless you `.await` or poll them"]
 pub enum WriterWait<'a> {
   // We need to wait for an event that is for us
   Wait {
