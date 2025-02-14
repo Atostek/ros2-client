@@ -2,16 +2,16 @@ use std::str::FromStr;
 
 #[allow(unused_imports)]
 use nom::{
+  Parser,
   branch::alt,
   bytes::complete::{is_not, tag, take_till, take_until, take_while1},
   character::complete::{
     alphanumeric1, char, digit1, line_ending, not_line_ending, one_of, space0,
   },
-  character::is_alphanumeric,
   combinator::{eof, map, map_res, opt, recognize, value},
   error::{dbg_dmp, ParseError},
   multi::{many0, many1},
-  sequence::{delimited, pair, preceded, terminated, tuple},
+  sequence::{delimited, pair, preceded, terminated},
   IResult,
 };
 
@@ -72,19 +72,19 @@ pub enum Value {
 
 #[allow(clippy::type_complexity)]
 pub fn msg_spec(i: &str) -> IResult<&str, Vec<(Option<Item>, Option<Comment>)>> {
-  many0(line)(i)
+  many0(line).parse(i)
 }
 
 fn line(i: &str) -> IResult<&str, (Option<Item>, Option<Comment>)> {
-  terminated(pair(alt((item, just_space)), opt(comment)), line_ending)(i)
+  terminated(pair(alt((item, just_space)), opt(comment)), line_ending).parse(i)
 }
 
 fn item(i: &str) -> IResult<&str, Option<Item>> {
-  map(delimited(space0, alt((constant, field)), space0), Some)(i)
+  map(delimited(space0, alt((constant, field)), space0), Some).parse(i)
 }
 
 fn just_space(i: &str) -> IResult<&str, Option<Item>> {
-  value(None, space0)(i)
+  value(None, space0).parse(i)
 }
 
 fn field(i: &str) -> IResult<&str, Item> {
@@ -172,7 +172,7 @@ fn type_spec(i: &str) -> IResult<&str, TypeName> {
   let (i, (base, array_spec)) = pair(
     alt((bounded_string, primitive_type, complex_type)),
     opt(array_specifier),
-  )(i)?;
+  ).parse(i)?;
   Ok((i, TypeName { base, array_spec }))
 }
 
@@ -180,11 +180,11 @@ fn identifier(i: &str) -> IResult<&str, String> {
   map(
     recognize(many1(alt((alphanumeric1, tag("_"))))),
     String::from,
-  )(i)
+  ).parse(i)
 }
 
 fn uint_value(i: &str) -> IResult<&str, u64> {
-  map(digit1, |s: &str| u64::from_str(s).expect("bad uint"))(i)
+  map(digit1, |s: &str| u64::from_str(s).expect("bad uint")).parse(i)
 }
 
 fn value_spec(i: &str) -> IResult<&str, Value> {
@@ -203,13 +203,13 @@ fn value_spec(i: &str) -> IResult<&str, Value> {
     int_value,
     u_int_value,
     string_value,
-  ))(i)
+  )).parse(i)
 }
 
 fn comment(i: &str) -> IResult<&str, Comment> {
   map(recognize(pair(tag("#"), not_line_ending)), |s: &str| {
     Comment(s.to_string())
-  })(i)
+  }).parse(i)
 }
 
 // from "nom" cookbook
@@ -217,19 +217,19 @@ fn float(input: &str) -> IResult<&str, f64> {
   map(
     alt((
       // Case one: .42
-      recognize(tuple((
+      recognize( (
         char('.'),
         decimal,
-        opt(tuple((one_of("eE"), opt(one_of("+-")), decimal))),
-      ))), // Case two: 42e42 and 42.42e42
-      recognize(tuple((
+        opt( (one_of("eE"), opt(one_of("+-")), decimal) ),
+      )), // Case two: 42e42 and 42.42e42
+      recognize( (
         decimal,
         opt(preceded(char('.'), decimal)),
         one_of("eE"),
         opt(one_of("+-")),
         decimal,
-      ))), // Case three: 42. and 42.42
-      recognize(tuple((decimal, char('.'), opt(decimal)))),
+      )), // Case three: 42. and 42.42
+      recognize((decimal, char('.'), opt(decimal))),
     )),
     |f: &str| f64::from_str(f).expect("Failed to parse floating point value."), /* Failing here
                                                                                  * means that
@@ -238,12 +238,16 @@ fn float(input: &str) -> IResult<&str, f64> {
                                                                                  * disagree on
                                                                                  * what is a valid
                                                                                  * float. */
-  )(input)
+  ).parse(input)
 }
 
 // from "nom" cookbook
 fn decimal(input: &str) -> IResult<&str, &str> {
-  recognize(many1(terminated(one_of("0123456789"), many0(char('_')))))(input)
+  recognize(
+    many1(
+      terminated(one_of("0123456789"), many0(char('_')))
+      )
+    ).parse(input)
 }
 
 #[test]
