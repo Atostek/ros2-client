@@ -3,7 +3,7 @@ use std::{convert::TryFrom, time::Duration};
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 use futures::{stream::StreamExt, FutureExt as StdFutureExt};
-use smol::future::FutureExt;
+use smol::{future::FutureExt, pin};
 use ros2_client::{
   action, action::GoalEndStatus, ActionTypeName, Context, Name, Node, NodeName, NodeOptions,
   ServiceMapping,
@@ -91,7 +91,8 @@ fn main() {
 
   let main_loop = async {
     let mut run = true;
-    let mut stop = stop_receiver.recv().fuse();
+    let stop = stop_receiver.recv().fuse();
+    pin!(stop);
 
     while run {
       info!("Waiting for a new goal.");

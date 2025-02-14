@@ -3,7 +3,7 @@ use std::time::Duration;
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 use futures::{pin_mut, FutureExt as StdFutureExt, StreamExt};
-use smol::future::FutureExt;
+use smol::{future::FutureExt, pin};
 use ros2_client::{
   action, action_msgs, ActionTypeName, Context, Name, NodeName, NodeOptions, ServiceMapping,
 };
@@ -91,7 +91,8 @@ fn main() {
 
   let main_loop = async {
     let mut run = true;
-    let mut stop = stop_receiver.recv().fuse();
+    let stop = stop_receiver.recv().fuse();
+    pin!(stop);
 
     let mut tick_stream = // Send new Goal at every tick, if previous one is not running.
       futures::StreamExt::fuse(smol::Timer::interval(Duration::from_secs(1)));

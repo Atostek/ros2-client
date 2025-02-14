@@ -3,7 +3,7 @@ use std::time::Duration;
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 use futures::{FutureExt as StdFutureExt, StreamExt, TryFutureExt};
-use smol::future::FutureExt;
+use smol::{future::FutureExt, pin};
 use serde::{Deserialize, Serialize};
 use ros2_client::{
   service::CallServiceError, AService, Context, Message, Name, Node, NodeName, NodeOptions,
@@ -76,7 +76,8 @@ fn main() {
 
   let main_loop = async {
     let mut run = true;
-    let mut stop = stop_receiver.recv().fuse();
+    let stop = stop_receiver.recv().fuse();
+    pin!(stop);
     let mut tick_stream = futures::StreamExt::fuse(smol::Timer::interval(Duration::from_secs(2)));
 
     while run {
