@@ -2,7 +2,6 @@ use std::str::FromStr;
 
 #[allow(unused_imports)]
 use nom::{
-  Parser,
   branch::alt,
   bytes::complete::{is_not, tag, take_till, take_until, take_while1},
   character::complete::{
@@ -12,7 +11,7 @@ use nom::{
   error::{dbg_dmp, ParseError},
   multi::{many0, many1},
   sequence::{delimited, pair, preceded, terminated},
-  IResult,
+  IResult, Parser,
 };
 
 use super::stringparser::parse_string;
@@ -172,7 +171,8 @@ fn type_spec(i: &str) -> IResult<&str, TypeName> {
   let (i, (base, array_spec)) = pair(
     alt((bounded_string, primitive_type, complex_type)),
     opt(array_specifier),
-  ).parse(i)?;
+  )
+  .parse(i)?;
   Ok((i, TypeName { base, array_spec }))
 }
 
@@ -180,7 +180,8 @@ fn identifier(i: &str) -> IResult<&str, String> {
   map(
     recognize(many1(alt((alphanumeric1, tag("_"))))),
     String::from,
-  ).parse(i)
+  )
+  .parse(i)
 }
 
 fn uint_value(i: &str) -> IResult<&str, u64> {
@@ -203,13 +204,15 @@ fn value_spec(i: &str) -> IResult<&str, Value> {
     int_value,
     u_int_value,
     string_value,
-  )).parse(i)
+  ))
+  .parse(i)
 }
 
 fn comment(i: &str) -> IResult<&str, Comment> {
   map(recognize(pair(tag("#"), not_line_ending)), |s: &str| {
     Comment(s.to_string())
-  }).parse(i)
+  })
+  .parse(i)
 }
 
 // from "nom" cookbook
@@ -217,12 +220,12 @@ fn float(input: &str) -> IResult<&str, f64> {
   map(
     alt((
       // Case one: .42
-      recognize( (
+      recognize((
         char('.'),
         decimal,
-        opt( (one_of("eE"), opt(one_of("+-")), decimal) ),
+        opt((one_of("eE"), opt(one_of("+-")), decimal)),
       )), // Case two: 42e42 and 42.42e42
-      recognize( (
+      recognize((
         decimal,
         opt(preceded(char('.'), decimal)),
         one_of("eE"),
@@ -238,16 +241,13 @@ fn float(input: &str) -> IResult<&str, f64> {
                                                                                  * disagree on
                                                                                  * what is a valid
                                                                                  * float. */
-  ).parse(input)
+  )
+  .parse(input)
 }
 
 // from "nom" cookbook
 fn decimal(input: &str) -> IResult<&str, &str> {
-  recognize(
-    many1(
-      terminated(one_of("0123456789"), many0(char('_')))
-      )
-    ).parse(input)
+  recognize(many1(terminated(one_of("0123456789"), many0(char('_'))))).parse(input)
 }
 
 #[test]
