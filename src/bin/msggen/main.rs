@@ -220,7 +220,8 @@ fn list_packges_with_msgs(
                   println!("Weird file name {:?}", path);
                 }
               } else if path.extension() == Some(OsStr::new("idl"))
-                        || path.extension() == Some(OsStr::new("json")) {
+                || path.extension() == Some(OsStr::new("json"))
+              {
                 // These are not the droids you are looking for.
               } else {
                 println!("{:?} is not .msg", path);
@@ -297,6 +298,7 @@ fn print_struct_definition<W: io::Write>(
     }
   }
 
+  writeln!(w)?;
   writeln!(w, "#[derive(Debug, Serialize, Deserialize)]")?;
   writeln!(w, "pub struct {name} {{")?;
   for (item, comment) in got_field {
@@ -304,7 +306,7 @@ fn print_struct_definition<W: io::Write>(
       (None, None) => writeln!(w)?, // empty line
       (None, Some(Comment(c))) => writeln!(w, "  // {c}")?,
       (Some(item), comment_opt) => {
-        write!(w, "  ")?;
+        write!(w, "  pub ")?;
         match item {
           Item::Field {
             type_name,
