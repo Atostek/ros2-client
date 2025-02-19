@@ -1,4 +1,10 @@
-use std::{collections::BTreeMap, fs, io, io::Write};
+use std::{
+  collections::BTreeMap,
+  ffi::OsStr,
+  fs, io,
+  io::Write,
+  path::{Path, PathBuf},
+};
 
 use clap::{Arg, Command}; // command line argument processing
 
@@ -14,16 +20,19 @@ fn main() -> io::Result<()> {
   let arg_matches = Command::new("msggen")
     .version("0.0.1")
     .author("Juhana Helovuo <juhana.helovuo@atostek.com>")
-    .about("ros2-client .sg compiler for ros2-client / RustDDS")
+    .about("ros2-client .msg to Rust compiler for ros2-client / RustDDS")
+    .after_help("Example: ./msggen --workspace /opt/ros/jazzy --type turtlesim/Pose --output generated_rust_dir")
     .arg(
       Arg::new("input")
         .short('i')
+        .long("input")
         .help("Input .msg file name")
         .value_name("file"),
     )
     .arg(
       Arg::new("type")
         .short('t')
+        .long("typename")
         .help("ROS 2 type to be translated. Can be used multiple times.")
         .value_name("package_name/type_name")
         .conflicts_with("input"),
@@ -31,22 +40,38 @@ fn main() -> io::Result<()> {
     .arg(
       Arg::new("output")
         .short('o')
+        .long("output")
         .help("Output path")
         .value_name("file/dir"),
     )
     .arg(
       Arg::new("workspace")
         .short('w')
+        .long("workspace")
         .help("Ros 2 workspace path")
         .value_name("dir"),
     )
+    .arg(
+      Arg::new("logdir")
+        .short('l')
+        .long("logdir")
+        .help("Dir to write colcon logs")
+        .value_name("logdir"),
+    )
     .get_matches();
+
+  let colcon_log_directory: PathBuf =
+    if let Some(log_dir) = arg_matches.get_one::<String>("logdir").map(String::as_str) {
+      PathBuf::from(log_dir)
+    } else {
+      PathBuf::from("/dev/null")
+    };
 
   if let Some(input_file_name) = arg_matches.get_one::<String>("input").map(String::as_str) {
     // Just one input file
     let input_file = fs::File::open(input_file_name)?;
 
-    let type_name = std::path::Path::new(input_file_name)
+    let type_name = Path::new(input_file_name)
       .file_stem()
       .ok_or(io::Error::new(
         io::ErrorKind::Other,
@@ -87,7 +112,7 @@ fn main() -> io::Result<()> {
     );
     for ros2_type in ros2_types_requested {
       use itertools::Itertools; // to get .unique()
-      let new_pkgs = list_packges_with_msgs(workspace_dir, ros2_type)?;
+      let new_pkgs = list_packges_with_msgs(workspace_dir, ros2_type, &colcon_log_directory)?;
       let prev_pkgs = pkgs;
       pkgs = prev_pkgs
         .iter()
@@ -138,21 +163,29 @@ struct RosPkg {
   types: BTreeMap<String, String>, // .msg file name stems --> file contents
 }
 
-use std::{ffi::OsStr, path::PathBuf};
+//use std::{ffi::OsStr, path::PathBuf};
 
 use bstr::ByteSlice;
 
-fn list_packges_with_msgs(workspace_dir: &str, ros2_abs_type: &str) -> io::Result<Vec<RosPkg>> {
+fn list_packges_with_msgs(
+  workspace_dir: &str,
+  ros2_abs_type: &str,
+  colcon_log_directory: &Path,
+) -> io::Result<Vec<RosPkg>> {
   let (package_name, _type_name) = ros2_abs_type.rsplit_once('/').ok_or(io::Error::new(
     io::ErrorKind::Other,
     "Need package_name/type_name",
   ))?;
 
   let cwd = std::env::current_dir()?;
+  println!("Changing to {workspace_dir}");
   std::env::set_current_dir(workspace_dir)?;
 
   println!("Querying colcon");
+  let mut colcon_log_option = "--log-base=".to_string();
+  colcon_log_option.push_str(colcon_log_directory.to_str().unwrap());
   let colcon_output = std::process::Command::new("colcon")
+    .arg(OsStr::new(&colcon_log_option))
     .arg("list")
     .arg("--topological-order")
     .arg("--packages-up-to")
