@@ -124,7 +124,7 @@ fn main() -> io::Result<()> {
 
     // Now we should have a Vec of unique required pkgs from most primitive to least
     // primitive.
-
+    println!("Generating code to directory '{output_dir}'");
     let mut mod_file_name = output_dir.clone();
     mod_file_name.extend(["/mod.rs"]);
     let mut mod_file = fs::File::create(mod_file_name)?;
@@ -219,6 +219,9 @@ fn list_packges_with_msgs(
                   // file name has no stem??
                   println!("Weird file name {:?}", path);
                 }
+              } else if path.extension() == Some(OsStr::new("idl"))
+                        || path.extension() == Some(OsStr::new("json")) {
+                // These are not the droids you are looking for.
               } else {
                 println!("{:?} is not .msg", path);
               }
