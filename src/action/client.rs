@@ -1,13 +1,8 @@
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
-
-use rustdds::{
-  dds::{ReadResult, WriteResult},
-};
+use rustdds::dds::{ReadResult, WriteResult};
 pub use action_msgs::{CancelGoalRequest, CancelGoalResponse, GoalId, GoalInfo, GoalStatusEnum};
 use builtin_interfaces::Time;
-
-
 use futures::{
   //pin_mut,
   stream::{FusedStream, StreamExt},
@@ -18,17 +13,13 @@ use crate::{
   action_msgs, builtin_interfaces,
   message::Message,
   names::Name,
-  service::{request_id::RmwRequestId, AService, CallServiceError, Client, },
+  service::{request_id::RmwRequestId, AService, CallServiceError, Client},
   unique_identifier_msgs, Subscription,
 };
-
-
 use super::{
-  ActionTypes, 
-  SendGoalRequest, SendGoalResponse, 
-  GetResultRequest, GetResultResponse, FeedbackMessage,
+  ActionTypes, FeedbackMessage, GetResultRequest, GetResultResponse, SendGoalRequest,
+  SendGoalResponse,
 };
-
 
 pub struct ActionClient<A>
 where
@@ -347,6 +338,3 @@ where
       })
   }
 } // impl ActionClient
-
-
-

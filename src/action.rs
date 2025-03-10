@@ -1,18 +1,12 @@
 use std::marker::PhantomData;
 
 use rustdds::*;
-
 use serde::{Deserialize, Serialize};
 pub use action_msgs::{CancelGoalRequest, CancelGoalResponse, GoalId, GoalInfo, GoalStatusEnum};
-
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 
-use crate::{
-  action_msgs, builtin_interfaces,
-  message::Message,
-};
-
+use crate::{action_msgs, builtin_interfaces, message::Message};
 
 mod client;
 #[doc(inline)]
@@ -21,11 +15,9 @@ pub use client::ActionClient;
 mod server;
 #[doc(inline)]
 pub use server::{
-  ActionServer, AsyncActionServer,
-  NewGoalHandle, AcceptedGoalHandle, ExecutingGoalHandle, CancelHandle,
-  GoalEndStatus, GoalError,
+  AcceptedGoalHandle, ActionServer, AsyncActionServer, CancelHandle, ExecutingGoalHandle,
+  GoalEndStatus, GoalError, NewGoalHandle,
 };
-
 
 /// A trait to define an Action type
 pub trait ActionTypes {
@@ -148,7 +140,6 @@ pub struct FeedbackMessage<F> {
 }
 impl<F: Message> Message for FeedbackMessage<F> {}
 
-
 // Example topic names and types at DDS level:
 
 // rq/turtle1/rotate_absolute/_action/send_goalRequest :
@@ -170,9 +161,3 @@ impl<F: Message> Message for FeedbackMessage<F> {}
 
 // rt/turtle1/rotate_absolute/_action/status :
 // action_msgs::msg::dds_::GoalStatusArray_
-
-
-
-
-
-
