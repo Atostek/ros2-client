@@ -39,7 +39,7 @@ pre-iron-gid = []
 
 # rustdds = {  path = "../RustDDS" , version = "~0.11.1" } # dev setting
 # rustdds = {   git = "https://github.com/Atostek/RustDDS.git" }
-rustdds = {  version = "~0.11.1"  } # release setting
+rustdds = {  version = "~0.11.4"  } # release setting
 
 mio = "^0.6.23"
 mio-extras = "2.0.6"

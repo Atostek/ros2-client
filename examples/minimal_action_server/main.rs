@@ -76,7 +76,7 @@ fn main() {
     status_publisher: publisher_qos,
   };
 
-  let mut fibonacci_action_server = action::AsyncActionServer::new(
+  let fibonacci_action_server = action::AsyncActionServer::new(
     node
       .create_action_server::<FibonacciAction>(
         ServiceMapping::Enhanced,
@@ -102,7 +102,7 @@ fn main() {
         new_goal_handle = fibonacci_action_server.receive_new_goal().fuse() => {
           match new_goal_handle {
             Ok(new_goal_handle) => {
-              let fib_order = usize::try_from( *fibonacci_action_server.get_new_goal(new_goal_handle).unwrap()).unwrap();
+              let fib_order = usize::try_from( fibonacci_action_server.get_new_goal(new_goal_handle).unwrap()).unwrap();
               info!("New goal. order={fib_order} goal_id={:?}", new_goal_handle.goal_id());
               if  !(1..=25).contains(&fib_order) {
                 fibonacci_action_server.reject_goal(new_goal_handle).await.unwrap();
