@@ -22,6 +22,8 @@ use super::{
   SendGoalResponse,
 };
 
+/// ROS 2 Action Server - Synchronous version. Please consider using
+/// `AsyncActionServer`instead.
 pub struct ActionServer<A>
 where
   A: ActionTypes,
@@ -166,11 +168,11 @@ struct InnerGoalHandle<G> {
   phantom: PhantomData<G>,
 }
 
-/// `NewGoalHandle` , `AcceptedGoalHandle`, and `ExecutingGoalHandle` are
-/// different types because they support different operations.
-///
 /// `NewGoalHandle` is received from an action client. It can be either accepted
 /// of rejected.
+///
+/// `NewGoalHandle` , `AcceptedGoalHandle`, and `ExecutingGoalHandle` are
+/// different types because they support different operations.
 ///
 /// `AcceptedGoalHandle` is the result of action server accepting a goal. The
 /// action server can either start executing, or abort the goal, if it is no
@@ -218,6 +220,8 @@ impl<G> ExecutingGoalHandle<G> {
   }
 }
 
+/// Handle used by action server to receive a goal cancel request from client
+/// and respond to it.
 pub struct CancelHandle {
   req_id: RmwRequestId,
   goals: Vec<GoalId>,
@@ -240,6 +244,7 @@ pub enum GoalEndStatus {
   Canceled,
 }
 
+/// Errors tha may occur in goal operations
 #[derive(Debug)]
 pub enum GoalError<T> {
   NoSuchGoal,
@@ -259,6 +264,7 @@ impl<T> From<WriteError<T>> for GoalError<T> {
   }
 }
 
+/// ROS 2 Action Server - Asynchronous version.
 pub struct AsyncActionServer<A>
 where
   A: ActionTypes,

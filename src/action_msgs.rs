@@ -3,6 +3,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::message::Message;
 
+/// A handle used to identify action goals.
 pub type GoalId = crate::unique_identifier_msgs::UUID;
 
 /// From [GoalInfo](https://docs.ros2.org/foxy/api/action_msgs/msg/GoalInfo.html)
@@ -13,10 +14,12 @@ pub struct GoalInfo {
 }
 impl Message for GoalInfo {}
 
+/// Named goal statuses from [GoalStatus](https://docs.ros2.org/foxy/api/action_msgs/msg/GoalStatus.html)
 #[derive(Clone, Copy, Serialize_repr, Deserialize_repr, PartialEq, Debug)]
 #[repr(i8)]
 pub enum GoalStatusEnum {
-  Unknown = 0, // Let's use this also for "New"
+  Unknown = 0,
+  /// Let's use this also for "New"
   Accepted = 1,
   Executing = 2,
   Canceling = 3,

@@ -519,7 +519,8 @@ impl Spinner {
     }
   }
 
-  /// Sets a parameter value. Parameter must be declared before setting.
+  /// Sets a parameter value. Parameter must be
+  /// [declared](NodeOptions::declare_parameter) before setting.
   pub fn set_parameter(&self, name: &str, value: ParameterValue) -> Result<(), String> {
     let already_set = self.parameters.lock().unwrap().contains_key(name);
     if self.allow_undeclared_parameters || already_set {
@@ -608,6 +609,12 @@ pub enum ParameterError {
 /// parameter events topics internally.
 ///
 /// These are produced by a [`Context`].
+///
+/// Many ROS 2 background tasks do not run unless you execute a [`Spinner`] for
+/// a `Node`. If you are using an async executor, consider running e.g.
+/// `
+/// smol::spawn(node.spinner().unwrap().spin()).detach();
+/// `
 pub struct Node {
   node_name: NodeName,
   options: NodeOptions,
@@ -972,7 +979,8 @@ impl Node {
     self.parameters.lock().unwrap().contains_key(name)
   }
 
-  /// Sets a parameter value. Parameter must be declared before setting.
+  /// Sets a parameter value. Parameter must be
+  /// [declared](NodeOptions::declare_parameter) before setting.
   //
   // TODO: This code is duplicated in Spinner. Not good.
   // Find a way to de-duplicate.

@@ -50,6 +50,13 @@ This is what is expected to work. There are no routine tests against older relea
 ## Version 0.8:
 * API change: `ParameterFunc` must now implement `Sync`, so that `Node` is also `Sync`. This helps in using multithreaded async executors.
 
+### Version 0.8.1:
+* `AsyncActionServer` methods changes from taking `&mut self` into `&self` for better serving
+concurrent goals.
+* Bump RustDDS and other depencency versions
+* Add example `concurrent_action_server`
+* `msggen` logging can be redirected.
+* Additional unit tests, including the use of `tokio` async executor.
 
 ## New in Version 0.7:
 * `NodeName` namespace is no longer allowed to be the empty string, because it confuses ROS 2 tools. Minimum namespace is "/".

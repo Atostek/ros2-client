@@ -21,6 +21,7 @@ use super::{
   SendGoalResponse,
 };
 
+/// A client for ROS 2 Actions. Supports both sync and async operation.
 pub struct ActionClient<A>
 where
   A: ActionTypes,

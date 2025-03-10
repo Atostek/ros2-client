@@ -102,8 +102,7 @@ pub struct ActionServerQosPolicies {
   pub status_publisher: QosPolicies,
 }
 
-/// Emulating ROS2 IDL code generator: Goal sending/setting service
-
+/// Emulating ROS2 IDL code generator: Goal sending/setting service request
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SendGoalRequest<G> {
   pub goal_id: GoalId,
@@ -111,6 +110,7 @@ pub struct SendGoalRequest<G> {
 }
 impl<G: Message> Message for SendGoalRequest<G> {}
 
+/// Emulating ROS2 IDL code generator: Goal sending/setting service response
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SendGoalResponse {
   pub accepted: bool,
@@ -118,13 +118,14 @@ pub struct SendGoalResponse {
 }
 impl Message for SendGoalResponse {}
 
-/// Emulating ROS2 IDL code generator: Result getting service
+/// Emulating ROS2 IDL code generator: Result getting service request
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GetResultRequest {
   pub goal_id: GoalId,
 }
 impl Message for GetResultRequest {}
 
+/// Emulating ROS2 IDL code generator: Result getting service response
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GetResultResponse<R> {
   pub status: GoalStatusEnum, // interpretation same as in GoalStatus message?
