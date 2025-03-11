@@ -275,8 +275,11 @@ where
   actionserver: ActionServer<A>,
   // goals and result_requests are protected by _synchronous_ Mutex (not async)
   goals: Mutex<BTreeMap<GoalId, AsyncGoal<A>>>,
+  finished_goals: Mutex<Vec<GoalId>>,
   result_requests: Mutex<BTreeMap<GoalId, RmwRequestId>>,
 }
+
+const FINISHED_GOAL_BUFFER_SIZE: usize = 2;
 
 impl<A> AsyncActionServer<A>
 where
@@ -289,11 +292,39 @@ where
     AsyncActionServer::<A> {
       actionserver,
       goals: Mutex::new(BTreeMap::new()),
+      finished_goals: Mutex::new(Vec::with_capacity(FINISHED_GOAL_BUFFER_SIZE)),
       result_requests: Mutex::new(BTreeMap::new()),
     }
   }
 
+  fn mark_goal_finished(&self, goal_id: GoalId) {
+    self.finished_goals.lock().unwrap().push(goal_id);
+  }
+
+  fn flush_finisehd_goals(&self) {
+    let mut goals_guard = self.goals.lock().unwrap();
+    for g in self.finished_goals.lock().unwrap().drain(0..) {
+      goals_guard
+        .remove(&g)
+        .inspect(|goal| {
+          let looks_done = goal.status == GoalStatusEnum::Succeeded
+            || goal.status == GoalStatusEnum::Aborted
+            || goal.status == GoalStatusEnum::Canceled;
+          debug_assert!(
+            looks_done,
+            "Flushing goal with wrong status: {:?}",
+            goal.status
+          )
+        })
+        .or_else(|| {
+          error!("We seem to have lost goal {g:?}");
+          None
+        });
+    }
+  }
+
   pub fn get_new_goal(&self, handle: NewGoalHandle<A::GoalType>) -> Option<A::GoalType> {
+    self.flush_finisehd_goals();
     self
       .goals
       .lock()
@@ -394,7 +425,7 @@ where
   }
 
   /// Reject a received goal. Client will be notified of rejection.
-  /// Server should not process the goal further.
+  /// Server must not process the goal further.
   pub async fn reject_goal(&self, handle: NewGoalHandle<A::GoalType>) -> Result<(), GoalError<()>>
   where
     A::GoalType: 'static,
@@ -408,7 +439,10 @@ where
             ..
           } => {
             //o.into_mut().0 = GoalStatusEnum::Rejected; -- there is no such state
-            //self.publish_statuses().await; -- this is not reported
+            //self.publish_statuses().await; -- this is not reported as status
+            // Instead, we just forget the goal.
+            o.remove();
+            info!("Action server rejected goal {:?}", handle.goal_id());
             Ok(())
           }
           AsyncGoal {
@@ -611,6 +645,7 @@ where
     };
     if ret_value.is_ok() {
       self.publish_statuses().await;
+      self.mark_goal_finished(handle.goal_id());
     }
     ret_value
   }
@@ -660,6 +695,7 @@ where
 
     if abort_result.is_ok() {
       self.publish_statuses().await;
+      self.mark_goal_finished(handle.goal_id);
     }
 
     abort_result

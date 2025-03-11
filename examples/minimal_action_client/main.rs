@@ -169,7 +169,11 @@ fn main() {
                         Ok(status) =>
                           match status.status_list.iter().find(|gs| gs.goal_info.goal_id == goal_id) {
                             Some(action_msgs::GoalStatus{goal_info:_, status}) => println!("{:?}",status),
-                            None => println!("Our status is missing: {:?}", status.status_list),
+                            None => println!("Our status is missing. Got {:?} others.", status.status_list.len()),
+                            // It may be normal for the status to be missing, if the server has other clients.
+                            // Other clients (other goals) may be triggering status reports and they are
+                            // broadcast to us also. We may be in a state where our current goal is not yet
+                            // accepted by the action server, so it is missing from the reports.
                           },
                         Err(e) => println!("{:?}",e),
                       }
