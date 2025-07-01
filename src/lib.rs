@@ -129,3 +129,7 @@ pub mod ros2 {
   pub use crate::names::Name; // import Name as ros2::Name if there is clash
                               // otherwise
 }
+
+/// Re-export of the entire RustDDS,
+/// to provide access to the same version that ros2-client uses.
+pub use rustdds;

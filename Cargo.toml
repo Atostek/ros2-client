@@ -37,7 +37,7 @@ pre-iron-gid = []
 
 [dependencies]
 
-# rustdds = {  path = "../RustDDS" , version = "~0.11.1" } # dev setting
+# rustdds = {  path = "../RustDDS"  } # dev setting
 # rustdds = {   git = "https://github.com/Atostek/RustDDS.git" }
 rustdds = {  version = "~0.11.4"  } # release setting
 
