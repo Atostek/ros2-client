@@ -227,7 +227,7 @@ impl Context {
     type_name: MessageTypeName,
     qos: &QosPolicies,
   ) -> CreateResult<Topic> {
-    info!("Creating topic, DDS name: {}", topic_dds_name);
+    info!("Creating topic, DDS name: {topic_dds_name}");
     let topic = self.domain_participant().create_topic(
       topic_dds_name,
       type_name.dds_msg_type(),
@@ -413,7 +413,7 @@ impl ContextInner {
     self
       .node_writer
       .publish(pei)
-      .unwrap_or_else(|e| error!("Failed to write into node_writer {:?}", e));
+      .unwrap_or_else(|e| error!("Failed to write into node_writer {e:?}"));
   }
 } // impl ContextInner
 

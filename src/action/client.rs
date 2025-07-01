@@ -107,10 +107,7 @@ where
         }
         Ok(Some((incoming_req_id, _resp))) => {
           // got someone else's answer. Try again.
-          info!(
-            "Goal Response not for us: {:?} != {:?}",
-            incoming_req_id, req_id
-          );
+          info!("Goal Response not for us: {incoming_req_id:?} != {req_id:?}");
           continue;
         }
       }
@@ -288,7 +285,7 @@ where
             if goal_id == expected_goal_id {
               Some(Ok(feedback))
             } else {
-              debug!("Feedback for some other {:?}.", goal_id);
+              debug!("Feedback for some other {goal_id:?}.");
               None
             }
           }

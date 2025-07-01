@@ -68,10 +68,7 @@ impl TryFrom<chrono::DateTime<Utc>> for ROSTime {
     chrono_time
       .timestamp_nanos_opt()
       .ok_or_else(|| {
-        error!(
-          "ROSTime: chrono timestamp is out of range: {:?}",
-          chrono_time
-        );
+        error!("ROSTime: chrono timestamp is out of range: {chrono_time:?}");
         OutOfRangeError {}
       })
       .map(ROSTime::from_nanos)
@@ -90,10 +87,7 @@ impl From<ROSTime> for Timestamp {
   fn from(rt: ROSTime) -> Timestamp {
     let chrono_time = chrono::DateTime::<Utc>::from(rt);
     Timestamp::try_from(chrono_time).unwrap_or_else(|e| {
-      error!(
-        "Time conversion ROSTime to Timestamp error: {} source={:?}",
-        e, rt
-      );
+      error!("Time conversion ROSTime to Timestamp error: {e} source={rt:?}");
       rustdds::Timestamp::INVALID
     })
   }

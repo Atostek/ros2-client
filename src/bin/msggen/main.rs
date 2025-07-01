@@ -73,10 +73,7 @@ fn main() -> io::Result<()> {
 
     let type_name = Path::new(input_file_name)
       .file_stem()
-      .ok_or(io::Error::new(
-        io::ErrorKind::Other,
-        "Input file did not have base name?",
-      ))?
+      .ok_or(io::Error::other("Input file did not have base name?"))?
       .to_string_lossy()
       .into_owned();
 
@@ -96,13 +93,10 @@ fn main() -> io::Result<()> {
   } else if let Some(ros2_types_requested) = arg_matches.get_many::<String>("type") {
     let output_dir = arg_matches
       .get_one::<String>("output")
-      .ok_or(io::Error::new(io::ErrorKind::Other, "Output dir required"))?;
+      .ok_or(io::Error::other("Output dir required"))?;
     let workspace_dir = arg_matches
       .get_one::<String>("workspace")
-      .ok_or(io::Error::new(
-        io::ErrorKind::Other,
-        "ROS 2 workspace dir required",
-      ))?;
+      .ok_or(io::Error::other("ROS 2 workspace dir required"))?;
 
     // Use colcon to determine what we need to translate
     let mut pkgs = Vec::new();
@@ -132,7 +126,7 @@ fn main() -> io::Result<()> {
     for pkg in &pkgs {
       let mut output_file_name = output_dir.clone();
       output_file_name.extend(["/", &pkg.name, ".rs"]);
-      println!("Generating to {:?}", output_file_name);
+      println!("Generating to {output_file_name:?}");
       let mut out_file = fs::File::create(output_file_name)?;
       writeln!(mod_file, "mod {};", pkg.name)?;
 
@@ -143,7 +137,7 @@ fn main() -> io::Result<()> {
       writeln!(out_file)?;
 
       for (ros2type, type_def) in &pkg.types {
-        println!("  type {:?}", ros2type);
+        println!("  type {ros2type:?}");
         let msg = parser::msg_spec(type_def).unwrap_or_else(|e| panic!("Parse error: {:?}", e));
         // TODO: msg.0 should be empty string here, warn if not.
         print_struct_definition(&mut out_file, ros2type, &msg.1)?;
@@ -172,10 +166,9 @@ fn list_packges_with_msgs(
   ros2_abs_type: &str,
   colcon_log_directory: &Path,
 ) -> io::Result<Vec<RosPkg>> {
-  let (package_name, _type_name) = ros2_abs_type.rsplit_once('/').ok_or(io::Error::new(
-    io::ErrorKind::Other,
-    "Need package_name/type_name",
-  ))?;
+  let (package_name, _type_name) = ros2_abs_type
+    .rsplit_once('/')
+    .ok_or(io::Error::other("Need package_name/type_name"))?;
 
   let cwd = std::env::current_dir()?;
   println!("Changing to {workspace_dir}");
@@ -217,14 +210,14 @@ fn list_packges_with_msgs(
                   types.insert(type_name.to_string_lossy().into_owned(), msg_spec);
                 } else {
                   // file name has no stem??
-                  println!("Weird file name {:?}", path);
+                  println!("Weird file name {path:?}");
                 }
               } else if path.extension() == Some(OsStr::new("idl"))
                 || path.extension() == Some(OsStr::new("json"))
               {
                 // These are not the droids you are looking for.
               } else {
-                println!("{:?} is not .msg", path);
+                println!("{path:?} is not .msg");
               }
             } // for .msg files (types)
           } else {
@@ -246,13 +239,10 @@ fn list_packges_with_msgs(
     println!("Got {} packages", result.len());
     Ok(result)
   } else {
-    Err(io::Error::new(
-      io::ErrorKind::Other,
-      format!(
-        "Colcon failure: {}\nHave you run local_setup.bash?",
-        String::from_utf8_lossy(&colcon_output.stderr)
-      ),
-    ))
+    Err(io::Error::other(format!(
+      "Colcon failure: {}\nHave you run local_setup.bash?",
+      String::from_utf8_lossy(&colcon_output.stderr)
+    )))
   }
 }
 
@@ -388,10 +378,10 @@ fn translate_type(t: &TypeName) -> io::Result<String> {
   match t.array_spec {
     None => {}
     Some(ArraySpecifier::Static { size }) => {
-      base = format!("[{};{}]", base, size);
+      base = format!("[{base};{size}]");
     }
     Some(ArraySpecifier::Unbounded) | Some(ArraySpecifier::Bounded { .. }) => {
-      base = format!("Vec<{}>", base);
+      base = format!("Vec<{base}>");
     }
   }
 

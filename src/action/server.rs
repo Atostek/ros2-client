@@ -589,10 +589,7 @@ where
             break req_id;
           } else {
             self.result_requests.lock().unwrap().insert(goal_id, req_id);
-            debug!(
-              "Got result request for goal_id={:?} req_id={:?}",
-              goal_id, req_id
-            );
+            debug!("Got result request for goal_id={goal_id:?} req_id={req_id:?}");
             // and loop to wait for the next
           }
         }
@@ -843,6 +840,6 @@ where
     self
       .actionserver
       .send_goal_statuses(goal_status_array)
-      .unwrap_or_else(|e| error!("AsyncActionServer::publish_statuses: {:?}", e));
+      .unwrap_or_else(|e| error!("AsyncActionServer::publish_statuses: {e:?}"));
   }
 }

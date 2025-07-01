@@ -26,7 +26,7 @@ pub struct Gid([u8; GID_LENGTH]);
 impl fmt::Debug for Gid {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     for b in self.0.iter() {
-      write!(f, "{:02x}", b)?;
+      write!(f, "{b:02x}")?;
     }
     Ok(())
   }
