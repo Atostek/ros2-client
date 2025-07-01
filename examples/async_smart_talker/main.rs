@@ -63,7 +63,7 @@ fn main() {
       chatter_publisher.wait_for_subscription(&node).await;
       loop {
         count += 1;
-        let message = format!("count={} {}", count, filler);
+        let message = format!("count={count} {filler}");
         println!("Talking, count={} len={}", count, message.len());
         let _ = chatter_publisher.async_publish(message).await;
 

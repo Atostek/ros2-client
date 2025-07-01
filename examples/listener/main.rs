@@ -55,7 +55,7 @@ fn main() {
           }
           Ok(None) => println!("No message?!"),
           Err(e) => {
-            println!(">>> error with response handling, e: {:?}", e)
+            println!(">>> error with response handling, e: {e:?}")
           }
         },
         _ => println!(">>> Unknown poll token {:?}", event.token()),

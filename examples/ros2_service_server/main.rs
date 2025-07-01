@@ -67,16 +67,13 @@ fn main() {
         Token(1) => match server.receive_request() {
           Ok(req_option) => match req_option {
             Some((id, request)) => {
-              println!(
-                ">>> Request received - id: {:?}, request: {:?}",
-                id, request
-              );
+              println!(">>> Request received - id: {id:?}, request: {request:?}");
               let sum = request.a + request.b;
               let response = AddTwoIntsResponse { sum };
               match server.send_response(id, response.clone()) {
-                Ok(_) => println!(">>> Server sent response: {:?} id: {:?}", response, id,),
+                Ok(_) => println!(">>> Server sent response: {response:?} id: {id:?}",),
 
-                Err(e) => error!(">>> Server response error: {:?}", e),
+                Err(e) => error!(">>> Server response error: {e:?}"),
               }
             }
             None => {
@@ -84,7 +81,7 @@ fn main() {
             }
           },
           Err(e) => {
-            println!(">>> error with response handling, e: {:?}", e)
+            println!(">>> error with response handling, e: {e:?}")
           }
         },
         _ => println!(">>> Unknown poll token {:?}", event.token()),

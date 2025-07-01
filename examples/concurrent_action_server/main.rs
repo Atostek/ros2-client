@@ -130,7 +130,7 @@ fn main() {
                 smol::spawn( action_runner( Arc::clone(&fibonacci_action_server), new_goal_handle, fib_order) ).detach();
               } // if-else
             }
-            Err(e) => println!("Goal receive failed: {:?}",e),
+            Err(e) => println!("Goal receive failed: {e:?}"),
           } // match
         } // new_goal_handle
 
@@ -207,6 +207,6 @@ async fn action_runner(
       Err(action::GoalError::NoSuchGoal)
     })
     .await
-    .unwrap_or_else(|e| println!("Error: Cannot send result response {:?}", e));
-  info!("Goal ended. Reason={:?}", result_status);
+    .unwrap_or_else(|e| println!("Error: Cannot send result response {e:?}"));
+  info!("Goal ended. Reason={result_status:?}");
 }

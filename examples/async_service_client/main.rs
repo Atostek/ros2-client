@@ -107,12 +107,12 @@ fn main() {
                 match response.await
                 {
                   Ok(response) => {
-                    println!("<<< response: {:?}", response);
+                    println!("<<< response: {response:?}");
                   }
-                  Err(e) => println!("<<< response error {:?}", e),
+                  Err(e) => println!("<<< response error {e:?}"),
                 }
               }
-              Err(e) => println!(">>> request sending error {:?}", e),
+              Err(e) => println!(">>> request sending error {e:?}"),
             } // match async_send_request
 
           } else { // service not ready

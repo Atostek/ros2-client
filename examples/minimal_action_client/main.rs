@@ -120,7 +120,7 @@ fn main() {
           {
             Ok((goal_id, goal_response)) => {
               // Server responded to goal request.
-              println!("<<< Goal Response={:?} goal_id={:?}", goal_response, goal_id);
+              println!("<<< Goal Response={goal_response:?} goal_id={goal_id:?}");
               if goal_response.accepted {
                 // Now that we have a goal, we can ask for a result, feedback, and status.
                 let feedback_stream =
@@ -142,7 +142,7 @@ fn main() {
 
                     _ = goal_finish_timeout => {
                       goal_done=true;
-                      println!("Goal execution timeout. {:?}", goal_id);
+                      println!("Goal execution timeout. {goal_id:?}");
                     }
 
                     // get action result
@@ -150,16 +150,16 @@ fn main() {
                       goal_done = true;
                       match action_result {
                         Ok((goal_status, result)) => {
-                          println!("<<< Action Result: {:?} Status: {:?}", result, goal_status);
+                          println!("<<< Action Result: {result:?} Status: {goal_status:?}");
                         }
-                        Err(e) => println!("<<< Action Result error {:?}", e),
+                        Err(e) => println!("<<< Action Result error {e:?}"),
                       }
                       println!("\n");
                     }
 
                     // get action feedback
                     feedback = feedback_stream.select_next_some() => {
-                      println!("<<< Feedback: {:?}", feedback);
+                      println!("<<< Feedback: {feedback:?}");
                     }
 
                     // get action status changes
@@ -168,14 +168,14 @@ fn main() {
                       match status {
                         Ok(status) =>
                           match status.status_list.iter().find(|gs| gs.goal_info.goal_id == goal_id) {
-                            Some(action_msgs::GoalStatus{goal_info:_, status}) => println!("{:?}",status),
+                            Some(action_msgs::GoalStatus{goal_info:_, status}) => println!("{status:?}"),
                             None => println!("Our status is missing. Got {:?} others.", status.status_list.len()),
                             // It may be normal for the status to be missing, if the server has other clients.
                             // Other clients (other goals) may be triggering status reports and they are
                             // broadcast to us also. We may be in a state where our current goal is not yet
                             // accepted by the action server, so it is missing from the reports.
                           },
-                        Err(e) => println!("{:?}",e),
+                        Err(e) => println!("{e:?}"),
                       }
                     }
                   } // select!
@@ -185,7 +185,7 @@ fn main() {
                 smol::Timer::after(Duration::from_secs(5)).await;
               }
             } // Ok(..)
-            Err(e) => println!("<<< Goal send error {:?}", e),
+            Err(e) => println!("<<< Goal send error {e:?}"),
           } // match
         }
       } // select!

@@ -71,10 +71,7 @@ fn main() {
       match event.token() {
         RESPONSE_TOKEN => {
           while let Ok(Some((id, response))) = client.receive_response() {
-            println!(
-              ">>> Response received: response: {:?} - response id: {:?}, ",
-              response, id,
-            );
+            println!(">>> Response received: response: {response:?} - response id: {id:?}, ",);
           }
         }
         _ => println!(">>> Unknown poll token {:?}", event.token()),
@@ -90,10 +87,10 @@ fn main() {
       let b = request_generator % 7;
       match client.send_request(AddTwoIntsRequest { a, b }) {
         Ok(id) => {
-          println!(">>> request sent a={} b={}, {:?}", a, b, id);
+          println!(">>> request sent a={a} b={b}, {id:?}");
         }
         Err(e) => {
-          println!(">>> request sending error {:?}", e);
+          println!(">>> request sending error {e:?}");
         }
       }
     }

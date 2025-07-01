@@ -13,7 +13,7 @@ pub fn main() {
   smol::spawn(node.spinner().unwrap().spin()).detach();
 
   let status_event_stream = node.status_receiver().for_each(|event| async move {
-    println!("{:?}", event);
+    println!("{event:?}");
   });
 
   smol::block_on(status_event_stream);

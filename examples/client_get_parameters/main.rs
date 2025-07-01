@@ -82,7 +82,7 @@ fn main() {
                 .collect::<Vec<ParameterValue>>()
             );
           }
-          Err(e) => println!("<<< response error {:?}", e),
+          Err(e) => println!("<<< response error {e:?}"),
         }
       }
       Err(e) => println!(">>> request sending error {e:?}"),

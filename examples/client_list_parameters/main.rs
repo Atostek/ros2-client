@@ -68,9 +68,9 @@ fn main() {
           });
         match response_or_timeout.await {
           Ok(response) => {
-            println!("<<< response: {:?}", response);
+            println!("<<< response: {response:?}");
           }
-          Err(e) => println!("<<< response error {:?}", e),
+          Err(e) => println!("<<< response error {e:?}"),
         }
       }
       Err(e) => println!(">>> request sending error {e:?}"),

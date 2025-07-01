@@ -38,7 +38,7 @@ pub fn main() {
     .for_each(|result| async {
       match result {
         Ok((msg, _)) => println!("I heard: {msg}"),
-        Err(e) => eprintln!("Receive request error: {:?}", e),
+        Err(e) => eprintln!("Receive request error: {e:?}"),
       }
     });
 

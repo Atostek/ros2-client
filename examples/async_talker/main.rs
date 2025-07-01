@@ -42,7 +42,7 @@ fn main() {
   smol::block_on(async {
     loop {
       count += 1;
-      let message = format!("count={} {}", count, filler);
+      let message = format!("count={count} {filler}");
       println!("Talking, count={} len={}", count, message.len());
       let _ = chatter_publisher.async_publish(message).await;
       Timer::after(std::time::Duration::from_secs(2)).await;

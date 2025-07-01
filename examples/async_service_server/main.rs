@@ -59,10 +59,10 @@ fn main() {
         let resp = AddTwoIntsResponse { sum: req.a + req.b };
         let sr = server.async_send_response(req_id, resp).await;
         if let Err(e) = sr {
-          println!("Send error {:?}", e);
+          println!("Send error {e:?}");
         }
       }
-      Err(e) => println!("Receive request error: {:?}", e),
+      Err(e) => println!("Receive request error: {e:?}"),
     }
   });
 

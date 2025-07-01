@@ -165,11 +165,11 @@ fn main() {
                     smol::Timer::interval(Duration::from_secs(5)).await;
                     Err(action::GoalError::NoSuchGoal)
                     })
-                  .await.unwrap_or_else(|e| println!("Error: Cannot send result response {:?}", e));
-                info!("Goal ended. Reason={:?}", result_status);
+                  .await.unwrap_or_else(|e| println!("Error: Cannot send result response {e:?}"));
+                info!("Goal ended. Reason={result_status:?}");
               } // if-else
             }
-            Err(e) => println!("Goal receive failed: {:?}",e),
+            Err(e) => println!("Goal receive failed: {e:?}"),
           } // match
         } // new_goal_handle
 

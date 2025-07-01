@@ -24,7 +24,7 @@ pub fn main() {
         }))
         // parameter set handler.
         .parameter_set_action(Box::new(|name, value| {
-          println!("Setting {}={:?}", name, value);
+          println!("Setting {name}={value:?}");
           Ok(())
         })),
     )

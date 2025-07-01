@@ -241,7 +241,7 @@ impl UiController {
                 key,
               )
               .unwrap();
-              info!("key: {:?}", key);
+              info!("key: {key:?}");
               match key {
                 Key::Char('q') | Key::Ctrl('c') => {
                   debug!("Quit.");
@@ -365,12 +365,12 @@ impl UiController {
               )
               .unwrap();
               for m in &self.messages {
-                writeln!(self.stdout, "{}\r", m).unwrap();
+                writeln!(self.stdout, "{m}\r").unwrap();
               }
             }
           }
           other_token => {
-            error!("What is this? {:?}", other_token);
+            error!("What is this? {other_token:?}");
           }
         } // match
       } // for
@@ -381,7 +381,7 @@ impl UiController {
     self
       .command_sender
       .try_send(command)
-      .unwrap_or_else(|e| error!("UI: Failed to send command {:?}", e))
+      .unwrap_or_else(|e| error!("UI: Failed to send command {e:?}"))
   }
 
   fn print_sent_turtle_cmd_vel(&mut self, twist: &Twist) {
