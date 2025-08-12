@@ -12,6 +12,6 @@ jobs:
   test-on-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --no-fail-fast -- --test-threads=1
