@@ -54,6 +54,7 @@ fn main() {
       .reliability(policy::Reliability::Reliable {
         max_blocking_time: rustdds::Duration::from_millis(100),
       })
+      .durability(policy::Durability::TransientLocal)
       .history(policy::History::KeepLast { depth: 1 })
       .build()
   };
