@@ -1,8 +1,7 @@
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
-use rustdds::*;
-use rustdds::dds::key::CdrEncodingSize;
+use rustdds::{dds::key::CdrEncodingSize, *};
 
 #[cfg(not(feature = "pre-iron-gid"))]
 pub const GID_LENGTH: usize = 16;

@@ -450,7 +450,10 @@ impl Spinner {
         }
       }
     }
-    info!("Spinner {} exiting .spin()", &self.fully_qualified_node_name );
+    info!(
+      "Spinner {} exiting .spin()",
+      &self.fully_qualified_node_name
+    );
     Ok(())
     //}
   } // fn
@@ -1576,7 +1579,6 @@ impl Node {
         .unwrap_or_else(|e| error!("Cannot notify spin task to stop: {e:?}"));
     }
   }
-
 } // impl Node
 
 impl Drop for Node {
