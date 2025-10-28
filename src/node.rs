@@ -177,6 +177,7 @@ where
 
 impl Spinner {
   pub async fn spin(self) -> CreateResult<()> {
+    info!("Starting Spinner for {}", &self.fully_qualified_node_name);
     let dds_status_listener = self.ros_context.domain_participant().status_listener();
     let dds_status_stream = dds_status_listener.as_async_status_stream();
     pin_mut!(dds_status_stream);
@@ -219,6 +220,8 @@ impl Spinner {
       .parameter_servers
       .as_ref()
       .map(|s| s.describe_parameters_server.receive_request_stream());
+
+    info!("Spinner {} initialized", &self.fully_qualified_node_name);
 
     loop {
       futures::select! {
@@ -447,7 +450,7 @@ impl Spinner {
         }
       }
     }
-    info!("Spinner exiting .spin()");
+    info!("Spinner {} exiting .spin()", &self.fully_qualified_node_name );
     Ok(())
     //}
   } // fn
@@ -1564,10 +1567,21 @@ impl Node {
       base_name: self.node_name.base_name().to_string(),
     }
   }
+
+  pub fn stop_spinner(&self) {
+    info!("Signalling spinner to stop (manual)");
+    if let Some(ref stop_spin_sender) = self.stop_spin_sender {
+      stop_spin_sender
+        .try_send(())
+        .unwrap_or_else(|e| error!("Cannot notify spin task to stop: {e:?}"));
+    }
+  }
+
 } // impl Node
 
 impl Drop for Node {
   fn drop(&mut self) {
+    debug!("Signalling spinner to stop (.drop)");
     if let Some(ref stop_spin_sender) = self.stop_spin_sender {
       stop_spin_sender
         .try_send(())
