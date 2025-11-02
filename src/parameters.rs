@@ -17,7 +17,7 @@ pub struct Parameter {
 
 /// Rust-like representation of ROS2
 /// [ParameterValue](https://github.com/ros2/rcl_interfaces/blob/master/rcl_interfaces/msg/ParameterValue.msg)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum ParameterValue {
   NotSet,
   Boolean(bool),
@@ -33,6 +33,7 @@ pub enum ParameterValue {
 
 /// List of Parameter types supported by ROS 2.
 /// <https://github.com/ros2/rcl_interfaces/blob/humble/rcl_interfaces/msg/ParameterType.msg>
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ParameterType {
   NotSet = 0,
   Bool = 1,
