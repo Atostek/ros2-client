@@ -1,5 +1,6 @@
 use futures::StreamExt;
 use ros2_client::{ros2::policy, *};
+use rustdds::DomainParticipantStatusEvent;
 
 pub fn main() {
   // Here is a fixed path, so this example must be started from
@@ -7,12 +8,31 @@ pub fn main() {
   log4rs::init_file("examples/async_listener/log4rs.yaml", Default::default()).unwrap();
 
   let context = Context::new().unwrap();
+  let unique_node_name = format!("listener_{}", std::process::id());
   let mut node = context
     .new_node(
-      NodeName::new("/rustdds", "rustdds_listener").unwrap(),
+      NodeName::new("/rustdds", &unique_node_name).unwrap(),
       NodeOptions::new().enable_rosout(true),
     )
     .unwrap();
+
+  smol::spawn(node.spinner().unwrap().spin()).detach();
+
+  let status_event_stream = node.status_receiver().for_each(|event| async move {
+    match event {
+      NodeEvent::DDS(DomainParticipantStatusEvent::RemoteWriterMatched {
+        local_reader,
+        remote_writer,
+      }) if remote_writer.entity_id.kind().is_user_defined() => {
+        println!("Matched remote writer {remote_writer:?}");
+      }
+      NodeEvent::DDS(DomainParticipantStatusEvent::WriterLost { guid, reason }) => {
+        println!("Lost remote writer {guid:?}: {reason:?}");
+      }
+      _ => {}
+    }
+  });
+  smol::spawn(status_event_stream).detach();
 
   let reliable_qos = ros2::QosPolicyBuilder::new()
     .history(policy::History::KeepLast { depth: 10 })

@@ -7,7 +7,7 @@ appenders:
 #    kind: file
 #    path: "log4rs.txt"
 root:
-  level: warn
+  level: info
 #  level: warn
   appenders:
     - stdout
