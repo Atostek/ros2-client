@@ -7,17 +7,17 @@ appenders:
 #    kind: file
 #    path: "log4rs.txt"
 root:
-  level: info
-#  level: warn
+#  level: info
+  level: warn
   appenders:
     - stdout
 #    - file_appender
 
 loggers:
-  rustdds:
-    level: warn
-  rustdds::dds::message_receiver:
-    level: info
+ # rustdds:
+ #   level: info
+ # rustdds::dds::participant:
+ #   level: debug
   rustdds::dds::fragment_assembler:
     level: warn
  # rustdds::dds::with_key::datareader:
