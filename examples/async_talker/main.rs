@@ -7,12 +7,16 @@ fn main() {
   log4rs::init_file("examples/async_talker/log4rs.yaml", Default::default()).unwrap();
 
   let context = Context::new().unwrap();
+
+  let unique_node_name = format!("talker_{}", std::process::id());
   let mut node = context
     .new_node(
-      NodeName::new("/rustdds", "talker").unwrap(),
-      NodeOptions::default(),
+      NodeName::new("/rustdds", &unique_node_name).unwrap(),
+      NodeOptions::new().enable_rosout(true),
     )
     .unwrap();
+
+  smol::spawn(node.spinner().unwrap().spin()).detach();
 
   let reliable_qos = ros2::QosPolicyBuilder::new()
     .history(policy::History::KeepLast { depth: 10 })
@@ -35,9 +39,8 @@ fn main() {
     .unwrap();
   let mut count = 0;
 
-  let filler: String =
-    "All work and no play makes ROS a dull boy. All play and no work makes RTPS a mere toy. "
-      .repeat(2);
+  let filler = "All work and no play makes ROS a dull boy.";
+  //" All play and no work makes RTPS a mere toy. ";
 
   smol::block_on(async {
     loop {
