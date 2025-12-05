@@ -54,26 +54,24 @@ where
     &self.my_action_name
   }
 
-  pub fn goal_client(
-    &mut self,
-  ) -> &mut Client<AService<SendGoalRequest<A::GoalType>, SendGoalResponse>> {
-    &mut self.my_goal_client
+  pub fn goal_client(&self) -> &Client<AService<SendGoalRequest<A::GoalType>, SendGoalResponse>> {
+    &self.my_goal_client
   }
   pub fn cancel_client(
-    &mut self,
-  ) -> &mut Client<AService<action_msgs::CancelGoalRequest, action_msgs::CancelGoalResponse>> {
-    &mut self.my_cancel_client
+    &self,
+  ) -> &Client<AService<action_msgs::CancelGoalRequest, action_msgs::CancelGoalResponse>> {
+    &self.my_cancel_client
   }
   pub fn result_client(
-    &mut self,
-  ) -> &mut Client<AService<GetResultRequest, GetResultResponse<A::ResultType>>> {
-    &mut self.my_result_client
+    &self,
+  ) -> &Client<AService<GetResultRequest, GetResultResponse<A::ResultType>>> {
+    &self.my_result_client
   }
-  pub fn feedback_subscription(&mut self) -> &mut Subscription<FeedbackMessage<A::FeedbackType>> {
-    &mut self.my_feedback_subscription
+  pub fn feedback_subscription(&self) -> &Subscription<FeedbackMessage<A::FeedbackType>> {
+    &self.my_feedback_subscription
   }
-  pub fn status_subscription(&mut self) -> &mut Subscription<action_msgs::GoalStatusArray> {
-    &mut self.my_status_subscription
+  pub fn status_subscription(&self) -> &Subscription<action_msgs::GoalStatusArray> {
+    &self.my_status_subscription
   }
 
   /// Returns and id of the Request and id for the Goal.
