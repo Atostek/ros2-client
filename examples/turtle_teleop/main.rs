@@ -354,7 +354,7 @@ fn ros2_loop(
     status_subscription: service_qos,
   };
 
-  let mut rotate_action_client = ros_node
+  let rotate_action_client = ros_node
     .create_action_client::<RotateAbsoluteAction>(
       ServiceMapping::Enhanced,
       &Name::new("/turtle1", "rotate_absolute").unwrap(),
