@@ -66,17 +66,16 @@ tracing = "0.1.41"
 
 [dev-dependencies]
 log = "0.4"
-termion = "4.0.3"
 pretty_env_logger = "0.5.0"
 # turle_teleop
 log4rs = "1.2"
 test-case = "3.3.1"
 ctrlc = "3.1.6"
+ratatui = "0.29.0"
+crossterm = { version = "0.29.0", features = ["event-stream"] }
 
 # async examples
 smol = "2.0"
 async-io = "2.2.0"
 async-ctrlc = "1.2"
-
-# tests
 tokio = { version = "1", features=["rt", "macros", "time", "sync"]}
