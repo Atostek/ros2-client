@@ -1,23 +1,25 @@
 use std::{cell::Cell, io};
+
 use async_ctrlc::CtrlC;
-use futures::{StreamExt, channel::oneshot};
+use futures::{channel::oneshot, StreamExt};
 use log::{error, info};
 use ros2_client::{
-  AService, Action, ActionTypeName, Client, Context, Message, MessageTypeName, Name, Node,
-  NodeName, NodeOptions, Publisher, ServiceMapping, ServiceTypeName, Subscription,
   action::{self, ActionClient},
   ros2, rosout,
   service::CallServiceError,
+  AService, Action, ActionTypeName, Client, Context, Message, MessageTypeName, Name, Node,
+  NodeName, NodeOptions, Publisher, ServiceMapping, ServiceTypeName, Subscription,
 };
-use rustdds::{QosPolicyBuilder, policy};
+use rustdds::{policy, QosPolicyBuilder};
 use serde::{Deserialize, Serialize};
-use smol::{LocalExecutor, channel, pin};
+use smol::{channel, pin, LocalExecutor};
 use tokio::select;
 
 mod ui;
 
 fn main() {
-  // Here is a fixed path, so this example must be started from repository root directory.
+  // Here is a fixed path, so this example must be started from repository root
+  // directory.
   log4rs::init_file("examples/turtle_teleop/log4rs.yaml", Default::default())
     .expect("example was not started from the project root directory");
 
