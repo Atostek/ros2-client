@@ -114,6 +114,8 @@ impl App {
     // event loop
 
     info!("Entering event_loop");
+
+    // Example of how to write to "rosout" log
     rosout!(
       self.requester.node,
       ros2::LogLevel::Info,
@@ -233,7 +235,7 @@ impl Requester {
     //   another host also.
     //
     // * create_client basic version is untested.
-    // Service responses do not fully work yet.
+
     let reset_client = node
       .create_client::<AService<EmptyMessage, EmptyMessage>>(
         ServiceMapping::Enhanced,
@@ -269,7 +271,7 @@ impl Requester {
       )
       .unwrap();
 
-    // kill client
+    // kill service client
     let kill_srv_type = ServiceTypeName::new("turtlesim", "Kill");
     let kill_client = node
       .create_client::<KillService>(
