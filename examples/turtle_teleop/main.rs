@@ -1,45 +1,491 @@
-use std::time::Duration;
+use std::{cell::Cell, io};
 
-#[allow(unused_imports)]
-use ::log::{debug, error, info, warn};
-use mio::{Events, Poll, PollOpt, Ready, Token};
-use mio_extras::channel as mio_channel;
+use async_ctrlc::CtrlC;
+use futures::{channel::oneshot, StreamExt};
+use log::{error, info};
+use ros2_client::{
+  action::{self, ActionClient},
+  ros2, rosout,
+  service::CallServiceError,
+  AService, Action, ActionTypeName, Client, Context, Message, MessageTypeName, Name, Node,
+  NodeName, NodeOptions, Publisher, ServiceMapping, ServiceTypeName, Subscription,
+};
+use rustdds::{policy, QosPolicyBuilder};
 use serde::{Deserialize, Serialize};
-use termion::raw::*;
-use ros2_client::{action, ros2, *};
-use rustdds::*;
-use ui::{RosCommand, UiController};
+use smol::{channel, pin, LocalExecutor};
+use tokio::select;
 
-// modules
 mod ui;
 
-const TURTLE_CMD_VEL_READER_TOKEN: Token = Token(1);
-const ROS2_COMMAND_TOKEN: Token = Token(2);
-const TURTLE_POSE_READER_TOKEN: Token = Token(3);
-const RESET_CLIENT_TOKEN: Token = Token(4);
-const SET_PEN_CLIENT_TOKEN: Token = Token(5);
-const SPAWN_CLIENT_TOKEN: Token = Token(6);
-const KILL_CLIENT_TOKEN: Token = Token(7);
+fn main() {
+  // Here is a fixed path, so this example must be started from repository root
+  // directory.
+  log4rs::init_file("examples/turtle_teleop/log4rs.yaml", Default::default())
+    .expect("example was not started from the project root directory");
 
-const ROTATE_ABSOLUTE_GOAL_RESPONSE_TOKEN: Token = Token(8);
-const ROTATE_ABSOLUTE_RESULT_RESPONSE_TOKEN: Token = Token(9);
-const ROTATE_ABSOLUTE_FEEDBACK_TOKEN: Token = Token(10);
-const ROTATE_ABSOLUTE_STATUS_TOKEN: Token = Token(11);
-const ROTATE_ABSOLUTE_CANCEL_RESPONSE_TOKEN: Token = Token(12);
+  let mut app = App::new();
+  let exec = LocalExecutor::new();
+
+  smol::block_on(exec.run(async {
+    select! {
+      _ = app.run(&exec) => {
+        info!("process finished");
+      }
+      _ = CtrlC::new().unwrap() => {
+        info!("process terminated");
+      }
+    };
+  }));
+}
+
+struct App {
+  requester: Requester,
+  turtle_cmd_vel_reader: Subscription<Twist>,
+  turtle_pose_reader: Subscription<Pose>,
+  messages_receiver: channel::Receiver<String>,
+  terminal: ratatui::DefaultTerminal,
+  display: ui::Display,
+}
+
+impl App {
+  fn new() -> Self {
+    let topic_qos = {
+      QosPolicyBuilder::new()
+        .durability(policy::Durability::Volatile)
+        .liveliness(policy::Liveliness::Automatic {
+          lease_duration: ros2::Duration::INFINITE,
+        })
+        .reliability(policy::Reliability::Reliable {
+          max_blocking_time: ros2::Duration::from_millis(100),
+        })
+        .history(policy::History::KeepLast { depth: 1 })
+        .build()
+    };
+
+    let ctx = Context::new().unwrap();
+
+    let mut node = ctx
+      .new_node(
+        NodeName::new("/ros2_demo", "turtle_teleop").unwrap(),
+        NodeOptions::new().enable_rosout(true),
+      )
+      .unwrap();
+
+    let turtle_cmd_vel_topic = node
+      .create_topic(
+        &Name::new("/turtle1", "cmd_vel").unwrap(),
+        MessageTypeName::new("geometry_msgs", "Twist"),
+        &topic_qos,
+      )
+      .unwrap();
+
+    // But here is how to read it also, if anyone is interested.
+    // This should show what is the turtle command in case someone else is
+    // also issuing commands, i.e. there are two turtle controllers running.
+    let turtle_cmd_vel_reader = node
+      .create_subscription::<Twist>(&turtle_cmd_vel_topic, None)
+      .unwrap();
+
+    let turtle_pose_topic = node
+      .create_topic(
+        &Name::new("/turtle1", "pose").unwrap(),
+        MessageTypeName::new("turtlesim", "Pose"),
+        &topic_qos,
+      )
+      .unwrap();
+
+    let turtle_pose_reader = node
+      .create_subscription::<Pose>(&turtle_pose_topic, None)
+      .unwrap();
+
+    let (messages_sender, messages_receiver) = channel::bounded(16);
+
+    Self {
+      requester: Requester::new(node, messages_sender, &topic_qos, &turtle_cmd_vel_topic),
+      turtle_cmd_vel_reader,
+      turtle_pose_reader,
+      messages_receiver,
+      terminal: ratatui::init(),
+      display: ui::Display::default(),
+    }
+  }
+
+  async fn run<'a>(&'a mut self, exec: &LocalExecutor<'a>) -> io::Result<()> {
+    // event loop
+
+    info!("Entering event_loop");
+
+    // Example of how to write to "rosout" log
+    rosout!(
+      self.requester.node,
+      ros2::LogLevel::Info,
+      "initialized, entering event loop"
+    );
+
+    let events = ui::events().fuse();
+    pin!(events);
+    loop {
+      let display = &self.display;
+      self.terminal.draw(|frame| display.draw(frame))?;
+
+      select! {
+        Some(Ok(event)) = events.next() => {
+          match event {
+            ui::Event::StopEventLoop => {
+              info!("Stopping main event loop");
+              break;
+            }
+            ui::Event::TurtleCmdVel { twist } => {
+              exec.spawn(self.requester.publish_turtle_cmd_vel(twist)).detach();
+            }
+            ui::Event::Reset => {
+              exec.spawn(self.requester.reset()).detach();
+            }
+            ui::Event::SetPen(pen_request) => {
+              exec.spawn(self.requester.set_pen(pen_request)).detach();
+            }
+            ui::Event::Spawn(name) => {
+              exec.spawn(self.requester.spawn(name)).detach();
+            }
+            ui::Event::Kill(name) => {
+              exec.spawn(self.requester.kill(name)).detach();
+            }
+            ui::Event::RotateAbsolute { heading } => {
+              exec.spawn(self.requester.rotate_absolute(heading)).detach();
+            }
+            ui::Event::CancelRotateAbsolute => {
+              self.requester.cancel_rotate_absolute()
+            }
+            ui::Event::ChooseTurtle { id } => {
+              self.requester.set_controlled_turtle_id(id);
+            }
+          }
+        }
+        Ok(message) = self.messages_receiver.recv() => {
+          self.display.add_message(message);
+        }
+        Ok((cmd_vel, _)) = self.turtle_cmd_vel_reader.async_take() => {
+          self.display.set_cmd_vel(cmd_vel);
+        }
+        Ok((pose, _)) = self.turtle_pose_reader.async_take() => {
+          self.display.set_pose(pose);
+        }
+      }
+    }
+
+    ratatui::restore();
+    Ok(())
+  }
+}
+
+struct Requester {
+  node: Node,
+  messages_sender: channel::Sender<String>,
+  turtle_cmd_vel_writer: Publisher<Twist>,
+  turtle_cmd_vel_writer2: Publisher<Twist>,
+  reset_client: Client<AService<EmptyMessage, EmptyMessage>>,
+  set_pen_client: Client<AService<PenRequest, ()>>,
+  spawn_client: Client<SpawnService>,
+  kill_client: Client<KillService>,
+  rotate_action_client: ActionClient<RotateAbsoluteAction>,
+  cancel_rotate: Cell<Option<oneshot::Sender<()>>>,
+  turtle_id: Cell<i32>,
+}
+
+impl Requester {
+  fn new(
+    mut node: Node,
+    messages_sender: channel::Sender<String>,
+    topic_qos: &ros2::QosPolicies,
+    turtle_cmd_vel_topic: &rustdds::Topic,
+  ) -> Self {
+    // The point here is to publish Twist for the turtle
+    let turtle_cmd_vel_writer = node
+      .create_publisher::<Twist>(turtle_cmd_vel_topic, None)
+      .unwrap();
+
+    // Prepare for controlling 2nd turtle
+    let turtle2_cmd_vel_topic = node
+      .create_topic(
+        &Name::new("/turtle2", "cmd_vel").unwrap(),
+        MessageTypeName::new("geometry_msgs", "Twist"),
+        topic_qos,
+      )
+      .unwrap();
+    let turtle_cmd_vel_writer2 = node
+      .create_publisher::<Twist>(&turtle2_cmd_vel_topic, None)
+      .unwrap();
+
+    // Turtle has services, let's construct some clients.
+
+    let service_qos = QosPolicyBuilder::new()
+      .reliability(policy::Reliability::Reliable {
+        max_blocking_time: ros2::Duration::from_millis(100),
+      })
+      .history(policy::History::KeepLast { depth: 1 })
+      .build();
+
+    // create_client cyclone version tested against ROS2 Galactic. Obviously with
+    // CycloneDDS. Seems to work on the same host only.
+    //
+    // create_client enhanced version tested against
+    // * ROS2 Foxy with eProsima DDS. Works to another host also.
+    // * ROS2 Galactic with RTI Connext (rmw_connextdds, not rmw_connext_cpp)
+    //   Environment variable RMW_CONNEXT_REQUEST_REPLY_MAPPING=extended Works to
+    //   another host also.
+    //
+    // * create_client basic version is untested.
+
+    let reset_client = node
+      .create_client::<AService<EmptyMessage, EmptyMessage>>(
+        ServiceMapping::Enhanced,
+        &Name::new("/", "reset").unwrap(),
+        &ServiceTypeName::new("std_srvs", "Empty"),
+        service_qos.clone(),
+        service_qos.clone(),
+      )
+      .unwrap();
+
+    // another client
+
+    // from https://docs.ros2.org/foxy/api/turtlesim/srv/SetPen.html
+    let set_pen_client = node
+      .create_client::<AService<PenRequest, ()>>(
+        ServiceMapping::Enhanced,
+        &Name::new("/turtle1", "set_pen").unwrap(),
+        &ServiceTypeName::new("turtlesim", "SetPen"),
+        service_qos.clone(),
+        service_qos.clone(),
+      )
+      .unwrap();
+
+    // third client
+    let spawn_srv_type = ServiceTypeName::new("turtlesim", "Spawn");
+    let spawn_client = node
+      .create_client::<SpawnService>(
+        ServiceMapping::Enhanced,
+        &Name::new("/", "spawn").unwrap(),
+        &spawn_srv_type,
+        service_qos.clone(),
+        service_qos.clone(),
+      )
+      .unwrap();
+
+    // kill service client
+    let kill_srv_type = ServiceTypeName::new("turtlesim", "Kill");
+    let kill_client = node
+      .create_client::<KillService>(
+        ServiceMapping::Enhanced,
+        &Name::new("/", "kill").unwrap(),
+        &kill_srv_type,
+        service_qos.clone(),
+        service_qos.clone(),
+      )
+      .unwrap();
+
+    // Try an Action
+    //TODO: There should be an easier way to do this.
+    let rotate_action_qos = action::ActionClientQosPolicies {
+      goal_service: service_qos.clone(),
+      result_service: service_qos.clone(),
+      cancel_service: service_qos.clone(),
+      feedback_subscription: service_qos.clone(),
+      status_subscription: service_qos,
+    };
+
+    let rotate_action_client = node
+      .create_action_client::<RotateAbsoluteAction>(
+        ServiceMapping::Enhanced,
+        &Name::new("/turtle1", "rotate_absolute").unwrap(),
+        &ActionTypeName::new("turtlesim", "RotateAbsolute"),
+        rotate_action_qos,
+      )
+      .unwrap();
+
+    Self {
+      node,
+      messages_sender,
+      turtle_cmd_vel_writer,
+      turtle_cmd_vel_writer2,
+      reset_client,
+      set_pen_client,
+      spawn_client,
+      kill_client,
+      rotate_action_client,
+      turtle_id: Cell::new(1),
+      cancel_rotate: Cell::default(),
+    }
+  }
+
+  async fn publish_turtle_cmd_vel(&self, twist: Twist) {
+    let writer = match self.turtle_id.get() {
+      1 => &self.turtle_cmd_vel_writer,
+      2 => &self.turtle_cmd_vel_writer2,
+      _ => return,
+    };
+    match writer.async_publish(twist).await {
+      Ok(()) => info!(
+        "cmd_vel {twist:?} for turtle {id} has been published",
+        id = self.turtle_id.get()
+      ),
+      Err(err) => error!("failed to write to turtle writer: {err}"),
+    }
+  }
+
+  async fn reset(&self) {
+    match self
+      .reset_client
+      .async_call_service(EmptyMessage::new())
+      .await
+    {
+      Ok(EmptyMessage { .. }) => {
+        rosout!(self.node, ros2::LogLevel::Info, "Requested turtlesim reset");
+        let msg = "reset request sent";
+        info!("{msg}");
+        let _ = self.messages_sender.send(msg.to_owned()).await;
+      }
+      Err(err) => {
+        error!(
+          "failed to reset turtlesim: {err}",
+          err = DisplayCallServiceError(err)
+        );
+      }
+    }
+  }
+
+  async fn set_pen(&self, pen_request: PenRequest) {
+    match self.set_pen_client.async_call_service(pen_request).await {
+      Ok(()) => {
+        let msg = format!("pen {pen_request:?} has been set");
+        info!("{msg}");
+        let _ = self.messages_sender.send(msg).await;
+      }
+      Err(err) => error!(
+        "error setting pen: {err}",
+        err = DisplayCallServiceError(err)
+      ),
+    }
+  }
+
+  async fn spawn(&self, name: String) {
+    match self
+      .spawn_client
+      .async_call_service(SpawnRequest {
+        x: 1.0,
+        y: 1.0,
+        theta: 0.0,
+        name,
+      })
+      .await
+    {
+      Ok(SpawnResponse { name }) => info!("a turtle has been spawned with name {name:?}"),
+      Err(err) => error!(
+        "failed to spawn a turtle: {err}",
+        err = DisplayCallServiceError(err)
+      ),
+    }
+  }
+
+  async fn kill(&self, name: String) {
+    match self
+      .kill_client
+      .async_call_service(KillRequest { name: name.clone() })
+      .await
+    {
+      Ok(EmptyMessage { .. }) => {
+        let msg = format!("turtle {name:?} has been killed");
+        info!("{msg}");
+        let _ = self.messages_sender.send(msg).await;
+      }
+      Err(err) => error!(
+        "failed to kill a turtle: {err}",
+        err = DisplayCallServiceError(err)
+      ),
+    }
+  }
+
+  async fn rotate_absolute(&self, heading: f32) {
+    match self
+      .rotate_action_client
+      .async_send_goal(RotateAbsoluteGoal { theta: heading })
+      .await
+    {
+      Ok((goal_id, action::SendGoalResponse { accepted, .. })) => {
+        if !accepted {
+          error!("rotate_absolute goal has been rejected (goal_id={goal_id:?})");
+          return;
+        }
+
+        let msg = format!("rotate_absolute goal has been accepted (goal_id={goal_id:?})");
+        info!("{msg}");
+        rosout!(self.node, ros2::LogLevel::Info, "{msg}");
+        let _ = self.messages_sender.send(msg).await;
+
+        let (cancel_sender, cancel_receiver) = oneshot::channel();
+        self.cancel_rotate.replace(Some(cancel_sender));
+        select! {
+          Ok(()) = cancel_receiver => {
+            match self.rotate_action_client.async_cancel_goal(goal_id, self.node.time_now().into()).await {
+              Ok(action::CancelGoalResponse { return_code, .. }) => {
+                let msg = format!("rotate_absolute cancellation returned code {return_code:?}");
+                info!("{msg}");
+                let _ = self.messages_sender.send(msg).await;
+              }
+              Err(err) => {
+                error!(
+                  "failed to cancel rotate_absolute goal {goal_id:?}: {err}",
+                  err = DisplayCallServiceError(err)
+                )
+              }
+            }
+          }
+          res = self.rotate_action_client.async_request_result(goal_id) => {
+            match res {
+              Ok((status, RotateAbsoluteResult { delta })) => {
+                let msg = format!("rotate_absolute has terminated with status {status:?} and delta {delta}");
+                info!("{msg}");
+                let _ = self.messages_sender.send(msg).await;
+              },
+              Err(err) => {
+                error!("failed to receive rotate_absolute result: {err}", err = DisplayCallServiceError(err));
+              }
+            }
+          }
+        }
+      }
+      Err(err) => {
+        error!(
+          "failed to send rotate_absolute action goal: {err}",
+          err = DisplayCallServiceError(err)
+        );
+      }
+    }
+  }
+
+  fn cancel_rotate_absolute(&self) {
+    if let Some(cancel) = self.cancel_rotate.take() {
+      let _res = cancel.send(());
+    }
+  }
+
+  fn set_controlled_turtle_id(&self, id: i32) {
+    self.turtle_id.replace(id);
+  }
+}
 
 // This corresponds to ROS2 message type
 // https://github.com/ros2/common_interfaces/blob/master/geometry_msgs/msg/Twist.msg
 //
 // The struct definition must have a layout corresponding to the
 // ROS2 msg definition to get compatible serialization.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Twist {
   pub linear: Vector3,
   pub angular: Vector3,
 }
 
 // https://docs.ros2.org/foxy/api/turtlesim/msg/Pose.html
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Pose {
   pub x: f32,
   pub y: f32,
@@ -50,7 +496,7 @@ pub struct Pose {
 
 // This corresponds to ROS2 message type
 // https://github.com/ros2/common_interfaces/blob/master/geometry_msgs/msg/Vector3.msg
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Vector3 {
   pub x: f64,
   pub y: f64,
@@ -65,7 +511,7 @@ impl Vector3 {
   };
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct PenRequest {
   pub r: u8,
   pub g: u8,
@@ -76,640 +522,90 @@ pub struct PenRequest {
 
 impl Message for PenRequest {}
 
-fn main() {
-  // Here is a fixed path, so this example must be started from
-  // RustDDS main directory
-  log4rs::init_file("examples/turtle_teleop/log4rs.yaml", Default::default()).unwrap();
-
-  let (command_sender, command_receiver) = mio_channel::sync_channel::<RosCommand>(10);
-  let (readback_sender, readback_receiver) = mio_channel::sync_channel(10);
-  let (pose_sender, pose_receiver) = mio_channel::sync_channel(10);
-  let (message_sender, message_receiver) = mio_channel::sync_channel(2);
-
-  // For some strange reason the ROS2 messaging event loop is in a separate thread
-  // and we talk to it using (mio) mpsc channels.
-  let jhandle = std::thread::Builder::new()
-    .name("ros2_loop".into())
-    .spawn(move || {
-      ros2_loop(
-        command_receiver,
-        readback_sender,
-        pose_sender,
-        message_sender,
-      )
-    })
-    .unwrap();
-
-  // From termion docs:
-  // "A terminal restorer, which keeps the previous state of the terminal,
-  // and restores it, when dropped.
-  // Restoring will entirely bring back the old TTY state."
-  // So the point of _stdout_restorer is that it will restore the TTY back to
-  // its original cooked mode when the variable is dropped.
-  let _stdout_restorer = std::io::stdout().into_raw_mode().unwrap();
-
-  // UI loop, which is in the main thread
-  let mut main_control = UiController::new(
-    std::io::stdout(),
-    command_sender,
-    readback_receiver,
-    pose_receiver,
-    message_receiver,
-  );
-  main_control.start();
-
-  jhandle.join().unwrap(); // wait until threads exit.
-
-  // need to wait a bit for cleanup, because drop is not waited for join
-  std::thread::sleep(Duration::from_millis(10));
-}
-
-fn ros2_loop(
-  command_receiver: mio_channel::Receiver<RosCommand>,
-  readback_sender: mio_channel::SyncSender<Twist>,
-  pose_sender: mio_channel::SyncSender<Pose>,
-  message_sender: mio_channel::SyncSender<String>,
-) {
-  info!("ros2_loop");
-
-  let topic_qos: QosPolicies = {
-    QosPolicyBuilder::new()
-      .durability(policy::Durability::Volatile)
-      .liveliness(policy::Liveliness::Automatic {
-        lease_duration: ros2::Duration::INFINITE,
-      })
-      .reliability(policy::Reliability::Reliable {
-        max_blocking_time: ros2::Duration::from_millis(100),
-      })
-      .history(policy::History::KeepLast { depth: 1 })
-      .build()
-  };
-
-  let ros_context = Context::new().unwrap();
-
-  let mut ros_node = ros_context
-    .new_node(
-      NodeName::new("/ros2_demo", "turtle_teleop").unwrap(),
-      NodeOptions::new().enable_rosout(true),
-    )
-    .unwrap();
-
-  let turtle_cmd_vel_topic = ros_node
-    .create_topic(
-      &Name::new("/turtle1", "cmd_vel").unwrap(),
-      MessageTypeName::new("geometry_msgs", "Twist"),
-      &topic_qos,
-    )
-    .unwrap();
-
-  // The point here is to publish Twist for the turtle
-  let turtle_cmd_vel_writer = ros_node
-    .create_publisher::<Twist>(&turtle_cmd_vel_topic, None)
-    .unwrap();
-
-  // But here is how to read it also, if anyone is interested.
-  // This should show what is the turtle command in case someone else is
-  // also issuing commands, i.e. there are two turtle controllers running.
-  let turtle_cmd_vel_reader = ros_node
-    .create_subscription::<Twist>(&turtle_cmd_vel_topic, None)
-    .unwrap();
-
-  let turtle_pose_topic = ros_node
-    .create_topic(
-      &Name::new("/turtle1", "pose").unwrap(),
-      MessageTypeName::new("turtlesim", "Pose"),
-      &topic_qos,
-    )
-    .unwrap();
-  let turtle_pose_reader = ros_node
-    .create_subscription::<Pose>(&turtle_pose_topic, None)
-    .unwrap();
-
-  // Prepare for controlling 2nd turtle
-  let turtle2_cmd_vel_topic = ros_node
-    .create_topic(
-      &Name::new("/turtle2", "cmd_vel").unwrap(),
-      MessageTypeName::new("geometry_msgs", "Twist"),
-      &topic_qos,
-    )
-    .unwrap();
-  let turtle_cmd_vel_writer2 = ros_node
-    .create_publisher::<Twist>(&turtle2_cmd_vel_topic, None)
-    .unwrap();
-
-  // Turtle has services, let's construct some clients.
-
-  //pub struct EmptyService {}
-
-  #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmptyMessage {
   // ROS2 Foxy with eProsima DDS crashes if the EmptyMessage is really empty,
   // so we put in a dummy byte.
-  pub struct EmptyMessage {
-    dummy: u8,
+  dummy: u8,
+}
+impl EmptyMessage {
+  pub fn new() -> EmptyMessage {
+    EmptyMessage { dummy: 1 }
   }
-  impl EmptyMessage {
-    pub fn new() -> EmptyMessage {
-      EmptyMessage { dummy: 1 }
+}
+
+impl Default for EmptyMessage {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
+impl Message for EmptyMessage {}
+
+// from https://docs.ros2.org/foxy/api/turtlesim/srv/Spawn.html
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpawnRequest {
+  pub x: f32,
+  pub y: f32,
+  pub theta: f32,
+  pub name: String,
+}
+impl Message for SpawnRequest {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpawnResponse {
+  pub name: String,
+}
+impl Message for SpawnResponse {}
+
+type SpawnService = AService<SpawnRequest, SpawnResponse>;
+
+// from https://docs.ros2.org/foxy/api/turtlesim/srv/Spawn.html
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KillRequest {
+  pub name: String,
+}
+impl Message for KillRequest {}
+
+type KillService = AService<KillRequest, EmptyMessage>;
+
+// https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Actions/Understanding-ROS2-Actions.html
+//
+//
+// Note: The action component types could be named anything.
+// The field naming is also arbitrary.
+// The important thing is that the types serialize to/from the same as the
+// definition at the other end of the wire. In this case, a simple "f32" would
+// do.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RotateAbsoluteGoal {
+  theta: f32,
+}
+impl Message for RotateAbsoluteGoal {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RotateAbsoluteResult {
+  delta: f32,
+}
+impl Message for RotateAbsoluteResult {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RotateAbsoluteFeedback {
+  remaining: f32,
+}
+impl Message for RotateAbsoluteFeedback {}
+
+type RotateAbsoluteAction =
+  Action<RotateAbsoluteGoal, RotateAbsoluteResult, RotateAbsoluteFeedback>;
+
+#[derive(Debug)]
+struct DisplayCallServiceError<T>(CallServiceError<T>);
+
+impl<T> std::fmt::Display for DisplayCallServiceError<T> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match &self.0 {
+      CallServiceError::WriteError(err) => err.fmt(f),
+      CallServiceError::ReadError(err) => err.fmt(f),
     }
-  }
-
-  impl Message for EmptyMessage {}
-
-  let service_qos: QosPolicies = {
-    QosPolicyBuilder::new()
-      .reliability(policy::Reliability::Reliable {
-        max_blocking_time: ros2::Duration::from_millis(100),
-      })
-      .history(policy::History::KeepLast { depth: 1 })
-      .build()
-  };
-
-  // create_client cyclone version tested against ROS2 Galactic. Obviously with
-  // CycloneDDS. Seems to work on the same host only.
-  //
-  // create_client enhanced version tested against
-  // * ROS2 Foxy with eProsima DDS. Works to another host also.
-  // * ROS2 Galactic with RTI Connext (rmw_connextdds, not rmw_connext_cpp)
-  //   Environment variable RMW_CONNEXT_REQUEST_REPLY_MAPPING=extended Works to
-  //   another host also.
-  //
-  // * create_client basic version is untested.
-  // Service responses do not fully work yet.
-  let empty_srv_type = ServiceTypeName::new("std_srvs", "Empty");
-  let reset_client = ros_node
-    .create_client::<AService<EmptyMessage, EmptyMessage>>(
-      ServiceMapping::Enhanced,
-      &Name::new("/", "reset").unwrap(),
-      &empty_srv_type,
-      service_qos.clone(),
-      service_qos.clone(),
-    )
-    .unwrap();
-
-  // another client
-
-  // from https://docs.ros2.org/foxy/api/turtlesim/srv/SetPen.html
-  let set_pen_srv_type = ServiceTypeName::new("turtlesim", "SetPen");
-  let set_pen_client = ros_node
-    .create_client::<AService<PenRequest, ()>>(
-      ServiceMapping::Enhanced,
-      &Name::new("/turtle1", "set_pen").unwrap(),
-      &set_pen_srv_type,
-      service_qos.clone(),
-      service_qos.clone(),
-    )
-    .unwrap();
-
-  // third client
-
-  // from https://docs.ros2.org/foxy/api/turtlesim/srv/Spawn.html
-
-  #[derive(Debug, Clone, Serialize, Deserialize)]
-  pub struct SpawnRequest {
-    pub x: f32,
-    pub y: f32,
-    pub theta: f32,
-    pub name: String,
-  }
-  impl Message for SpawnRequest {}
-
-  #[derive(Debug, Clone, Serialize, Deserialize)]
-  pub struct SpawnResponse {
-    pub name: String,
-  }
-  impl Message for SpawnResponse {}
-
-  type SpawnService = AService<SpawnRequest, SpawnResponse>;
-
-  let spawn_srv_type = ServiceTypeName::new("turtlesim", "Spawn");
-  let spawn_client = ros_node
-    .create_client::<SpawnService>(
-      ServiceMapping::Enhanced,
-      &Name::new("/", "spawn").unwrap(),
-      &spawn_srv_type,
-      service_qos.clone(),
-      service_qos.clone(),
-    )
-    .unwrap();
-
-  // kill client
-
-  // from https://docs.ros2.org/foxy/api/turtlesim/srv/Spawn.html
-  #[derive(Debug, Clone, Serialize, Deserialize)]
-  pub struct KillRequest {
-    pub name: String,
-  }
-  impl Message for KillRequest {}
-
-  type KillService = AService<KillRequest, EmptyMessage>;
-
-  let kill_srv_type = ServiceTypeName::new("turtlesim", "Kill");
-  let kill_client = ros_node
-    .create_client::<KillService>(
-      ServiceMapping::Enhanced,
-      &Name::new("/", "kill").unwrap(),
-      &kill_srv_type,
-      service_qos.clone(),
-      service_qos.clone(),
-    )
-    .unwrap();
-
-  // Try an Action
-
-  // https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Actions/Understanding-ROS2-Actions.html
-  //
-  //
-  // Note: The action component types could be named anything.
-  // The field naming is also arbitrary.
-  // The important thing is that the types serialize to/from the same as the
-  // definition at the other end of the wire. In this case, a simple "f32" would
-  // do.
-  #[derive(Debug, Clone, Serialize, Deserialize)]
-  struct RotateAbsoluteGoal {
-    theta: f32,
-  }
-  impl Message for RotateAbsoluteGoal {}
-
-  #[derive(Debug, Clone, Serialize, Deserialize)]
-  struct RotateAbsoluteResult {
-    delta: f32,
-  }
-  impl Message for RotateAbsoluteResult {}
-
-  #[derive(Debug, Clone, Serialize, Deserialize)]
-  struct RotateAbsoluteFeedback {
-    remaining: f32,
-  }
-  impl Message for RotateAbsoluteFeedback {}
-
-  type RotateAbsoluteAction =
-    Action<RotateAbsoluteGoal, RotateAbsoluteResult, RotateAbsoluteFeedback>;
-
-  //TODO: There should be an easier way to do this.
-  let rotate_action_qos = action::ActionClientQosPolicies {
-    goal_service: service_qos.clone(),
-    result_service: service_qos.clone(),
-    cancel_service: service_qos.clone(),
-    feedback_subscription: service_qos.clone(),
-    status_subscription: service_qos,
-  };
-
-  let mut rotate_action_client = ros_node
-    .create_action_client::<RotateAbsoluteAction>(
-      ServiceMapping::Enhanced,
-      &Name::new("/turtle1", "rotate_absolute").unwrap(),
-      &ActionTypeName::new("turtlesim", "RotateAbsolute"),
-      rotate_action_qos,
-    )
-    .unwrap();
-
-  // Set up event loop
-
-  let poll = Poll::new().unwrap();
-
-  poll
-    .register(
-      &command_receiver,
-      ROS2_COMMAND_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
-
-  poll
-    .register(
-      &turtle_cmd_vel_reader,
-      TURTLE_CMD_VEL_READER_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
-  poll
-    .register(
-      &turtle_pose_reader,
-      TURTLE_POSE_READER_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
-  poll
-    .register(
-      &reset_client,
-      RESET_CLIENT_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
-  poll
-    .register(
-      &set_pen_client,
-      SET_PEN_CLIENT_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
-
-  poll
-    .register(
-      &spawn_client,
-      SPAWN_CLIENT_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
-
-  poll
-    .register(
-      &kill_client,
-      KILL_CLIENT_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
-
-  poll
-    .register(
-      rotate_action_client.goal_client(),
-      ROTATE_ABSOLUTE_GOAL_RESPONSE_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
-  poll
-    .register(
-      rotate_action_client.result_client(),
-      ROTATE_ABSOLUTE_RESULT_RESPONSE_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
-  poll
-    .register(
-      rotate_action_client.cancel_client(),
-      ROTATE_ABSOLUTE_CANCEL_RESPONSE_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
-  poll
-    .register(
-      rotate_action_client.status_subscription(),
-      ROTATE_ABSOLUTE_STATUS_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
-  poll
-    .register(
-      rotate_action_client.feedback_subscription(),
-      ROTATE_ABSOLUTE_FEEDBACK_TOKEN,
-      Ready::readable(),
-      PollOpt::edge(),
-    )
-    .unwrap();
-
-  // some state variables
-
-  let mut rotate_goal_req_id = None;
-  let mut rotate_goal_id = None;
-  let mut rotate_cancel_req_id = None;
-  let mut rotate_result_req_id = None;
-
-  // event loop
-
-  info!("Entering event_loop");
-  rosout!(
-    ros_node,
-    ros2::LogLevel::Info,
-    "initialized, entering event loop"
-  );
-  'event_loop: loop {
-    let mut events = Events::with_capacity(100);
-    poll.poll(&mut events, None).unwrap();
-
-    for event in events.iter() {
-      match event.token() {
-        ROS2_COMMAND_TOKEN => {
-          while let Ok(command) = command_receiver.try_recv() {
-            match command {
-              RosCommand::StopEventLoop => {
-                info!("Stopping main event loop");
-                break 'event_loop;
-              }
-              RosCommand::TurtleCmdVel { turtle_id, twist } => {
-                match match turtle_id {
-                  1 => turtle_cmd_vel_writer.publish(twist.clone()),
-                  2 => turtle_cmd_vel_writer2.publish(twist.clone()),
-                  _ => panic!("WTF?"),
-                } {
-                  Ok(_) => {
-                    info!("Wrote to ROS2 {twist:?}");
-                  }
-                  Err(e) => {
-                    error!("Failed to write to turtle writer. {e:?}");
-                    return;
-                  }
-                }
-              }
-              RosCommand::Reset => match reset_client.send_request(EmptyMessage::new()) {
-                Ok(id) => {
-                  rosout!(ros_node, ros2::LogLevel::Info, "Requested turtlesim reset");
-                  info!("Reset request sent {id:?}");
-                }
-                Err(e) => {
-                  error!("Failed to send request: {e:?}");
-                }
-              },
-              RosCommand::SetPen(pen_request) => {
-                match set_pen_client.send_request(pen_request.clone()) {
-                  Ok(id) => {
-                    info!("set_pen request sent {id:?} {pen_request:?}");
-                  }
-                  Err(e) => {
-                    error!("Failed to send request: {e:?}");
-                  }
-                }
-              }
-
-              RosCommand::Spawn(name) => {
-                match spawn_client.send_request(SpawnRequest {
-                  x: 1.0,
-                  y: 1.0,
-                  theta: 0.0,
-                  name,
-                }) {
-                  Ok(id) => {
-                    info!("spawn request sent {id:?} ");
-                  }
-                  Err(e) => {
-                    error!("Failed to send request: {e:?}");
-                  }
-                }
-              }
-              RosCommand::Kill(name) => match kill_client.send_request(KillRequest { name }) {
-                Ok(id) => {
-                  info!("kill request sent {id:?} ");
-                }
-                Err(e) => {
-                  error!("Failed to send request: {e:?}");
-                }
-              },
-
-              RosCommand::RotateAbsolute { heading } => {
-                match rotate_action_client.send_goal(RotateAbsoluteGoal { theta: heading }) {
-                  Err(e) => {
-                    error!("Failed to send RotateAbsoluteGoal: {e:?}");
-                  }
-                  Ok((req_id, ref goal_id)) => {
-                    info!("RotateAbsoluteGoal sent. req_id={req_id:?}  goal_id={goal_id:?}");
-                    rosout!(
-                      ros_node,
-                      ros2::LogLevel::Info,
-                      "RotateAbsoluteGoal sent. req_id={:?}  goal_id={:?}",
-                      req_id,
-                      goal_id
-                    );
-                    rotate_goal_req_id = Some(req_id);
-                    rotate_goal_id = Some(*goal_id);
-                  }
-                }
-              }
-
-              RosCommand::RotateAbsolute_Cancel => match rotate_goal_id {
-                None => info!("No goal to cancel!"),
-                Some(ref goal_id) => match rotate_action_client.cancel_goal(*goal_id) {
-                  Err(e) => {
-                    error!("Failed to cancel RotateAbsoluteGoal: {e:?}");
-                  }
-                  Ok(req_id) => {
-                    rotate_cancel_req_id = Some(req_id);
-                    info!("RotateAbsolute cancel request sent.");
-                  }
-                },
-              },
-            }
-          }
-        }
-        TURTLE_CMD_VEL_READER_TOKEN => {
-          while let Ok(Some(twist)) = turtle_cmd_vel_reader.take() {
-            readback_sender.send(twist.0).unwrap();
-          }
-        }
-        TURTLE_POSE_READER_TOKEN => {
-          while let Ok(Some(pose)) = turtle_pose_reader.take() {
-            pose_sender.send(pose.0).unwrap();
-          }
-        }
-        RESET_CLIENT_TOKEN => {
-          while let Ok(Some(id)) = reset_client.receive_response() {
-            message_sender
-              .send(format!("Turtle reset acknowledged: {id:?}"))
-              .unwrap();
-            info!("Turtle reset acknowledged: {id:?}");
-          }
-        }
-        SET_PEN_CLIENT_TOKEN => {
-          while let Ok(Some(id)) = set_pen_client.receive_response() {
-            message_sender
-              .send(format!("set_pen acknowledged: {id:?}"))
-              .unwrap();
-            info!("set_pen acknowledged: {id:?}");
-          }
-        }
-        KILL_CLIENT_TOKEN => {
-          while let Ok(Some(id)) = kill_client.receive_response() {
-            message_sender
-              .send(format!("Turtle kill acknowledged: {id:?}"))
-              .unwrap();
-            info!("Turtle kill acknowledged: {id:?}");
-          }
-        }
-
-        ROTATE_ABSOLUTE_GOAL_RESPONSE_TOKEN => {
-          info!("ROTATE_ABSOLUTE_GOAL_RESPONSE triggered");
-          match (rotate_goal_req_id, &rotate_goal_id) {
-            (Some(req_id), Some(goal_id)) => {
-              loop {
-                match rotate_action_client.receive_goal_response(req_id) {
-                  Ok(Some(goal_resp)) => {
-                    message_sender
-                      .send(format!("RotateAbsolute goal acknowledged: {goal_resp:?}"))
-                      .unwrap();
-                    info!("RotateAbsolute goal acknowledged: {goal_resp:?}");
-                    match rotate_action_client.request_result(*goal_id) {
-                      Err(e) => info!("Cannot request result: {e:?}"),
-                      Ok(result_req_id) => {
-                        rotate_result_req_id = Some(result_req_id);
-                        info!("Requested RotateAbsolute action result.")
-                      }
-                    }
-                  }
-                  Ok(None) => {
-                    // no more data to read
-                    info!("ROTATE_ABSOLUTE_GOAL_RESPONSE no more data");
-                    break;
-                  }
-                  Err(e) => {
-                    error!("Error receiving RotateAbsoluteGoal: {e}")
-                  }
-                } // match
-              } // loop
-            }
-            (_, None) => info!("Goal response, but for what goal?"),
-            (None, _) => info!("Goal response, but don't know goal request id!"),
-          }
-        }
-        ROTATE_ABSOLUTE_RESULT_RESPONSE_TOKEN => match rotate_result_req_id {
-          None => info!("Where is my result response id?"),
-          Some(req_id) => {
-            while let Ok(Some(result_resp)) = rotate_action_client.receive_result(req_id) {
-              message_sender
-                .send(format!("RotateAbsolute result: {result_resp:?}"))
-                .unwrap();
-              info!("RotateAbsolute result: {result_resp:?}");
-              rosout!(
-                ros_node,
-                ros2::LogLevel::Info,
-                "RotateAbsolute result: {:?}",
-                result_resp
-              );
-              rotate_cancel_req_id = None;
-            }
-          }
-        },
-        ROTATE_ABSOLUTE_CANCEL_RESPONSE_TOKEN => match rotate_cancel_req_id {
-          None => info!("Where is my cancel response id?"),
-          Some(req_id) => {
-            while let Ok(Some(cancel_resp)) = rotate_action_client.receive_cancel_response(req_id) {
-              message_sender
-                .send(format!("RotateAbsolute cancel response: {cancel_resp:?}"))
-                .unwrap();
-              info!("RotateAbsolute cancel response: {cancel_resp:?}");
-              rotate_cancel_req_id = None;
-            }
-          }
-        },
-
-        ROTATE_ABSOLUTE_STATUS_TOKEN => {
-          while let Ok(Some(status)) = rotate_action_client.receive_status() {
-            info!("RotateAbsolute status = {status:?}");
-          }
-        }
-        ROTATE_ABSOLUTE_FEEDBACK_TOKEN => match rotate_goal_id {
-          Some(ref rotate_goal_id) => loop {
-            match rotate_action_client.receive_feedback(*rotate_goal_id) {
-              Ok(Some(f)) => info!("RotateAbsolute feedback = {f:?}"),
-              Ok(None) => break,
-              Err(e) => error!("Bad feedback: {e:?}"),
-            }
-          },
-          None => info!("Feedback, but no goal!"),
-        },
-
-        _ => {
-          error!("Unknown poll token {:?}", event.token())
-        }
-      } // match
-    } // for
   }
 }

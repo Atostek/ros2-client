@@ -1,39 +1,30 @@
-use std::{
-  collections::VecDeque,
-  io::Write,
-  sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-  },
-};
+use std::{collections::VecDeque, f32::consts::PI, io, iter::FromIterator};
 
-#[allow(unused_imports)]
-use log::{debug, error, info, warn};
-use mio::{Events, Poll, PollOpt, Ready, Token};
-use mio_extras::channel as mio_channel;
-use termion::{
-  event::{Event, Key},
-  input::TermRead,
+use crossterm::event::{EventStream, KeyCode, KeyEvent, KeyModifiers};
+use futures::{Stream, TryStreamExt};
+use ratatui::{
+  layout::{Constraint, Layout},
+  prelude::{Buffer, Rect},
+  style::Stylize,
+  symbols::border,
+  text::{Line, Text},
+  widgets::{Block, List, ListDirection, Paragraph, Widget},
+  Frame,
 };
 
 use crate::{PenRequest, Pose, Twist, Vector3};
 
 #[derive(Debug)]
-pub enum RosCommand {
+pub enum Event {
   StopEventLoop,
-  TurtleCmdVel {
-    turtle_id: i32,
-    twist: Twist,
-  },
+  ChooseTurtle { id: i32 },
+  TurtleCmdVel { twist: Twist },
   Reset,
   SetPen(PenRequest),
   Spawn(String),
   Kill(String),
-  RotateAbsolute {
-    heading: f32,
-  },
-  #[allow(non_camel_case_types)]
-  RotateAbsolute_Cancel,
+  RotateAbsolute { heading: f32 },
+  CancelRotateAbsolute,
 }
 
 // Define turtle movement commands as Twist values
@@ -69,329 +60,235 @@ const ROTATE_RIGHT: Twist = Twist {
   },
 };
 
-pub struct UiController {
-  poll: Poll,
-  stdout: std::io::Stdout,
-  stdin_receiver: mio_channel::Receiver<Event>,
-  stop_reader: Arc<AtomicBool>,
-  command_sender: mio_channel::SyncSender<RosCommand>,
-  readback_receiver: mio_channel::Receiver<Twist>,
-  pose_receiver: mio_channel::Receiver<Pose>,
-  message_receiver: mio_channel::Receiver<String>,
+const PEN_REQUESTS: [PenRequest; 5] = [
+  PenRequest {
+    r: 255,
+    b: 0,
+    g: 0,
+    width: 3,
+    off: 0,
+  },
+  PenRequest {
+    r: 255,
+    b: 0,
+    g: 200,
+    width: 5,
+    off: 0,
+  },
+  PenRequest {
+    r: 250,
+    b: 250,
+    g: 250,
+    width: 2,
+    off: 1,
+  },
+  PenRequest {
+    r: 0,
+    b: 0,
+    g: 250,
+    width: 1,
+    off: 0,
+  },
+  PenRequest {
+    r: 0,
+    b: 0,
+    g: 0,
+    width: 1,
+    off: 0,
+  },
+];
+
+const MESSAGES_MAX_LEN: usize = 20;
+
+#[derive(Default, Debug)]
+pub struct Display {
+  cmd_vel: Twist,
+  pose: Pose,
   messages: VecDeque<String>,
 }
 
-impl UiController {
-  const KEYBOARD_CHECK_TOKEN: Token = Token(0);
-  const READBACK_TOKEN: Token = Token(1);
-  const POSE_TOKEN: Token = Token(2);
-  const MESSAGE_TOKEN: Token = Token(3);
-
-  pub fn new(
-    stdout: std::io::Stdout,
-    command_sender: mio_channel::SyncSender<RosCommand>,
-    readback_receiver: mio_channel::Receiver<Twist>,
-    pose_receiver: mio_channel::Receiver<Pose>,
-    message_receiver: mio_channel::Receiver<String>,
-  ) -> UiController {
-    let poll = Poll::new().unwrap();
-    let stop_reader = Arc::new(AtomicBool::new(false));
-    let (stdin_tx, stdin_receiver) = mio_channel::sync_channel(8);
-
-    // separate thread to do blocking reads of stdin events
-    // termion library has async_stdin for exactly this purpose, but
-    // we cannot use it, because it does not support .poll()
-    let stop_reader_thread_clone = stop_reader.clone();
-    std::thread::spawn(move || {
-      for i in std::io::stdin().events() {
-        if stdin_tx.send(i.unwrap()).is_err() {
-          return;
-        }
-        if stop_reader_thread_clone.load(Ordering::Relaxed) {
-          return;
-        }
-      }
-    });
-
-    UiController {
-      poll,
-      stdout,
-      stdin_receiver,
-      stop_reader,
-      command_sender,
-      readback_receiver,
-      pose_receiver,
-      message_receiver,
-      messages: VecDeque::new(),
-    }
+impl Display {
+  pub fn draw(&self, frame: &mut Frame) {
+    frame.render_widget(self, frame.area())
   }
 
-  pub fn start(&mut self) {
-    ctrlc::set_handler(move || {
-      println!("Aborting");
-      std::process::abort();
-    })
-    .expect("Error setting Ctrl-C handler");
+  pub fn set_cmd_vel(&mut self, twist: Twist) {
+    self.cmd_vel = twist;
+  }
 
-    self
-      .poll
-      .register(
-        &self.stdin_receiver,
-        UiController::KEYBOARD_CHECK_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .unwrap();
+  pub fn set_pose(&mut self, pose: Pose) {
+    self.pose = pose;
+  }
 
-    self
-      .poll
-      .register(
-        &self.readback_receiver,
-        UiController::READBACK_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .unwrap();
-    self
-      .poll
-      .register(
-        &self.pose_receiver,
-        UiController::POSE_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .unwrap();
-    self
-      .poll
-      .register(
-        &self.message_receiver,
-        UiController::MESSAGE_TOKEN,
-        Ready::readable(),
-        PollOpt::edge(),
-      )
-      .unwrap();
+  pub fn add_message(&mut self, msg: String) {
+    self.messages.push_front(msg);
+    self.messages.truncate(MESSAGES_MAX_LEN);
+  }
+}
 
-    // clearing screen
-    write!(
-      self.stdout,
-      "{}{}Press q to quit, cursor keys to control turtle.",
-      termion::clear::All,
-      termion::cursor::Goto(1, 1)
-    )
-    .unwrap();
-    self.stdout.flush().unwrap();
+impl Widget for &Display {
+  fn render(self, area: Rect, buf: &mut Buffer)
+  where
+    Self: Sized,
+  {
+    let main_block = Block::bordered()
+      .title(Line::from(" Turle Teleop ".bold()).centered())
+      .title_bottom(Line::from(vec![" Quit ".into(), "<q> / <Ctrl-C> ".blue().bold()]).centered())
+      .border_set(border::THICK);
 
-    let mut turtle_id = 1;
+    let vlayout = Layout::vertical(vec![Constraint::Fill(1), Constraint::Fill(1)])
+      .split(main_block.inner(area));
 
-    let mut pen_index = 0;
-    let pen_requests = [
-      PenRequest {
-        r: 255,
-        b: 0,
-        g: 0,
-        width: 3,
-        off: 0,
-      },
-      PenRequest {
-        r: 255,
-        b: 0,
-        g: 200,
-        width: 5,
-        off: 0,
-      },
-      PenRequest {
-        r: 250,
-        b: 250,
-        g: 250,
-        width: 2,
-        off: 1,
-      },
-      PenRequest {
-        r: 0,
-        b: 0,
-        g: 250,
-        width: 1,
-        off: 0,
-      },
-      PenRequest {
-        r: 0,
-        b: 0,
-        g: 0,
-        width: 1,
-        off: 0,
-      },
+    let hlayout =
+      Layout::horizontal(vec![Constraint::Fill(2), Constraint::Fill(1)]).split(vlayout[0]);
+
+    Paragraph::new(vec![
+      Line::from("cmd_vel: ".bold()),
+      Line::from(vec![" - ".into(), "linear: ".bold()]),
+      Line::from(vec![
+        "   - ".into(),
+        "x: ".bold(),
+        format!("{}", self.cmd_vel.linear.x).into(),
+      ]),
+      Line::from(vec![
+        "   - ".into(),
+        "y: ".bold(),
+        format!("{}", self.cmd_vel.linear.y).into(),
+      ]),
+      Line::from(vec![
+        "   - ".into(),
+        "z: ".bold(),
+        format!("{}", self.cmd_vel.linear.z).into(),
+      ]),
+      Line::from(vec![" - ".into(), "angular: ".bold()]),
+      Line::from(vec![
+        "   - ".into(),
+        "x: ".bold(),
+        format!("{}", self.cmd_vel.angular.x).into(),
+      ]),
+      Line::from(vec![
+        "   - ".into(),
+        "y: ".bold(),
+        format!("{}", self.cmd_vel.angular.y).into(),
+      ]),
+      Line::from(vec![
+        "   - ".into(),
+        "z: ".bold(),
+        format!("{}", self.cmd_vel.angular.z).into(),
+      ]),
+      Line::default(),
+      "pose: ".bold().into(),
+      Line::from(vec![
+        " - ".into(),
+        "x: ".bold(),
+        format!("{}", self.pose.x).into(),
+      ]),
+      Line::from(vec![
+        " - ".into(),
+        "y: ".bold(),
+        format!("{}", self.pose.y).into(),
+      ]),
+      Line::from(vec![
+        " - ".into(),
+        "theta: ".bold(),
+        format!("{}", self.pose.theta).into(),
+      ]),
+      Line::from(vec![
+        " - ".into(),
+        "linear velocity: ".bold(),
+        format!("{}", self.pose.linear_velocity).into(),
+      ]),
+      Line::from(vec![
+        " - ".into(),
+        "angular velocity: ".bold(),
+        format!("{}", self.pose.angular_velocity).into(),
+      ]),
+    ])
+    .block(Block::bordered().title("Turtle 1"))
+    .render(hlayout[0], buf);
+
+    const INSTRUCTIONS: [(&str, &str); 15] = [
+      ("a", "Spawn 1"),
+      ("A", "Kill 1"),
+      ("b", "Spawn 2"),
+      ("B", "Kill 2"),
+      ("1", "Control Turtle 1"),
+      ("2", "Control Turtle 2"),
+      ("d", "Rotate West "),
+      ("g", "Rotate East"),
+      ("f", "Cancel Rotate"),
+      ("Up", "Move Forward"),
+      ("Down", "Move Backward"),
+      ("Left", "Move Left "),
+      ("Right", "Move Right"),
+      ("p", "Set pen"),
+      ("r", "Reset"),
     ];
 
-    loop {
-      write!(self.stdout, "{}", termion::cursor::Goto(1, 1)).unwrap();
-      self.stdout.flush().unwrap();
-
-      let mut events = Events::with_capacity(100);
-      self.poll.poll(&mut events, None).unwrap();
-
-      for event in events.iter() {
-        match event.token() {
-          UiController::KEYBOARD_CHECK_TOKEN => {
-            while let Ok(termion::event::Event::Key(key)) = &self.stdin_receiver.try_recv() {
-              write!(
-                self.stdout,
-                "{}{}{:?}",
-                termion::cursor::Goto(1, 2),
-                termion::clear::CurrentLine,
-                key,
-              )
-              .unwrap();
-              info!("key: {key:?}");
-              match key {
-                Key::Char('q') | Key::Ctrl('c') => {
-                  debug!("Quit.");
-                  self.send_command(RosCommand::StopEventLoop);
-                  self.stop_reader.store(true, Ordering::Relaxed);
-                  return; // stop loop
-                }
-                Key::Char('r') => {
-                  debug!("Reset request");
-                  self.send_command(RosCommand::Reset);
-                }
-                Key::Char('p') => {
-                  debug!("Pen request");
-                  self.send_command(RosCommand::SetPen(pen_requests[pen_index].clone()));
-                  pen_index = (pen_index + 1) % pen_requests.len();
-                }
-                Key::Char('a') => {
-                  debug!("Spawn 1");
-                  self.send_command(RosCommand::Spawn("turtle1".to_owned()));
-                }
-                Key::Char('b') => {
-                  debug!("Spawn 2");
-                  self.send_command(RosCommand::Spawn("turtle2".to_owned()));
-                }
-                Key::Char('A') => {
-                  debug!("Kill 1");
-                  self.send_command(RosCommand::Kill("turtle1".to_owned()));
-                }
-                Key::Char('B') => {
-                  debug!("Kill 2");
-                  self.send_command(RosCommand::Kill("turtle2".to_owned()));
-                }
-
-                Key::Char('1') => {
-                  turtle_id = 1;
-                }
-
-                Key::Char('2') => {
-                  turtle_id = 2;
-                }
-
-                Key::Char('d') => {
-                  debug!("Rotate West");
-                  self.send_command(RosCommand::RotateAbsolute {
-                    heading: std::f32::consts::PI,
-                  });
-                }
-                Key::Char('g') => {
-                  debug!("Rotate East");
-                  self.send_command(RosCommand::RotateAbsolute { heading: 0.0 });
-                }
-                Key::Char('f') => {
-                  debug!("Cancel Rotate");
-                  self.send_command(RosCommand::RotateAbsolute_Cancel);
-                }
-
-                Key::Up => {
-                  debug!("Move up.");
-                  let twist = MOVE_FORWARD;
-                  self.print_sent_turtle_cmd_vel(&twist);
-                  self.send_command(RosCommand::TurtleCmdVel { turtle_id, twist })
-                }
-                Key::Right => {
-                  debug!("Move right.");
-                  let twist = ROTATE_RIGHT;
-                  self.print_sent_turtle_cmd_vel(&twist);
-                  self.send_command(RosCommand::TurtleCmdVel { turtle_id, twist })
-                }
-                Key::Down => {
-                  debug!("Rotate down.");
-                  let twist = MOVE_BACKWARD;
-                  self.print_sent_turtle_cmd_vel(&twist);
-                  self.send_command(RosCommand::TurtleCmdVel { turtle_id, twist })
-                }
-                Key::Left => {
-                  debug!("Rotate left.");
-                  let twist = ROTATE_LEFT;
-                  self.print_sent_turtle_cmd_vel(&twist);
-                  self.send_command(RosCommand::TurtleCmdVel { turtle_id, twist })
-                }
-                _ => (),
-              }
-            }
-          }
-          UiController::READBACK_TOKEN => {
-            while let Ok(twist) = self.readback_receiver.try_recv() {
-              write!(
-                self.stdout,
-                "{}{}Read Turtle cmd_vel {:?}",
-                termion::cursor::Goto(1, 6),
-                termion::clear::CurrentLine,
-                twist
-              )
-              .unwrap();
-            }
-          }
-          UiController::POSE_TOKEN => {
-            while let Ok(pose) = self.pose_receiver.try_recv() {
-              write!(
-                self.stdout,
-                "{}{}Turtle pose {:?}",
-                termion::cursor::Goto(1, 8),
-                termion::clear::CurrentLine,
-                pose
-              )
-              .unwrap();
-            }
-          }
-          UiController::MESSAGE_TOKEN => {
-            while let Ok(msg) = self.message_receiver.try_recv() {
-              self.messages.push_back(msg);
-              while self.messages.len() > 5 {
-                self.messages.pop_front();
-              }
-              write!(
-                self.stdout,
-                "{}{}Messages:{}",
-                termion::cursor::Goto(1, 10),
-                termion::clear::CurrentLine,
-                termion::cursor::Goto(1, 11),
-              )
-              .unwrap();
-              for m in &self.messages {
-                writeln!(self.stdout, "{m}\r").unwrap();
-              }
-            }
-          }
-          other_token => {
-            error!("What is this? {other_token:?}");
-          }
-        } // match
-      } // for
-    } // loop
-  } // fn
-
-  fn send_command(&self, command: RosCommand) {
-    self
-      .command_sender
-      .try_send(command)
-      .unwrap_or_else(|e| error!("UI: Failed to send command {e:?}"))
-  }
-
-  fn print_sent_turtle_cmd_vel(&mut self, twist: &Twist) {
-    write!(
-      self.stdout,
-      "{}{}Sent Turtle cmd_vel {:?}",
-      termion::cursor::Goto(1, 4),
-      termion::clear::CurrentLine,
-      twist
+    Paragraph::new(
+      INSTRUCTIONS
+        .iter()
+        .map(|(shortcut, descr)| [format!("<{shortcut}>: ").blue().bold(), (*descr).into()])
+        .map(Line::from_iter)
+        .collect::<Text>(),
     )
-    .unwrap();
+    .block(Block::bordered().title("Instructions"))
+    .render(hlayout[1], buf);
+
+    List::new(self.messages.iter().map(|s| s.as_str()))
+      .direction(ListDirection::TopToBottom)
+      .block(Block::bordered().title("Messages"))
+      .render(vlayout[1], buf);
+
+    main_block.render(area, buf);
   }
+}
+
+fn into_event(event: crossterm::event::Event, pen_index: &mut usize) -> Option<Event> {
+  event.as_key_press_event().and_then(
+    |KeyEvent {
+       code, modifiers, ..
+     }| match code {
+      KeyCode::Char('q') => Some(Event::StopEventLoop),
+      KeyCode::Char('c') if modifiers == KeyModifiers::CONTROL => Some(Event::StopEventLoop),
+      KeyCode::Char('r') => Some(Event::Reset),
+      KeyCode::Char('p') => {
+        let pen = PEN_REQUESTS[*pen_index];
+        *pen_index = (*pen_index + 1) % PEN_REQUESTS.len();
+        Some(Event::SetPen(pen))
+      }
+      KeyCode::Char(c @ ('a' | 'b')) => {
+        let turtle = if c == 'a' { "turtle1" } else { "turtle2" };
+        Some(Event::Spawn(turtle.to_owned()))
+      }
+      KeyCode::Char(c @ ('A' | 'B')) => {
+        let turtle = if c == 'A' { "turtle1" } else { "turtle2" };
+        Some(Event::Kill(turtle.to_owned()))
+      }
+      KeyCode::Char('1') => Some(Event::ChooseTurtle { id: 1 }),
+      KeyCode::Char('2') => Some(Event::ChooseTurtle { id: 2 }),
+      KeyCode::Char('d') => Some(Event::RotateAbsolute { heading: PI }),
+      KeyCode::Char('g') => Some(Event::RotateAbsolute { heading: 0. }),
+      KeyCode::Char('f') => Some(Event::CancelRotateAbsolute),
+      KeyCode::Up => Some(Event::TurtleCmdVel {
+        twist: MOVE_FORWARD,
+      }),
+      KeyCode::Down => Some(Event::TurtleCmdVel {
+        twist: MOVE_BACKWARD,
+      }),
+      KeyCode::Right => Some(Event::TurtleCmdVel {
+        twist: ROTATE_RIGHT,
+      }),
+      KeyCode::Left => Some(Event::TurtleCmdVel { twist: ROTATE_LEFT }),
+      _ => None,
+    },
+  )
+}
+
+pub fn events() -> impl Stream<Item = io::Result<Event>> {
+  let mut pen_index = 0;
+  EventStream::new().try_filter_map(move |event| {
+    let event = into_event(event, &mut pen_index);
+    async move { Ok(event) }
+  })
 }
