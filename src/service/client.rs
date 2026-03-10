@@ -249,6 +249,31 @@ impl<T> From<ReadError> for CallServiceError<T> {
   }
 }
 
+impl<T> std::fmt::Display for CallServiceError<T> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::WriteError(err) => {
+        write!(f, "Write error: {err}")
+      }
+      Self::ReadError(err) => {
+        write!(f, "Read error: {err}")
+      }
+    }
+  }
+}
+
+impl<T> std::error::Error for CallServiceError<T>
+where
+  T: std::fmt::Debug + 'static,
+{
+  fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+    Some(match self {
+      CallServiceError::WriteError(err) => err,
+      CallServiceError::ReadError(err) => err,
+    })
+  }
+}
+
 impl<S> Evented for Client<S>
 where
   S: 'static + Service,
