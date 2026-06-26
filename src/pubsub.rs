@@ -109,9 +109,9 @@ where
     Subscription { datareader }
   }
 
-  pub fn take_seed<'de, S>(&self, seed: S) -> ReadResult<Option<(M, MessageInfo)>>
+  pub fn take_seed<S>(&self, seed: S) -> ReadResult<Option<(M, MessageInfo)>>
   where
-    S: serde::de::DeserializeSeed<'de, Value = M> + Clone,
+    S: for<'de> serde::de::DeserializeSeed<'de, Value = M> + Clone,
     M: 'static,
   {
     self.datareader.drain_read_notifications();
@@ -122,12 +122,12 @@ where
   }
 
   // Returns an async Stream of messages with MessageInfo metadata
-  pub fn async_stream_seed<'a, 'de, S>(
+  pub fn async_stream_seed<'a, S>(
     &'a self,
     seed: S,
   ) -> impl FusedStream<Item = ReadResult<(M, MessageInfo)>> + 'a
   where
-    S: serde::de::DeserializeSeed<'de, Value = M> + Clone + 'a,
+    S: for<'de> serde::de::DeserializeSeed<'de, Value = M> + Clone + 'a,
     M: 'static,
   {
     let decoder = CdrDeserializeSeedDecoder::new(seed, PhantomData::<()>);

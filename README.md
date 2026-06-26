@@ -47,6 +47,9 @@ This is what is expected to work. There are no routine tests against older relea
 | Jazzy | Yes. Requires `ros2-client` 0.7.5 or newer | 
 
 
+## Version 0.9
+* Upgrade to RustDDS 0.12, which had an API change.
+
 ## Version 0.8:
 * API change: `ParameterFunc` must now implement `Sync`, so that `Node` is also `Sync`. This helps in using multithreaded async executors.
 

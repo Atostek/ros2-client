@@ -177,7 +177,7 @@ where
 
 impl Spinner {
   pub async fn spin(self) -> CreateResult<()> {
-    info!("Starting Spinner for {}", &self.fully_qualified_node_name);
+    info!("Starting Spinner for {}", self.fully_qualified_node_name);
     let dds_status_listener = self.ros_context.domain_participant().status_listener();
     let dds_status_stream = dds_status_listener.as_async_status_stream();
     pin_mut!(dds_status_stream);
@@ -221,7 +221,7 @@ impl Spinner {
       .as_ref()
       .map(|s| s.describe_parameters_server.receive_request_stream());
 
-    info!("Spinner {} initialized", &self.fully_qualified_node_name);
+    info!("Spinner {} initialized", self.fully_qualified_node_name);
 
     loop {
       futures::select! {
@@ -430,14 +430,14 @@ impl Spinner {
                 .or_insert(BTreeSet::from([remote_writer]));
             }
             DomainParticipantStatusEvent::ReaderLost {guid, ..} => {
-              for ( _local, readers)
-              in self.writers_to_remote_readers.lock().unwrap().iter_mut() {
+              for readers
+              in self.writers_to_remote_readers.lock().unwrap().values_mut() {
                 readers.remove(&guid);
               }
             }
             DomainParticipantStatusEvent::WriterLost {guid, ..} => {
-              for ( _local, writers)
-              in self.readers_to_remote_writers.lock().unwrap().iter_mut() {
+              for writers
+              in self.readers_to_remote_writers.lock().unwrap().values_mut() {
                 writers.remove(&guid);
               }
             }
@@ -450,10 +450,7 @@ impl Spinner {
         }
       }
     }
-    info!(
-      "Spinner {} exiting .spin()",
-      &self.fully_qualified_node_name
-    );
+    info!("Spinner {} exiting .spin()", self.fully_qualified_node_name);
     Ok(())
     //}
   } // fn

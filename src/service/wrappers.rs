@@ -381,7 +381,7 @@ impl<RW: Wrapper> no_key::DefaultDecoder<RW> for ServiceDeserializerAdapter<RW> 
 #[derive(Clone)]
 pub struct WrapperDecoder;
 
-impl<RW> no_key::Decode<RW> for WrapperDecoder
+impl<'de, RW> no_key::Decode<'de, RW> for WrapperDecoder
 where
   RW: Wrapper,
 {
@@ -389,7 +389,7 @@ where
 
   fn decode_bytes(
     self,
-    input_bytes: &[u8],
+    input_bytes: &'de [u8],
     encoding: RepresentationIdentifier,
   ) -> Result<RW, Self::Error> {
     Ok(RW::from_bytes_and_ri(input_bytes, encoding))
