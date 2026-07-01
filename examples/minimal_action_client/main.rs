@@ -209,7 +209,11 @@ fn create_qos() -> QosPolicies {
       .reliability(policy::Reliability::Reliable {
         max_blocking_time: rustdds::Duration::from_millis(100),
       })
-      .durability(policy::Durability::TransientLocal)
+      // ROS 2 action services and the feedback topic are VOLATILE (only the
+      // status topic is TRANSIENT_LOCAL). A TransientLocal reader here is
+      // incompatible with the ROS 2 server's Volatile reply/feedback writers,
+      // so goal responses and feedback never arrive.
+      .durability(policy::Durability::Volatile)
       .history(policy::History::KeepLast { depth: 1 })
       .build()
   };

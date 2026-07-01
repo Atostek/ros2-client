@@ -49,17 +49,33 @@ fn main() {
 
   let mut node = create_node();
 
+  // ROS 2 action services and the feedback topic are VOLATILE; only the status
+  // topic is TRANSIENT_LOCAL. Offering TransientLocal on the request readers is
+  // incompatible with a ROS 2 client's Volatile request writers, so goals never
+  // reach this server. Match the ROS 2 defaults per endpoint.
   let service_qos: QosPolicies = {
     QosPolicyBuilder::new()
       .reliability(policy::Reliability::Reliable {
         max_blocking_time: rustdds::Duration::from_millis(100),
       })
-      .durability(policy::Durability::TransientLocal)
+      .durability(policy::Durability::Volatile)
       .history(policy::History::KeepLast { depth: 1 })
       .build()
   };
 
-  let publisher_qos: QosPolicies = {
+  let feedback_qos: QosPolicies = {
+    QosPolicyBuilder::new()
+      .reliability(policy::Reliability::Reliable {
+        max_blocking_time: rustdds::Duration::from_millis(100),
+      })
+      .history(policy::History::KeepLast { depth: 1 })
+      .durability(policy::Durability::Volatile)
+      .build()
+  };
+
+  // The status topic must remain TRANSIENT_LOCAL: ROS 2 action clients request
+  // TransientLocal on status, so a Volatile writer would be incompatible.
+  let status_qos: QosPolicies = {
     QosPolicyBuilder::new()
       .reliability(policy::Reliability::Reliable {
         max_blocking_time: rustdds::Duration::from_millis(100),
@@ -73,8 +89,8 @@ fn main() {
     goal_service: service_qos.clone(),
     result_service: service_qos.clone(),
     cancel_service: service_qos,
-    feedback_publisher: publisher_qos.clone(),
-    status_publisher: publisher_qos,
+    feedback_publisher: feedback_qos,
+    status_publisher: status_qos,
   };
 
   let fibonacci_action_server = action::AsyncActionServer::new(
