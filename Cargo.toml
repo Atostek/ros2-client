@@ -55,7 +55,7 @@ default = ["jazzy"]
 
 # rustdds = {  path = "../RustDDS"  } # dev setting
 # rustdds = {   git = "https://github.com/Atostek/RustDDS.git" }
-rustdds = {  version = "0.12"  } # release setting
+rustdds = {  version = "0.13"  } # release setting
 
 mio = "^0.6.23"
 mio-extras = "2.0.6"
