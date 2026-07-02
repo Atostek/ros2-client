@@ -5,8 +5,9 @@
 //! older ones, so `cfg!(feature = "X")` means "at least distribution X".
 //!
 //! [`COMPILED_ROS_DISTRO`] exposes the selected distribution as a runtime
-//! constant, and [`verify_ros_distro_env`] compares it against the `ROS_DISTRO`
-//! environment variable at [`crate::Context`] initialization.
+//! constant, and [`crate::distributions::verify_ros_distro_env`] compares it
+//! against the `ROS_DISTRO` environment variable at [`crate::Context`]
+//! initialization.
 
 use std::fmt;
 

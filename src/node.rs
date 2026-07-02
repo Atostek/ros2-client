@@ -119,6 +119,7 @@ impl Default for NodeOptions {
 // ----------------------------------------------------------------------------------------------------
 
 /// DDS or ROS 2 Discovery events.
+#[allow(clippy::large_enum_variant)] // TODO: fix this
 #[derive(Clone, Debug)]
 pub enum NodeEvent {
   DDS(DomainParticipantStatusEvent),
@@ -1360,7 +1361,7 @@ impl Node {
   /// # Arguments
   ///
   /// * `service_mapping` - ServiceMapping to be used. See
-  ///   [`Self.create_client`].
+  ///   [`Self::create_client`].
   /// * `service_name` -
   /// * `qos`-
   pub fn create_server<S>(

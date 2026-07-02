@@ -63,14 +63,16 @@ distribution with, e.g., `cargo build --no-default-features --features humble`
 
 Please see [test results](interop/results) for details.  
 
+## Version 0.10
+* Add interoperability tests and results.
+* ROS 2 distribution selection via a feature (`galactic` .. `lyrical`; default `jazzy`). 
+* `Context` now checks the `ROS_DISTRO` environment variable against the compiled distribution.
+* Upgrade to RustDDS 0.13 to improve interoperability.
+
+
 ## Version 0.9
 * Upgrade to RustDDS 0.12, which had an API change.
-* ROS 2 distribution selection via a feature chain (`galactic` .. `lyrical`, each
-  enabling all older ones; default `jazzy`). This replaces the `pre-iron-gid`
-  feature (the old 24-byte Gid is now selected by building for `galactic`/`humble`,
-  i.e. any distribution older than `iron`). Adds the `RosDistro` enum and the
-  `COMPILED_ROS_DISTRO` constant, and `Context` now checks the `ROS_DISTRO`
-  environment variable against the compiled distribution.
+
 
 ## Version 0.8:
 * API change: `ParameterFunc` must now implement `Sync`, so that `Node` is also `Sync`. This helps in using multithreaded async executors.
