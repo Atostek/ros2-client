@@ -20,19 +20,35 @@ security = [
   "rustdds/security" # Requires "security" in RustDDS also
 ]
 
-# The ROS 2/RMW-defined Gid (global identifer) type (see src/gid.rs) has changed between
-# ROS2 releases Humble and Iron. See
-# https://github.com/ros2/rmw/commit/8995d9faa8ecb39f62cc4e2cb65abb63489ae4c6
-# These are incompatible and apparently not run-time negotiable/detectable over the wire. 
+# ROS 2 distribution selection.
 #
-# ros2-client now uses the newer Iron/Jazzy/... version as a default. 
-# Use this feature to revert back to older version.
-# There is no known easy and reliable way to talk to both Humble and Iron at the same time.
+# Each distribution feature enables all older distribution features, forming an
+# unbroken chain from the highest activated distribution down to `galactic`.
+# This means `cfg!(feature = "X")` is true whenever the build targets distro X
+# *or any newer one*, i.e. it tests "are we at least on distro X?".
 #
-# Using a wrong Gid format prevents ROS2 seeing Nodes published by ros2-client
-# so that `ros2 node list` or `rqt` Node Graph do not show nodes. 
-# Topic communication may still work, but Services likely do not.
-pre-iron-gid = []
+# Enable exactly the distribution you build/run against, e.g.
+#   cargo build --no-default-features --features kilted
+# The default is `jazzy` (a recent LTS); it keeps the modern 16-byte Gid format
+# (see src/gid.rs), because jazzy transitively enables `iron`.
+#
+# Notes:
+#  - The ROS 2/RMW Gid (global identifier) type (src/gid.rs) changed between
+#    Humble and Iron, so the `iron` link is the threshold for the new Gid format.
+#    See https://github.com/ros2/rmw/commit/8995d9faa8ecb39f62cc4e2cb65abb63489ae4c6
+#    Using a wrong Gid format prevents ROS 2 from seeing Nodes published by
+#    ros2-client (`ros2 node list`/`rqt` show nothing) and typically breaks
+#    Services; topic communication may still work.
+#  - `rolling` is not part of the chain; it is handled at run time (see the
+#    ROS_DISTRO check in src/distributions.rs).
+galactic = []
+humble   = ["galactic"]
+iron     = ["humble"]
+jazzy    = ["iron"]
+kilted   = ["jazzy"]
+lyrical  = ["kilted"]
+
+default = ["jazzy"]
 
 
 [dependencies]

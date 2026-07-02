@@ -20,10 +20,14 @@ fn main() {
   let mut node = create_node();
   let topic_qos = create_qos();
 
+  // Message type of the matching demo_nodes_cpp counterpart: older distros use
+  // std_msgs/String, newer ones (>= Lyrical) use example_interfaces/String.
+  // DDS matches by type name; selected via the distribution feature chain.
+  let (type_pkg, type_name) = chatter_type();
   let chatter_topic = node
     .create_topic(
       &Name::new("/", "chatter").unwrap(),
-      MessageTypeName::new("std_msgs", "String"),
+      MessageTypeName::new(type_pkg, type_name),
       &topic_qos,
     )
     .unwrap();
@@ -63,6 +67,16 @@ fn main() {
     } // for
   } // loop
 } // main
+
+// The /chatter message type of the matching demo_nodes_cpp counterpart:
+// example_interfaces/String on Lyrical or newer, std_msgs/String before that.
+fn chatter_type() -> (&'static str, &'static str) {
+  if cfg!(feature = "lyrical") {
+    ("example_interfaces", "String")
+  } else {
+    ("std_msgs", "String")
+  }
+}
 
 fn create_qos() -> QosPolicies {
   let service_qos: QosPolicies = {

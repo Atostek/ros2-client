@@ -158,6 +158,11 @@ impl Context {
 
   /// Create a new Context from an existing [`DomainParticipant`].
   pub fn from_domain_participant(domain_participant: DomainParticipant) -> CreateResult<Context> {
+    // Check the runtime ROS_DISTRO against the distribution we were compiled
+    // for. Guarded so it logs only once per process even with many Contexts.
+    static ROS_DISTRO_CHECK: std::sync::Once = std::sync::Once::new();
+    ROS_DISTRO_CHECK.call_once(crate::distributions::verify_ros_distro_env);
+
     let i = ContextInner::from_domain_participant(domain_participant)?;
     Ok(Context {
       inner: Arc::new(Mutex::new(i)),

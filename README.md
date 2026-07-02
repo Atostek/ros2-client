@@ -39,16 +39,32 @@ Please see the included examples on how to use the various features.
 
 This is what is expected to work. There are no routine tests against older releases.
 
+Select the target distribution with a Cargo feature. The distribution features
+form a chain (`galactic` < `humble` < `iron` < `jazzy` < `kilted` < `lyrical`)
+where each feature enables all older ones, so `cfg!(feature = "X")` means "at
+least distribution X". The default feature is `jazzy`. Build against a specific
+distribution with, e.g., `cargo build --no-default-features --features humble`
+(`--no-default-features` avoids also pulling in the default). This selects the
+correct RMW Gid format (which changed between Humble and Iron).
+
 | ROS 2 Release | `ros2-client` should interoperate? |
 | ------------- | :------------ |
 | A - E         | Maybe. Not tested. |
-| Foxy, Galactic, Humble | Yes. Enable feature `pre-iron-gid` when building `ros2-client` 0.7.5 or newer |
-| Iron  | Yes. Not well tested. Requires `ros2-client` 0.7.5 or newer |
-| Jazzy | Yes. Requires `ros2-client` 0.7.5 or newer | 
+| Foxy, Galactic, Humble | Yes. Build with feature `galactic` or `humble` (older Gid format). |
+| Iron  | Yes. Not well tested. Build with feature `iron`. |
+| Jazzy | Yes (default). Build with feature `jazzy`. |
+| Kilted | Yes. Build with feature `kilted`. |
+| Lyrical | Yes. Build with feature `lyrical`. |
 
 
 ## Version 0.9
 * Upgrade to RustDDS 0.12, which had an API change.
+* ROS 2 distribution selection via a feature chain (`galactic` .. `lyrical`, each
+  enabling all older ones; default `jazzy`). This replaces the `pre-iron-gid`
+  feature (the old 24-byte Gid is now selected by building for `galactic`/`humble`,
+  i.e. any distribution older than `iron`). Adds the `RosDistro` enum and the
+  `COMPILED_ROS_DISTRO` constant, and `Context` now checks the `ROS_DISTRO`
+  environment variable against the compiled distribution.
 
 ## Version 0.8:
 * API change: `ParameterFunc` must now implement `Sync`, so that `Node` is also `Sync`. This helps in using multithreaded async executors.

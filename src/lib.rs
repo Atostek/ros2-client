@@ -72,6 +72,8 @@ pub mod interfaces;
 
 /// ROS 2 Action machinery
 pub mod action;
+/// ROS 2 distribution identification (compile-time selection + runtime check)
+pub mod distributions;
 pub mod entities_info;
 mod gid;
 pub mod log;
@@ -95,6 +97,8 @@ pub(crate) mod node;
 // Re-exports from crate root to simplify usage
 #[doc(inline)]
 pub use context::*;
+#[doc(inline)]
+pub use distributions::{RosDistro, COMPILED_ROS_DISTRO};
 #[doc(inline)]
 pub use message::Message;
 #[doc(inline)]

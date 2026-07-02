@@ -3,9 +3,12 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use rustdds::{dds::key::CdrEncodingSize, *};
 
-#[cfg(not(feature = "pre-iron-gid"))]
+// The Gid definition changed between Humble and Iron, so `iron` (which is
+// enabled by every newer distribution feature) is the threshold: iron-or-newer
+// uses the 16-byte format, galactic/humble use the older 24-byte format.
+#[cfg(feature = "iron")]
 pub const GID_LENGTH: usize = 16;
-#[cfg(feature = "pre-iron-gid")]
+#[cfg(not(feature = "iron"))]
 pub const GID_LENGTH: usize = 24;
 
 /// ROS2 equivalent for DDS GUID
@@ -17,7 +20,9 @@ pub const GID_LENGTH: usize = 24;
 ///             
 /// This is between Humble (May 2022) and Iron (May 2023)
 ///
-/// Use Cargo feature `pre-iron-gid` if you want the old version.           
+/// The size is selected by the distribution feature chain (see Cargo.toml):
+/// build against `galactic` or `humble` for the old 24-byte format, or any
+/// `iron`-or-newer distribution for the 16-byte format.           
 #[derive(
   Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, CdrEncodingSize,
 )]
