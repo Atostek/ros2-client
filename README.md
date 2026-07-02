@@ -39,13 +39,17 @@ Please see the included examples on how to use the various features.
 
 This is what is expected to work. There are no routine tests against older releases.
 
-Select the target distribution with a Cargo feature. The distribution features
-form a chain (`galactic` < `humble` < `iron` < `jazzy` < `kilted` < `lyrical`)
-where each feature enables all older ones, so `cfg!(feature = "X")` means "at
-least distribution X". The default feature is `jazzy`. Build against a specific
+Select the target distribution with a Cargo feature. 
+
+Note: The distribution features
+form a chain (`galactic` < `humble` < `iron` < `jazzy` < `kilted` < `lyrical`), and enabling
+any of these also enables all the older features, 
+but the build aims to be compatible only with the latest enabled.
+
+The default feature is currently  `jazzy`, because it has LTS status. 
+Build against a specific
 distribution with, e.g., `cargo build --no-default-features --features humble`
-(`--no-default-features` avoids also pulling in the default). This selects the
-correct RMW Gid format (which changed between Humble and Iron).
+(`--no-default-features` avoids also pulling in the default). 
 
 | ROS 2 Release | `ros2-client` should interoperate? |
 | ------------- | :------------ |
@@ -56,6 +60,8 @@ correct RMW Gid format (which changed between Humble and Iron).
 | Kilted | Yes. Build with feature `kilted`. |
 | Lyrical | Yes. Build with feature `lyrical`. |
 
+
+Please see [test results](interop/results) for details.  
 
 ## Version 0.9
 * Upgrade to RustDDS 0.12, which had an API change.

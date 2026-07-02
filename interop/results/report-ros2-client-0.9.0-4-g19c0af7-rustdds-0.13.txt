@@ -1,0 +1,61 @@
+===== distro: humble =====
+  [PASS] humble.action_client interop: ros2-client action client -> ROS 2 minimal Fibonacci action server: matched /<<< (Feedback|Action Result)/ in rustdds log
+  [PASS] humble.action_client discovery: ros2-client node in `ros2 node list` -> seen
+  [PASS] humble.action_server interop: ROS 2 minimal action client -> ros2-client Fibonacci action server: matched /(Result received|Next number in sequence)/ in ros2 log
+  [PASS] humble.action_server discovery: ros2-client node visibility not asserted (ROS 2 counterpart is short-lived)
+  [PASS] humble.service_client interop: ros2-client client -> ROS 2 minimal AddTwoInts service: matched /Response received/ in rustdds log
+  [PASS] humble.service_client discovery: ros2-client node in `ros2 node list` -> seen
+  [PASS] humble.service_server interop: ROS 2 minimal client -> ros2-client AddTwoInts server: matched /result of \d+ \+ \d+ = \d+/ in ros2 log
+  [PASS] humble.service_server discovery: ros2-client node visibility not asserted (ROS 2 counterpart is short-lived)
+  [PASS] humble.topic_pub interop: ros2-client talker -> ROS 2 demo_nodes_cpp listener (/chatter): matched /I heard/ in ros2 log
+  [PASS] humble.topic_pub discovery: ros2-client node in `ros2 node list` -> seen
+  [PASS] humble.topic_sub interop: ROS 2 demo_nodes_cpp talker -> ros2-client listener (/chatter): matched /message len=/ in rustdds log
+  [PASS] humble.topic_sub discovery: ros2-client node in `ros2 node list` -> seen
+== humble: 12 pass, 0 note(s), 0 fail(s) ==
+
+===== distro: jazzy =====
+  [PASS] jazzy.action_client interop: ros2-client action client -> ROS 2 minimal Fibonacci action server: matched /<<< (Feedback|Action Result)/ in rustdds log
+  [PASS] jazzy.action_client discovery: ros2-client node in `ros2 node list` -> seen
+  [PASS] jazzy.action_server interop: ROS 2 minimal action client -> ros2-client Fibonacci action server: matched /(Result received|Next number in sequence)/ in ros2 log
+  [PASS] jazzy.action_server discovery: ros2-client node visibility not asserted (ROS 2 counterpart is short-lived)
+  [PASS] jazzy.service_client interop: ros2-client client -> ROS 2 minimal AddTwoInts service: matched /Response received/ in rustdds log
+  [PASS] jazzy.service_client discovery: ros2-client node in `ros2 node list` -> seen
+  [PASS] jazzy.service_server interop: ROS 2 minimal client -> ros2-client AddTwoInts server: matched /result of \d+ \+ \d+ = \d+/ in ros2 log
+  [PASS] jazzy.service_server discovery: ros2-client node visibility not asserted (ROS 2 counterpart is short-lived)
+  [PASS] jazzy.topic_pub interop: ros2-client talker -> ROS 2 demo_nodes_cpp listener (/chatter): matched /I heard/ in ros2 log
+  [PASS] jazzy.topic_pub discovery: ros2-client node in `ros2 node list` -> seen
+  [PASS] jazzy.topic_sub interop: ROS 2 demo_nodes_cpp talker -> ros2-client listener (/chatter): matched /message len=/ in rustdds log
+  [PASS] jazzy.topic_sub discovery: ros2-client node in `ros2 node list` -> seen
+== jazzy: 12 pass, 0 note(s), 0 fail(s) ==
+
+===== distro: kilted =====
+  [PASS] kilted.action_client interop: ros2-client action client -> ROS 2 minimal Fibonacci action server: matched /<<< (Feedback|Action Result)/ in rustdds log
+  [PASS] kilted.action_client discovery: ros2-client node in `ros2 node list` -> seen
+  [PASS] kilted.action_server interop: ROS 2 minimal action client -> ros2-client Fibonacci action server: matched /(Result received|Next number in sequence)/ in ros2 log
+  [PASS] kilted.action_server discovery: ros2-client node visibility not asserted (ROS 2 counterpart is short-lived)
+  [PASS] kilted.service_client interop: ros2-client client -> ROS 2 minimal AddTwoInts service: matched /Response received/ in rustdds log
+  [PASS] kilted.service_client discovery: ros2-client node in `ros2 node list` -> seen
+  [PASS] kilted.service_server interop: ROS 2 minimal client -> ros2-client AddTwoInts server: matched /result of \d+ \+ \d+ = \d+/ in ros2 log
+  [PASS] kilted.service_server discovery: ros2-client node visibility not asserted (ROS 2 counterpart is short-lived)
+  [PASS] kilted.topic_pub interop: ros2-client talker -> ROS 2 demo_nodes_cpp listener (/chatter): matched /I heard/ in ros2 log
+  [PASS] kilted.topic_pub discovery: ros2-client node in `ros2 node list` -> seen
+  [PASS] kilted.topic_sub interop: ROS 2 demo_nodes_cpp talker -> ros2-client listener (/chatter): matched /message len=/ in rustdds log
+  [PASS] kilted.topic_sub discovery: ros2-client node in `ros2 node list` -> seen
+== kilted: 12 pass, 0 note(s), 0 fail(s) ==
+
+===== distro: lyrical =====
+  [PASS] lyrical.action_client interop: ros2-client action client -> ROS 2 minimal Fibonacci action server: matched /<<< (Feedback|Action Result)/ in rustdds log
+  [PASS] lyrical.action_client discovery: ros2-client node in `ros2 node list` -> seen
+  [PASS] lyrical.action_server interop: ROS 2 minimal action client -> ros2-client Fibonacci action server: matched /(Result received|Next number in sequence)/ in ros2 log
+  [PASS] lyrical.action_server discovery: ros2-client node visibility not asserted (ROS 2 counterpart is short-lived)
+  [PASS] lyrical.service_client interop: ros2-client client -> ROS 2 minimal AddTwoInts service: matched /Response received/ in rustdds log
+  [PASS] lyrical.service_client discovery: ros2-client node in `ros2 node list` -> seen
+  [PASS] lyrical.service_server interop: ROS 2 minimal client -> ros2-client AddTwoInts server: matched /result of \d+ \+ \d+ = \d+/ in ros2 log
+  [PASS] lyrical.service_server discovery: ros2-client node visibility not asserted (ROS 2 counterpart is short-lived)
+  [PASS] lyrical.topic_pub interop: ros2-client talker -> ROS 2 demo_nodes_cpp listener (/chatter): matched /I heard/ in ros2 log
+  [PASS] lyrical.topic_pub discovery: ros2-client node in `ros2 node list` -> seen
+  [PASS] lyrical.topic_sub interop: ROS 2 demo_nodes_cpp talker -> ros2-client listener (/chatter): matched /message len=/ in rustdds log
+  [PASS] lyrical.topic_sub discovery: ros2-client node in `ros2 node list` -> seen
+== lyrical: 12 pass, 0 note(s), 0 fail(s) ==
+
+===== TOTAL: 48 pass, 0 note(s), 0 fail(s) across 4 distro(s) =====
