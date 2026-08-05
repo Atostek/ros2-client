@@ -10,7 +10,7 @@ use rustdds::{
   *,
 };
 
-use crate::{message_info::MessageInfo, node::Node, service::*};
+use crate::{message_info::MessageInfo, node::Node, qos::QosProfile, service::*};
 
 /// Client end of a ROS2 Service
 pub struct Client<S>
@@ -35,8 +35,8 @@ where
     node: &mut Node,
     request_topic: &Topic,
     response_topic: &Topic,
-    qos_request: Option<QosPolicies>,
-    qos_response: Option<QosPolicies>,
+    qos_request: Option<QosProfile>,
+    qos_response: Option<QosProfile>,
   ) -> CreateResult<Self> {
     let request_sender =
       node.create_datawriter

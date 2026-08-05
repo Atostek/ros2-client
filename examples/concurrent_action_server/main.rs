@@ -6,14 +6,15 @@ use futures::{stream::StreamExt, FutureExt as StdFutureExt};
 use smol::{future::FutureExt, pin};
 use ros2_client::{
   action::{self, AsyncActionServer, GoalEndStatus, NewGoalHandle},
+  qos::{Durability, History},
   ActionTypeName,
   Context,
   Name, //Node,
   NodeName,
   NodeOptions,
+  QosProfile,
   ServiceMapping,
 };
-use rustdds::{policy, QosPolicies, QosPolicyBuilder};
 
 // Test / demo program of ROS2 Action, server side.
 //
@@ -66,25 +67,13 @@ fn main() {
   // run ROS2 background tasks
   smol::spawn(node.spinner().unwrap().spin()).detach();
 
-  let service_qos: QosPolicies = {
-    QosPolicyBuilder::new()
-      .reliability(policy::Reliability::Reliable {
-        max_blocking_time: rustdds::Duration::from_millis(100),
-      })
-      .history(policy::History::KeepLast { depth: 4 })
-      .durability(policy::Durability::TransientLocal)
-      .build()
-  };
+  let service_qos = QosProfile::publisher_default()
+    .history(History::KeepLast { depth: 4 })
+    .durability(Durability::TransientLocal);
 
-  let publisher_qos: QosPolicies = {
-    QosPolicyBuilder::new()
-      .reliability(policy::Reliability::Reliable {
-        max_blocking_time: rustdds::Duration::from_millis(100),
-      })
-      .history(policy::History::KeepLast { depth: 4 })
-      .durability(policy::Durability::TransientLocal)
-      .build()
-  };
+  let publisher_qos = QosProfile::publisher_default()
+    .history(History::KeepLast { depth: 4 })
+    .durability(Durability::TransientLocal);
 
   let fibonacci_action_qos = action::ActionServerQosPolicies {
     goal_service: service_qos.clone(),

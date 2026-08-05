@@ -1,7 +1,7 @@
 use futures::StreamExt;
 use smol::future::{self, FutureExt};
 use async_ctrlc::CtrlC;
-use ros2_client::{ros2::policy, *};
+use ros2_client::{qos::History, *};
 use rustdds::DomainParticipantStatusEvent;
 
 pub fn main() {
@@ -49,19 +49,13 @@ pub fn main() {
   });
   executor.spawn(status_event_stream).detach();
 
-  let reliable_qos = ros2::QosPolicyBuilder::new()
-    .history(policy::History::KeepLast { depth: 10 })
-    .reliability(policy::Reliability::Reliable {
-      max_blocking_time: ros2::Duration::from_millis(100),
-    })
-    //.durability(policy::Durability::TransientLocal)
-    .build();
+  let reliable_qos = QosProfile::publisher_default().history(History::KeepLast { depth: 10 });
 
   let chatter_topic = node
     .create_topic(
       &Name::new("/", "chatter").unwrap(),
       MessageTypeName::new("std_msgs", "String"),
-      &ros2_client::DEFAULT_SUBSCRIPTION_QOS,
+      &DEFAULT_SUBSCRIPTION_QOS,
     )
     .unwrap();
   let chatter_subscription = node

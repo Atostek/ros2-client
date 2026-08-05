@@ -11,8 +11,8 @@
 //! * On the **`zenoh`** backend it drives publisher/subscriber options and the
 //!   compact QoS encoding embedded in liveliness keys (E2/E5).
 //!
-//! This is the first step of E1; existing APIs still accept the RustDDS QoS
-//! types and are migrated incrementally.
+//! Phase 1 of ADR-0010: public `create_*` APIs take [`QosProfile`]; RustDDS
+//! `QosPolicies` is only used at the DDS adapter boundary (via `From`).
 
 use std::time::Duration;
 
@@ -81,8 +81,7 @@ pub struct QosProfile {
 impl QosProfile {
   /// The ROS 2 "sensor data" style default used for subscriptions: best-effort,
   /// volatile, keep-last depth 1, infinite deadline/lifespan, automatic
-  /// liveliness. Mirrors the DDS-spec defaults used by
-  /// `DEFAULT_SUBSCRIPTION_QOS`.
+  /// liveliness.
   pub const fn subscription_default() -> Self {
     Self {
       reliability: Reliability::BestEffort,
@@ -96,7 +95,7 @@ impl QosProfile {
   }
 
   /// The default used for publishers: like [`Self::subscription_default`] but
-  /// reliable (the DDS default for writers). Mirrors `DEFAULT_PUBLISHER_QOS`.
+  /// reliable (the DDS default for writers).
   pub const fn publisher_default() -> Self {
     Self {
       reliability: Reliability::Reliable,
@@ -124,6 +123,34 @@ impl QosProfile {
     self.history = history;
     self
   }
+
+  /// Builder-style setter for deadline (`None` = infinite).
+  #[must_use]
+  pub const fn deadline(mut self, deadline: Option<Duration>) -> Self {
+    self.deadline = deadline;
+    self
+  }
+
+  /// Builder-style setter for lifespan (`None` = infinite).
+  #[must_use]
+  pub const fn lifespan(mut self, lifespan: Option<Duration>) -> Self {
+    self.lifespan = lifespan;
+    self
+  }
+
+  /// Builder-style setter for liveliness.
+  #[must_use]
+  pub const fn liveliness(mut self, liveliness: Liveliness) -> Self {
+    self.liveliness = liveliness;
+    self
+  }
+
+  /// Builder-style setter for liveliness lease (`None` = infinite).
+  #[must_use]
+  pub const fn liveliness_lease(mut self, liveliness_lease: Option<Duration>) -> Self {
+    self.liveliness_lease = liveliness_lease;
+    self
+  }
 }
 
 impl Default for QosProfile {
@@ -144,7 +171,7 @@ mod dds_conv {
 
   // Default DDS max_blocking_time for a Reliable writer/reader. RustDDS requires
   // a value; ROS 2 QoS has no such knob, so we use the same 100 ms this crate
-  // already uses for DEFAULT_PUBLISHER_QOS.
+  // historically used for publisher defaults.
   const DEFAULT_MAX_BLOCKING: DdsDuration = DdsDuration::from_millis(100);
 
   fn to_dds_duration(d: Option<std::time::Duration>) -> DdsDuration {

@@ -30,7 +30,7 @@ async fn make_subscriber() {
     .create_topic(
       &Name::new("/", "pub_sub_topic").unwrap(),
       MessageTypeName::new("std_msgs", "String"),
-      &DEFAULT_PUBLISHER_QOS.clone(),
+      &DEFAULT_PUBLISHER_QOS,
     )
     .unwrap();
   let subscriber: Subscription<String> = node.create_subscription(&topic, None).unwrap();
@@ -68,7 +68,7 @@ async fn make_publisher() {
     .create_topic(
       &Name::new("/", "pub_sub_topic").unwrap(),
       MessageTypeName::new("std_msgs", "String"),
-      &DEFAULT_PUBLISHER_QOS.clone(),
+      &DEFAULT_PUBLISHER_QOS,
     )
     .unwrap();
 

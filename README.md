@@ -64,6 +64,15 @@ loopback):
 cargo run --no-default-features --features zenoh --example zenoh_demo
 ```
 
+### QoS (API convergence Phase 1)
+
+On branch `zenoh`, topic/service/action create APIs take the owned
+[`QosProfile`](src/qos.rs) type on **both** backends (not `rustdds::QosPolicies`).
+Use `QosProfile::subscription_default()` / `publisher_default()` (also exported
+as `DEFAULT_SUBSCRIPTION_QOS` / `DEFAULT_PUBLISHER_QOS`) and the builder-style
+setters. See [ADR-0010](docs/decisions/0010-converge-api-surfaces.md).
+`ros2::QosPolicies` remains re-exported temporarily as an escape hatch.
+
 ### Zenoh router requirement
 
 Like `rmw_zenoh`, the Zenoh backend discovers peers and exchanges the ROS graph

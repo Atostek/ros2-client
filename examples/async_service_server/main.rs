@@ -3,11 +3,9 @@ use log::{debug, error, info, warn};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use ros2_client::{
-  AService, Context, Message, Name, Node, NodeName, NodeOptions, ServiceMapping, ServiceTypeName,
-};
-use rustdds::{
-  policy::{self, Deadline, Lifespan},
-  Duration, QosPolicies, QosPolicyBuilder,
+  qos::{Durability, History, Reliability},
+  AService, Context, Message, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping,
+  ServiceTypeName,
 };
 
 // This is an example / test program.
@@ -72,24 +70,11 @@ fn main() {
   // It would return the count of requestes processed, if the stream would end.
 } // main
 
-fn create_qos() -> QosPolicies {
-  let service_qos: QosPolicies = {
-    QosPolicyBuilder::new()
-      .history(policy::History::KeepLast { depth: 10 })
-      .reliability(policy::Reliability::Reliable {
-        max_blocking_time: Duration::from_millis(100),
-      })
-      .durability(policy::Durability::Volatile)
-      .deadline(Deadline(Duration::INFINITE))
-      .lifespan(Lifespan {
-        duration: Duration::INFINITE,
-      })
-      .liveliness(policy::Liveliness::Automatic {
-        lease_duration: Duration::INFINITE,
-      })
-      .build()
-  };
-  service_qos
+fn create_qos() -> QosProfile {
+  QosProfile::publisher_default()
+    .reliability(Reliability::Reliable)
+    .durability(Durability::Volatile)
+    .history(History::KeepLast { depth: 10 })
 }
 
 fn create_node() -> Node {

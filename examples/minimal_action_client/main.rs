@@ -5,9 +5,10 @@ use log::{debug, error, info, warn};
 use futures::{pin_mut, FutureExt as StdFutureExt, StreamExt};
 use smol::{future::FutureExt, pin};
 use ros2_client::{
-  action, action_msgs, ActionTypeName, Context, Name, NodeName, NodeOptions, ServiceMapping,
+  action, action_msgs, qos::{Durability, History},
+  ActionTypeName, Context, Name, NodeName, NodeOptions, QosProfile, ServiceMapping,
 };
-use rustdds::{dds::WriteError, policy, QosPolicies, QosPolicyBuilder};
+use rustdds::dds::WriteError;
 
 // Test / demo program of ROS2 Action, client side.
 //
@@ -203,19 +204,12 @@ fn main() {
   smol::block_on(main_loop);
 }
 
-fn create_qos() -> QosPolicies {
-  let service_qos: QosPolicies = {
-    QosPolicyBuilder::new()
-      .reliability(policy::Reliability::Reliable {
-        max_blocking_time: rustdds::Duration::from_millis(100),
-      })
-      // ROS 2 action services and the feedback topic are VOLATILE (only the
-      // status topic is TRANSIENT_LOCAL). A TransientLocal reader here is
-      // incompatible with the ROS 2 server's Volatile reply/feedback writers,
-      // so goal responses and feedback never arrive.
-      .durability(policy::Durability::Volatile)
-      .history(policy::History::KeepLast { depth: 1 })
-      .build()
-  };
-  service_qos
+fn create_qos() -> QosProfile {
+  // ROS 2 action services and the feedback topic are VOLATILE (only the
+  // status topic is TRANSIENT_LOCAL). A TransientLocal reader here is
+  // incompatible with the ROS 2 server's Volatile reply/feedback writers,
+  // so goal responses and feedback never arrive.
+  QosProfile::publisher_default()
+    .durability(Durability::Volatile)
+    .history(History::KeepLast { depth: 1 })
 }

@@ -33,9 +33,9 @@ use futures::{
 };
 use tokio::sync::oneshot;
 use ros2_client::{
-  ros2::{policy::*, QosPolicyBuilder},
+  qos::{Durability, History, QosProfile, Reliability},
   Context, MessageTypeName, Name, NodeName, NodeOptions, Publisher, Subscription,
-  DEFAULT_PUBLISHER_QOS, DEFAULT_SUBSCRIPTION_QOS,
+  DEFAULT_PUBLISHER_QOS,
 };
 
 #[tokio::test]
@@ -55,14 +55,8 @@ async fn make_subscriber(tx: oneshot::Sender<()>) {
       NodeOptions::new(),
     )
     .unwrap();
-  let sub_policy = DEFAULT_SUBSCRIPTION_QOS.modify_by(
-    &QosPolicyBuilder::new()
-      // Subscriber must be made Reliable, or it will not request past data.
-      .reliability(Reliability::Reliable {
-        max_blocking_time: Duration::from_millis(1000).into(),
-      })
-      .build(),
-  );
+  // Subscriber must be Reliable, or it will not request past data.
+  let sub_policy = QosProfile::subscription_default().reliability(Reliability::Reliable);
   let topic = node
     .create_topic(
       &Name::new("/", "late_topic").unwrap(),
@@ -120,23 +114,16 @@ async fn make_publisher(rx: oneshot::Receiver<()>) {
     .create_topic(
       &Name::new("/", "late_topic").unwrap(),
       MessageTypeName::new("std_msgs", "String"),
-      &DEFAULT_PUBLISHER_QOS.clone(),
+      &DEFAULT_PUBLISHER_QOS,
     )
     .unwrap();
-  let pub_policy = DEFAULT_PUBLISHER_QOS.modify_by(
-    &QosPolicyBuilder::new()
-      // TransientLocal is necessary. Otherwise Durablity = Volatile and published data
-      // is forgotten immediately after publishing.
-      .durability(Durability::TransientLocal)
-      // Reliablility is obviously necessary.
-      .reliability(Reliability::Reliable {
-        max_blocking_time: Duration::from_millis(100).into(),
-      })
-      // History buffer must be deep enough to hold all the data we wish to
-      // provide for late joiners. In this case, >= 5 .
-      .history(History::KeepLast { depth: 10 })
-      .build(),
-  );
+  // TransientLocal is necessary. Otherwise Durability = Volatile and published
+  // data is forgotten immediately after publishing.
+  // History buffer must be deep enough to hold all the data we wish to
+  // provide for late joiners. In this case, >= 5.
+  let pub_policy = QosProfile::publisher_default()
+    .durability(Durability::TransientLocal)
+    .history(History::KeepLast { depth: 10 });
 
   let publisher: Publisher<String> = node.create_publisher(&topic, Some(pub_policy)).unwrap();
   tokio::task::spawn(node.spinner().unwrap().spin());

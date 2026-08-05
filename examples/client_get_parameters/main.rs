@@ -3,13 +3,13 @@ use std::{env, time::Duration};
 use futures::TryFutureExt;
 use smol::future::FutureExt;
 use ros2_client::{
+  qos::History,
   rcl_interfaces::{GetParametersRequest, GetParametersResponse},
   ros2::WriteError,
   service::CallServiceError,
-  AService, Context, Name, Node, NodeName, NodeOptions, ParameterValue, ServiceMapping,
-  ServiceTypeName,
+  AService, Context, Name, Node, NodeName, NodeOptions, ParameterValue, QosProfile,
+  ServiceMapping, ServiceTypeName,
 };
-use rustdds::{policy, QosPolicies, QosPolicyBuilder};
 
 fn main() {
   log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
@@ -90,16 +90,8 @@ fn main() {
   });
 }
 
-fn create_qos() -> QosPolicies {
-  let service_qos: QosPolicies = {
-    QosPolicyBuilder::new()
-      .reliability(policy::Reliability::Reliable {
-        max_blocking_time: rustdds::Duration::from_millis(100),
-      })
-      .history(policy::History::KeepLast { depth: 1 })
-      .build()
-  };
-  service_qos
+fn create_qos() -> QosProfile {
+  QosProfile::publisher_default().history(History::KeepLast { depth: 1 })
 }
 
 fn create_node() -> Node {

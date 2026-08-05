@@ -13,7 +13,6 @@ use serde::Serialize;
 use rustdds::{
   dds::CreateResult,
   no_key::{DeserializerAdapter, SerializerAdapter},
-  policy::*,
   *,
 };
 
@@ -24,41 +23,20 @@ use crate::{
   names::*,
   node::{Node, NodeOptions},
   pubsub::{Publisher, Subscription},
+  qos::QosProfile,
   NodeCreateError,
 };
 
-lazy_static! {
-/// Basic BestEffort QoS for subscribers
+/// Basic BestEffort QoS for subscribers (same as
+/// [`QosProfile::subscription_default`]).
 ///
-/// Note: If you want Reliable communication, both publisher and Subscriber
-/// must specify QoS Reliability = Reliable.
-  pub static ref DEFAULT_SUBSCRIPTION_QOS: QosPolicies = QosPolicyBuilder::new()
-    .durability(Durability::Volatile) // default per table in DDS Spec v1.4 Section 2.2.3 Supported QoS
-    .deadline(Deadline(Duration::INFINITE)) // default per table in DDS Spec v1.4 Section 2.2.3 Supported QoS
-    .ownership(Ownership::Shared) // default per table in DDS Spec v1.4 Section 2.2.3 Supported QoS
-    .reliability(Reliability::BestEffort) // default for DataReaders and Topics
-    .history(History::KeepLast { depth: 1 }) // default per table in DDS Spec v1.4 Section 2.2.3 Supported QoS
-    .lifespan(Lifespan {
-      // default per table in DDS Spec v1.4 Section 2.2.3 Supported QoS
-      duration: Duration::INFINITE
-    })
-    .build();
-}
+/// Note: If you want Reliable communication, both Publisher and Subscription
+/// must specify [`Reliability::Reliable`](crate::qos::Reliability::Reliable).
+pub const DEFAULT_SUBSCRIPTION_QOS: QosProfile = QosProfile::subscription_default();
 
-lazy_static! {
-/// Basic Reliable QoS for publishing.
-  pub static ref DEFAULT_PUBLISHER_QOS: QosPolicies = QosPolicyBuilder::new()
-    .durability(Durability::Volatile)
-    .deadline(Deadline(Duration::INFINITE))
-    .ownership(Ownership::Shared)
-    .reliability(Reliability::Reliable{max_blocking_time: Duration::from_millis(100)})
-      // Reliability = Reliable is the default for DataWriters, different from above.
-    .history(History::KeepLast { depth: 1 })
-    .lifespan(Lifespan {
-      duration: Duration::INFINITE
-    })
-    .build();
-}
+/// Basic Reliable QoS for publishing (same as
+/// [`QosProfile::publisher_default`]).
+pub const DEFAULT_PUBLISHER_QOS: QosProfile = QosProfile::publisher_default();
 
 #[cfg(feature = "security")]
 struct SecurityConfig {
@@ -230,13 +208,14 @@ impl Context {
     &self,
     topic_dds_name: String,
     type_name: MessageTypeName,
-    qos: &QosPolicies,
+    qos: &QosProfile,
   ) -> CreateResult<Topic> {
     info!("Creating topic, DDS name: {topic_dds_name}");
+    let dds_qos: QosPolicies = qos.into();
     let topic = self.domain_participant().create_topic(
       topic_dds_name,
       type_name.dds_msg_type(),
-      qos,
+      &dds_qos,
       TopicKind::NoKey,
     )?;
     // ROS2 does not use WithKey topics, so always NoKey
@@ -247,14 +226,15 @@ impl Context {
   pub(crate) fn create_publisher<M>(
     &self,
     topic: &Topic,
-    qos: Option<QosPolicies>,
+    qos: Option<QosProfile>,
   ) -> dds::CreateResult<Publisher<M>>
   where
     M: Serialize,
   {
+    let dds_qos = qos.map(QosPolicies::from);
     let datawriter = self
       .get_ros_default_publisher()
-      .create_datawriter_no_key(topic, qos)?;
+      .create_datawriter_no_key(topic, dds_qos)?;
 
     Ok(Publisher::new(datawriter))
   }
@@ -262,42 +242,45 @@ impl Context {
   pub(crate) fn create_subscription<M>(
     &self,
     topic: &Topic,
-    qos: Option<QosPolicies>,
+    qos: Option<QosProfile>,
   ) -> dds::CreateResult<Subscription<M>>
   where
     M: 'static,
   {
+    let dds_qos = qos.map(QosPolicies::from);
     let datareader = self
       .get_ros_default_subscriber()
-      .create_simple_datareader_no_key(topic, qos)?;
+      .create_simple_datareader_no_key(topic, dds_qos)?;
     Ok(Subscription::new(datareader))
   }
 
   pub(crate) fn create_datawriter<M, SA>(
     &self,
     topic: &Topic,
-    qos: Option<QosPolicies>,
+    qos: Option<QosProfile>,
   ) -> dds::CreateResult<no_key::DataWriter<M, SA>>
   where
     SA: SerializerAdapter<M>,
   {
+    let dds_qos = qos.map(QosPolicies::from);
     self
       .get_ros_default_publisher()
-      .create_datawriter_no_key(topic, qos)
+      .create_datawriter_no_key(topic, dds_qos)
   }
 
   pub(crate) fn create_simpledatareader<M, DA>(
     &self,
     topic: &Topic,
-    qos: Option<QosPolicies>,
+    qos: Option<QosProfile>,
   ) -> dds::CreateResult<no_key::SimpleDataReader<M, DA>>
   where
     M: 'static,
     DA: 'static + DeserializerAdapter<M>,
   {
+    let dds_qos = qos.map(QosPolicies::from);
     self
       .get_ros_default_subscriber()
-      .create_simple_datareader_no_key(topic, qos)
+      .create_simple_datareader_no_key(topic, dds_qos)
   }
 
   pub(crate) fn update_node(&mut self, node_info: NodeEntitiesInfo) {
@@ -346,8 +329,10 @@ impl ContextInner {
   pub fn from_domain_participant(
     domain_participant: DomainParticipant,
   ) -> CreateResult<ContextInner> {
-    let ros_default_publisher = domain_participant.create_publisher(&DEFAULT_PUBLISHER_QOS)?;
-    let ros_default_subscriber = domain_participant.create_subscriber(&DEFAULT_SUBSCRIPTION_QOS)?;
+    let ros_default_publisher =
+      domain_participant.create_publisher(&QosPolicies::from(DEFAULT_PUBLISHER_QOS))?;
+    let ros_default_subscriber =
+      domain_participant.create_subscriber(&QosPolicies::from(DEFAULT_SUBSCRIPTION_QOS))?;
 
     // This is for tracking (ROS) Node to (DDS) Participant mapping
     let ros_discovery_topic = domain_participant.create_topic(

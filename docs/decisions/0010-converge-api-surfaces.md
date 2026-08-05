@@ -85,18 +85,18 @@ pattern.
 - Keep Zenoh experimental on branch `zenoh` until shared surface progress
   justifies promotion—not merely Zenoh feature completeness.
 
-**Phase 1 — QoS (highest leverage)**
+**Phase 1 — QoS (highest leverage)** — **done on branch `zenoh` (2026-08-05)**
 
-- Make DDS `create_topic` / `create_publisher` / `create_subscription` / client /
+- DDS `create_topic` / `create_publisher` / `create_subscription` / client /
   server / action QoS take `&QosProfile` / `Option<QosProfile>` (same as Zenoh).
 - Convert at the boundary: `QosPolicies::from(&profile)` inside the DDS backend.
-- Replace `DEFAULT_*_QOS: QosPolicies` with `QosProfile::subscription_default()` /
-  `publisher_default()`.
-- Soften the break if needed for one release: `Into<QosProfile>` bounds,
-  deprecated helpers, migration notes — not a permanent dual QoS API.
+- `DEFAULT_SUBSCRIPTION_QOS` / `DEFAULT_PUBLISHER_QOS` are `QosProfile` consts
+  (aliases of `subscription_default()` / `publisher_default()`).
+- In-tree examples and tests build `QosProfile` instead of `QosPolicyBuilder`.
+- Escape hatch: `QosProfile::from(&QosPolicies)` remains; `ros2::QosPolicies`
+  re-exports stay until Phase 5.
 - DDS-only knobs (`max_blocking_time`, `Ownership`, …): fixed defaults in the
-  adapter, or a `dds`-only extension (`DdsQosExt` / escape hatch) — **not**
-  fields on the common `QosProfile`. Do not expand `QosProfile` into full DDS QoS.
+  adapter — **not** fields on `QosProfile`.
 
 **Phase 2 — Metadata, IDs, and discovery**
 

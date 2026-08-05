@@ -2,10 +2,9 @@
 use core::cmp::min;
 
 use mio::{Events, Poll, PollOpt, Ready, Token};
-use ros2_client::{Context, MessageTypeName, Name, Node, NodeName, NodeOptions};
-use rustdds::{
-  policy::{self, Deadline, Lifespan},
-  Duration, QosPolicies, QosPolicyBuilder,
+use ros2_client::{
+  qos::{Durability, History, Reliability},
+  Context, MessageTypeName, Name, Node, NodeName, NodeOptions, QosProfile,
 };
 
 // Simple demo program.
@@ -78,24 +77,11 @@ fn chatter_type() -> (&'static str, &'static str) {
   }
 }
 
-fn create_qos() -> QosPolicies {
-  let service_qos: QosPolicies = {
-    QosPolicyBuilder::new()
-      .history(policy::History::KeepLast { depth: 10 })
-      .reliability(policy::Reliability::Reliable {
-        max_blocking_time: Duration::from_millis(100),
-      })
-      .durability(policy::Durability::Volatile)
-      .deadline(Deadline(Duration::INFINITE))
-      .lifespan(Lifespan {
-        duration: Duration::INFINITE,
-      })
-      .liveliness(policy::Liveliness::Automatic {
-        lease_duration: Duration::INFINITE,
-      })
-      .build()
-  };
-  service_qos
+fn create_qos() -> QosProfile {
+  QosProfile::publisher_default()
+    .reliability(Reliability::Reliable)
+    .durability(Durability::Volatile)
+    .history(History::KeepLast { depth: 10 })
 }
 
 fn create_node() -> Node {

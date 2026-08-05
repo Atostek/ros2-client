@@ -31,6 +31,7 @@ use crate::{
   names::*,
   parameters::*,
   pubsub::{Publisher, Subscription},
+  qos::{History, QosProfile},
   rcl_interfaces,
   ros_time::ROSTime,
   rosout::{NodeLoggingHandle, RosoutRaw},
@@ -789,12 +790,7 @@ impl Node {
     self.stop_spin_sender = Some(stop_spin_sender);
 
     //TODO: Check QoS policies against ROS 2 specs or some refernce.
-    let service_qos = QosPolicyBuilder::new()
-      .reliability(policy::Reliability::Reliable {
-        max_blocking_time: Duration::from_millis(100),
-      })
-      .history(policy::History::KeepLast { depth: 1 })
-      .build();
+    let service_qos = QosProfile::publisher_default().history(History::KeepLast { depth: 1 });
 
     let node_name = self.node_name.fully_qualified_name();
 
@@ -1237,7 +1233,7 @@ impl Node {
     &self,
     topic_name: &Name,
     type_name: MessageTypeName,
-    qos: &QosPolicies,
+    qos: &QosProfile,
   ) -> CreateResult<Topic> {
     let dds_name = topic_name.to_dds_name("rt", &self.node_name, "");
     self.ros_context.create_topic(dds_name, type_name, qos)
@@ -1247,13 +1243,13 @@ impl Node {
   ///
   /// # Arguments
   ///
-  /// * `topic` - Reference to topic created with `create_ros_topic`.
-  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use if
-  ///   it's compatible with topics QOS. `None` indicates the use of Topics QOS.
+  /// * `topic` - Reference to topic created with `create_topic`.
+  /// * `qos` - [`QosProfile`] compatible with the topic QoS. `None` indicates
+  ///   the use of the topic's QoS.
   pub fn create_subscription<D: 'static>(
     &mut self,
     topic: &Topic,
-    qos: Option<QosPolicies>,
+    qos: Option<QosProfile>,
   ) -> CreateResult<Subscription<D>> {
     let sub = self.ros_context.create_subscription(topic, qos)?;
     self.add_reader(sub.guid().into());
@@ -1264,14 +1260,13 @@ impl Node {
   ///
   /// # Arguments
   ///
-  /// * `topic` - Reference to topic created with `create_ros_topic`.
-  /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it
-  ///   if it's compatible with topics QOS. `None` indicates the use of Topics
-  ///   QOS.
+  /// * `topic` - Reference to topic created with `create_topic`.
+  /// * `qos` - [`QosProfile`] compatible with the topic QoS. `None` indicates
+  ///   the use of the topic's QoS.
   pub fn create_publisher<D: Serialize>(
     &mut self,
     topic: &Topic,
-    qos: Option<QosPolicies>,
+    qos: Option<QosProfile>,
   ) -> CreateResult<Publisher<D>> {
     let p = self.ros_context.create_publisher(topic, qos)?;
     self.add_writer(p.guid().into());
@@ -1281,7 +1276,7 @@ impl Node {
   pub(crate) fn create_simpledatareader<D, DA>(
     &mut self,
     topic: &Topic,
-    qos: Option<QosPolicies>,
+    qos: Option<QosProfile>,
   ) -> CreateResult<no_key::SimpleDataReader<D, DA>>
   where
     D: 'static,
@@ -1295,7 +1290,7 @@ impl Node {
   pub(crate) fn create_datawriter<D, SA>(
     &mut self,
     topic: &Topic,
-    qos: Option<QosPolicies>,
+    qos: Option<QosProfile>,
   ) -> CreateResult<no_key::DataWriter<D, SA>>
   where
     SA: rustdds::no_key::SerializerAdapter<D>,
@@ -1317,8 +1312,8 @@ impl Node {
     service_mapping: ServiceMapping,
     service_name: &Name,
     service_type_name: &ServiceTypeName,
-    request_qos: QosPolicies,
-    response_qos: QosPolicies,
+    request_qos: QosProfile,
+    response_qos: QosProfile,
   ) -> CreateResult<Client<S>>
   where
     S: Service + 'static,
@@ -1329,18 +1324,21 @@ impl Node {
     // Where are the suffixes documented?
     // And why "Reply" and not "Response" ?
 
+    let request_dds_qos: QosPolicies = (&request_qos).into();
+    let response_dds_qos: QosPolicies = (&response_qos).into();
+
     let rq_topic = self.ros_context.domain_participant().create_topic(
       service_name.to_dds_name("rq", &self.node_name, "Request"),
       //rq_name,
       service_type_name.dds_request_type(),
-      &request_qos,
+      &request_dds_qos,
       TopicKind::NoKey,
     )?;
     let rs_topic = self.ros_context.domain_participant().create_topic(
       service_name.to_dds_name("rr", &self.node_name, "Reply"),
       //rs_name,
       service_type_name.dds_response_type(),
-      &response_qos,
+      &response_dds_qos,
       TopicKind::NoKey,
     )?;
 
@@ -1369,8 +1367,8 @@ impl Node {
     service_mapping: ServiceMapping,
     service_name: &Name,
     service_type_name: &ServiceTypeName,
-    request_qos: QosPolicies,
-    response_qos: QosPolicies,
+    request_qos: QosProfile,
+    response_qos: QosProfile,
   ) -> CreateResult<Server<S>>
   where
     S: Service + 'static,
@@ -1381,17 +1379,20 @@ impl Node {
     // Self::check_name_and_add_prefix("rr/", &(service_name.to_owned() +
     // "Reply"))?;
 
+    let request_dds_qos: QosPolicies = (&request_qos).into();
+    let response_dds_qos: QosPolicies = (&response_qos).into();
+
     let rq_topic = self.ros_context.domain_participant().create_topic(
       //rq_name,
       service_name.to_dds_name("rq", &self.node_name, "Request"),
       service_type_name.dds_request_type(),
-      &request_qos,
+      &request_dds_qos,
       TopicKind::NoKey,
     )?;
     let rs_topic = self.ros_context.domain_participant().create_topic(
       service_name.to_dds_name("rr", &self.node_name, "Reply"),
       service_type_name.dds_response_type(),
-      &response_qos,
+      &response_dds_qos,
       TopicKind::NoKey,
     )?;
 

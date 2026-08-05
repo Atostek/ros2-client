@@ -1,6 +1,9 @@
 use smol::future::{self, FutureExt};
 use async_ctrlc::CtrlC;
-use ros2_client::{ros2, ros2::policy, Context, MessageTypeName, Name, NodeName, NodeOptions};
+use ros2_client::{
+  qos::{Durability, History, Reliability},
+  Context, MessageTypeName, Name, NodeName, NodeOptions, QosProfile,
+};
 use async_io::Timer;
 
 fn main() {
@@ -29,13 +32,10 @@ fn main() {
   executor.spawn(node.spinner().unwrap().spin()).detach();
   //smol::spawn(node.spinner().unwrap().spin()).detach();
 
-  let reliable_qos = ros2::QosPolicyBuilder::new()
-    .history(policy::History::KeepLast { depth: 10 })
-    .reliability(policy::Reliability::Reliable {
-      max_blocking_time: ros2::Duration::from_millis(100),
-    })
-    .durability(policy::Durability::TransientLocal)
-    .build();
+  let reliable_qos = QosProfile::publisher_default()
+    .reliability(Reliability::Reliable)
+    .durability(Durability::TransientLocal)
+    .history(History::KeepLast { depth: 10 });
 
   let chatter_topic = node
     .create_topic(

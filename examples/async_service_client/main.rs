@@ -6,10 +6,11 @@ use futures::{FutureExt as StdFutureExt, StreamExt, TryFutureExt};
 use smol::{future::FutureExt, pin};
 use serde::{Deserialize, Serialize};
 use ros2_client::{
+  qos::History,
   service::CallServiceError, AService, Context, Message, Name, Node, NodeName, NodeOptions,
-  ServiceMapping, ServiceTypeName,
+  QosProfile, ServiceMapping, ServiceTypeName,
 };
-use rustdds::{dds::WriteError, policy, QosPolicies, QosPolicyBuilder};
+use rustdds::dds::WriteError;
 
 // Test / demo program of ROS2 services, client side.
 //
@@ -132,16 +133,8 @@ fn main() {
   smol::block_on(main_loop);
 }
 
-fn create_qos() -> QosPolicies {
-  let service_qos: QosPolicies = {
-    QosPolicyBuilder::new()
-      .reliability(policy::Reliability::Reliable {
-        max_blocking_time: rustdds::Duration::from_millis(100),
-      })
-      .history(policy::History::KeepLast { depth: 1 })
-      .build()
-  };
-  service_qos
+fn create_qos() -> QosProfile {
+  QosProfile::publisher_default().history(History::KeepLast { depth: 1 })
 }
 
 fn create_node() -> Node {

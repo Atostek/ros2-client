@@ -1,10 +1,8 @@
 use std::marker::PhantomData;
 
-use rustdds::*;
 use serde::{Deserialize, Serialize};
+
 pub use action_msgs::{CancelGoalRequest, CancelGoalResponse, GoalId, GoalInfo, GoalStatusEnum};
-#[allow(unused_imports)]
-use log::{debug, error, info, warn};
 
 use crate::{action_msgs, builtin_interfaces, message::Message};
 
@@ -84,22 +82,22 @@ where
 
 //TODO: Make fields private, add constructor and accessors.
 
-/// Collection of QoS policies requires for an Action client
+/// Collection of QoS profiles required for an Action client
 pub struct ActionClientQosPolicies {
-  pub goal_service: QosPolicies,
-  pub result_service: QosPolicies,
-  pub cancel_service: QosPolicies,
-  pub feedback_subscription: QosPolicies,
-  pub status_subscription: QosPolicies,
+  pub goal_service: crate::qos::QosProfile,
+  pub result_service: crate::qos::QosProfile,
+  pub cancel_service: crate::qos::QosProfile,
+  pub feedback_subscription: crate::qos::QosProfile,
+  pub status_subscription: crate::qos::QosProfile,
 }
 
-/// Collection of QoS policies requires for an Action server
+/// Collection of QoS profiles required for an Action server
 pub struct ActionServerQosPolicies {
-  pub goal_service: QosPolicies,
-  pub result_service: QosPolicies,
-  pub cancel_service: QosPolicies,
-  pub feedback_publisher: QosPolicies,
-  pub status_publisher: QosPolicies,
+  pub goal_service: crate::qos::QosProfile,
+  pub result_service: crate::qos::QosProfile,
+  pub cancel_service: crate::qos::QosProfile,
+  pub feedback_publisher: crate::qos::QosProfile,
+  pub status_publisher: crate::qos::QosProfile,
 }
 
 /// Emulating ROS2 IDL code generator: Goal sending/setting service request

@@ -5,12 +5,12 @@ use futures::{channel::oneshot, StreamExt};
 use log::{error, info};
 use ros2_client::{
   action::{self, ActionClient},
+  qos::{Durability, History, Liveliness, Reliability},
   ros2, rosout,
   service::CallServiceError,
   AService, Action, ActionTypeName, Client, Context, Message, MessageTypeName, Name, Node,
-  NodeName, NodeOptions, Publisher, ServiceMapping, ServiceTypeName, Subscription,
+  NodeName, NodeOptions, Publisher, QosProfile, ServiceMapping, ServiceTypeName, Subscription,
 };
-use rustdds::{policy, QosPolicyBuilder};
 use serde::{Deserialize, Serialize};
 use smol::{channel, pin, LocalExecutor};
 use tokio::select;
@@ -49,18 +49,11 @@ struct App {
 
 impl App {
   fn new() -> Self {
-    let topic_qos = {
-      QosPolicyBuilder::new()
-        .durability(policy::Durability::Volatile)
-        .liveliness(policy::Liveliness::Automatic {
-          lease_duration: ros2::Duration::INFINITE,
-        })
-        .reliability(policy::Reliability::Reliable {
-          max_blocking_time: ros2::Duration::from_millis(100),
-        })
-        .history(policy::History::KeepLast { depth: 1 })
-        .build()
-    };
+    let topic_qos = QosProfile::publisher_default()
+      .durability(Durability::Volatile)
+      .liveliness(Liveliness::Automatic)
+      .reliability(Reliability::Reliable)
+      .history(History::KeepLast { depth: 1 });
 
     let ctx = Context::new().unwrap();
 
@@ -196,7 +189,7 @@ impl Requester {
   fn new(
     mut node: Node,
     messages_sender: channel::Sender<String>,
-    topic_qos: &ros2::QosPolicies,
+    topic_qos: &QosProfile,
     turtle_cmd_vel_topic: &rustdds::Topic,
   ) -> Self {
     // The point here is to publish Twist for the turtle
@@ -218,12 +211,7 @@ impl Requester {
 
     // Turtle has services, let's construct some clients.
 
-    let service_qos = QosPolicyBuilder::new()
-      .reliability(policy::Reliability::Reliable {
-        max_blocking_time: ros2::Duration::from_millis(100),
-      })
-      .history(policy::History::KeepLast { depth: 1 })
-      .build();
+    let service_qos = QosProfile::publisher_default().history(History::KeepLast { depth: 1 });
 
     // create_client cyclone version tested against ROS2 Galactic. Obviously with
     // CycloneDDS. Seems to work on the same host only.

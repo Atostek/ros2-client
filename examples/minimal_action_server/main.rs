@@ -5,10 +5,9 @@ use log::{debug, error, info, warn};
 use futures::{stream::StreamExt, FutureExt as StdFutureExt};
 use smol::{future::FutureExt, pin};
 use ros2_client::{
-  action, action::GoalEndStatus, ActionTypeName, Context, Name, Node, NodeName, NodeOptions,
-  ServiceMapping,
+  action, action::GoalEndStatus, qos::{Durability, History},
+  ActionTypeName, Context, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping,
 };
-use rustdds::{policy, QosPolicies, QosPolicyBuilder};
 
 // Test / demo program of ROS2 Action, server side.
 //
@@ -53,37 +52,19 @@ fn main() {
   // topic is TRANSIENT_LOCAL. Offering TransientLocal on the request readers is
   // incompatible with a ROS 2 client's Volatile request writers, so goals never
   // reach this server. Match the ROS 2 defaults per endpoint.
-  let service_qos: QosPolicies = {
-    QosPolicyBuilder::new()
-      .reliability(policy::Reliability::Reliable {
-        max_blocking_time: rustdds::Duration::from_millis(100),
-      })
-      .durability(policy::Durability::Volatile)
-      .history(policy::History::KeepLast { depth: 1 })
-      .build()
-  };
+  let service_qos = QosProfile::publisher_default()
+    .durability(Durability::Volatile)
+    .history(History::KeepLast { depth: 1 });
 
-  let feedback_qos: QosPolicies = {
-    QosPolicyBuilder::new()
-      .reliability(policy::Reliability::Reliable {
-        max_blocking_time: rustdds::Duration::from_millis(100),
-      })
-      .history(policy::History::KeepLast { depth: 1 })
-      .durability(policy::Durability::Volatile)
-      .build()
-  };
+  let feedback_qos = QosProfile::publisher_default()
+    .history(History::KeepLast { depth: 1 })
+    .durability(Durability::Volatile);
 
   // The status topic must remain TRANSIENT_LOCAL: ROS 2 action clients request
   // TransientLocal on status, so a Volatile writer would be incompatible.
-  let status_qos: QosPolicies = {
-    QosPolicyBuilder::new()
-      .reliability(policy::Reliability::Reliable {
-        max_blocking_time: rustdds::Duration::from_millis(100),
-      })
-      .history(policy::History::KeepLast { depth: 1 })
-      .durability(policy::Durability::TransientLocal)
-      .build()
-  };
+  let status_qos = QosProfile::publisher_default()
+    .history(History::KeepLast { depth: 1 })
+    .durability(Durability::TransientLocal);
 
   let fibonacci_action_qos = action::ActionServerQosPolicies {
     goal_service: service_qos.clone(),
