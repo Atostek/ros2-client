@@ -2,7 +2,6 @@ use futures::StreamExt;
 use smol::future::{self, FutureExt};
 use async_ctrlc::CtrlC;
 use ros2_client::{qos::History, *};
-use rustdds::DomainParticipantStatusEvent;
 
 pub fn main() {
   // Here is a fixed path, so this example must be started from
@@ -36,13 +35,15 @@ pub fn main() {
 
   let status_event_stream = node.status_receiver().for_each(|event| async move {
     match event {
-      NodeEvent::DDS(DomainParticipantStatusEvent::RemoteWriterMatched {
-        remote_writer, ..
-      }) if remote_writer.entity_id.kind().is_user_defined() => {
-        println!("Matched remote writer {remote_writer:?}");
+      NodeEvent::Graph(GraphEvent::EntityDeclared(entity))
+        if entity.kind == EntityKind::Publisher =>
+      {
+        println!("Matched remote writer {entity:?}");
       }
-      NodeEvent::DDS(DomainParticipantStatusEvent::WriterLost { guid, reason }) => {
-        println!("Lost remote writer {guid:?}: {reason:?}");
+      NodeEvent::Graph(GraphEvent::EntityUndeclared(entity))
+        if entity.kind == EntityKind::Publisher =>
+      {
+        println!("Lost remote writer {entity:?}");
       }
       _ => {}
     }

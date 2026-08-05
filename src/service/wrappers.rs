@@ -12,7 +12,7 @@ use rustdds::{
 };
 
 use crate::{message::Message, message_info::MessageInfo};
-use super::{request_id, RmwRequestId, ServiceMapping};
+use super::{RmwRequestId, ServiceMapping};
 
 // trait Wrapper is for interfacing to Service-specific (De)SerializerAdapter.
 // These adapters are essentially pass-through, and do no actual serialization.
@@ -71,19 +71,20 @@ impl<R: Message> RequestWrapper<R> {
         // Therefore, we use a wrapper that is identical to the payload.
         let (request, _request_bytes) =
           deserialize_from_cdr_with_rep_id::<R>(&self.serialized_message, self.encoding)?;
-        let mut rmw_req_id = RmwRequestId::from(
-          message_info.related_sample_identity()
+        let mut rmw_req_id = message_info.related_request_id()
             .unwrap_or_else(|| {
               // ServiceMapping::Enhanced is supposed to contain related sample identity as 
               // inline QoS parameter.
               //
               // Use the identity of the incoming request as a default, if there was no
               // related sample identity specified in inline QoS.
-              let backup_identity = message_info.sample_identity();
+              let backup_identity = RmwRequestId {
+                writer_gid: message_info.publisher_gid(),
+                sequence_number: message_info.sequence_number(),
+              };
               warn!("RequestWrapper::unwrap: related_sample_identity missing. Using sample_identity = {backup_identity:?}");
               backup_identity
-            })
-        );
+            });
 
         // Logic added for eProsima FastDDS compatibility:
         //
@@ -94,15 +95,15 @@ impl<R: Message> RequestWrapper<R> {
         //
         // Maybe FastDDS just forgets to set the field in RELATED_SAMPLE_IDENTITY inline
         // QoS parameter?
-        if rmw_req_id.sequence_number == SequenceNumber::UNKNOWN {
-          rmw_req_id.sequence_number = message_info.sample_identity().sequence_number;
+        if rmw_req_id.sequence_number == i64::from(SequenceNumber::UNKNOWN) {
+          rmw_req_id.sequence_number = message_info.sequence_number();
         }
 
         Ok((rmw_req_id, request))
       }
       ServiceMapping::Cyclone => cyclone_unwrap::<R>(
         self.serialized_message.clone(),
-        message_info.writer_guid(),
+        GUID::from(message_info.publisher_gid()),
         self.encoding,
       ),
     }
@@ -188,13 +189,13 @@ impl<R: Message> ResponseWrapper<R> {
         // Therefore, we use a wrapper that is identical to the payload.
         let (response, _response_bytes) =
           deserialize_from_cdr_with_rep_id::<R>(&self.serialized_message, self.encoding)?;
-        let related_sample_identity = match message_info.related_sample_identity() {
+        let related_sample_identity = match message_info.related_request_id() {
           Some(rsi) => rsi,
           None => {
             return read_error_deserialization!("ServiceMapping=Enhanced, but response message did not have related_sample_identity parameter!")
           }
         };
-        Ok((RmwRequestId::from(related_sample_identity), response))
+        Ok((related_sample_identity, response))
       }
       ServiceMapping::Cyclone => {
         // Cyclone constructs the client GUID from two parts
@@ -208,7 +209,7 @@ impl<R: Message> ResponseWrapper<R> {
           first_half.copy_from_slice(&client_guid.to_bytes().as_slice()[0..8]);
 
           // This is received in the wrapper header
-          second_half.copy_from_slice(&message_info.writer_guid().to_bytes()[8..16]);
+          second_half.copy_from_slice(&message_info.publisher_gid().to_bytes16()[8..16]);
         }
         let client_guid = GUID::from_bytes(client_guid_bytes);
 
@@ -298,10 +299,10 @@ pub struct CycloneHeader {
 }
 impl CycloneHeader {
   fn new(r_id: RmwRequestId) -> Self {
-    let sn = r_id.sequence_number;
+    let sn = SequenceNumber::from(r_id.sequence_number);
     let mut guid_second_half = [0; 8];
-    // writer_guid means client GUID (i.e. request writer)
-    guid_second_half.copy_from_slice(&r_id.writer_guid.to_bytes()[8..16]);
+    // writer_gid means client GUID (i.e. request writer)
+    guid_second_half.copy_from_slice(&r_id.writer_gid.to_bytes16()[8..16]);
 
     CycloneHeader {
       guid_second_half,
@@ -329,14 +330,14 @@ fn cyclone_unwrap<R: Message>(
     let _header_bytes = bytes.split_off(header_size);
     let (response, _response_bytes) = deserialize_from_cdr_with_rep_id::<R>(&bytes, encoding)?;
     let req_id = RmwRequestId {
-      writer_guid, // TODO: This seems to be completely wrong!!!
+      writer_gid: crate::gid::Gid::from(writer_guid), // TODO: This seems to be completely wrong!!!
       // When we are the client, we get half of Client GUID on the CycloneHeader, other half from
       // Client State when we are the server, we get half of Client GUID on the CycloneHeader,
       // other half from writer_guid.
-      sequence_number: request_id::SequenceNumber::from_high_low(
+      sequence_number: i64::from(SequenceNumber::from_high_low(
         header.sequence_number_high,
         header.sequence_number_low,
-      ),
+      )),
     };
     Ok((req_id, response))
   }

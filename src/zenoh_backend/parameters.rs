@@ -13,10 +13,7 @@
 //!   services (`rcl_interfaces/srv/*`)
 //! * `parameter_events` topic (`rcl_interfaces/msg/ParameterEvent`)
 //!
-//! The event message carries an owned [`builtin_interfaces::Time`] timestamp,
-//! keeping the Zenoh backend independent of RustDDS (ADR-0004); the DDS
-//! backend's `parameters::raw::ParameterEvent` uses `rustdds::Timestamp`
-//! instead.
+//! Events use shared [`raw::ParameterEvent`] (`stamp: builtin_interfaces::Time`).
 //!
 //! Like the DDS backend's parameter machinery (which runs inside a `Spinner`),
 //! the server here is driven by the application: call [`ParameterServer::spin`]
@@ -25,8 +22,6 @@
 //! failure result, mirroring the DDS backend).
 
 use std::{collections::BTreeMap, sync::Mutex};
-
-use serde::{Deserialize, Serialize};
 
 use super::{
   pubsub::Publisher,
@@ -42,25 +37,9 @@ use crate::{
   },
 };
 
-/// `rcl_interfaces/msg/ParameterEvent` with an owned
-/// [`builtin_interfaces::Time`] timestamp.
-///
-/// The field layout (and thus the CDR wire format) matches ROS 2's
-/// `ParameterEvent.msg`: `builtin_interfaces/Time stamp`, `string node`, and
-/// three `Parameter[]` arrays.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ParameterEvent {
-  /// When the change happened.
-  pub stamp: Time,
-  /// Fully-qualified name of the node whose parameters changed.
-  pub node: String,
-  /// Parameters that were newly declared.
-  pub new_parameters: Vec<raw::Parameter>,
-  /// Parameters whose value changed.
-  pub changed_parameters: Vec<raw::Parameter>,
-  /// Parameters that were removed.
-  pub deleted_parameters: Vec<raw::Parameter>,
-}
+/// Re-export shared wire type for callers that historically imported
+/// `ParameterEvent` from this module.
+pub use raw::ParameterEvent;
 
 /// A ROS 2 parameter server over Zenoh: a parameter store plus the six
 /// `rcl_interfaces` services and the `parameter_events` publisher.

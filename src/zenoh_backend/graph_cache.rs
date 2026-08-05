@@ -13,35 +13,8 @@ use std::{collections::HashMap, sync::Mutex};
 
 use async_channel::{Receiver, Sender};
 
-use super::keyexpr::{parse_liveliness_key, EntityKind, ParsedEntity};
-
-/// A change in the ROS 2 graph, delivered by
-/// [`Context::graph_event_stream`](super::context::Context::graph_event_stream).
-///
-/// Backend-neutral: the same shape would be produced by the DDS backend's
-/// discovery (ADR-0004). It replaces the RustDDS-specific `NodeEvent::DDS` for
-/// graph observation on the Zenoh backend.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum GraphEvent {
-  /// An entity became visible in the graph.
-  EntityDeclared(GraphEntity),
-  /// An entity was removed from the graph.
-  EntityUndeclared(GraphEntity),
-}
-
-/// A discovered ROS 2 graph entity (backend-neutral view of a liveliness
-/// token).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GraphEntity {
-  /// What kind of entity this is.
-  pub kind: EntityKind,
-  /// Fully-qualified name of the owning node (e.g. `/robot1/talker`).
-  pub node_name: String,
-  /// Topic/service name (`None` for a node entity).
-  pub name: Option<String>,
-  /// DDS-form type name (`None` for a node entity).
-  pub type_name: Option<String>,
-}
+use super::keyexpr::{parse_liveliness_key, ParsedEntity};
+use crate::graph::{EntityKind, GraphEntity, GraphEvent};
 
 impl From<&ParsedEntity> for GraphEntity {
   fn from(e: &ParsedEntity) -> Self {

@@ -31,22 +31,13 @@ use zenoh::{
 };
 
 use super::{attachment::AttachmentData, cdr};
+use crate::{gid::Gid, request_id::RmwRequestId};
 
 fn now_nanos() -> i64 {
   SystemTime::now()
     .duration_since(UNIX_EPOCH)
     .map(|d| d.as_nanos() as i64)
     .unwrap_or(0)
-}
-
-/// Identifies a service request: the client's GID plus its sequence number.
-/// (The Zenoh analogue of the DDS `RmwRequestId`.)
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RmwRequestId {
-  /// GID of the requesting client entity.
-  pub writer_gid: [u8; 16],
-  /// Client-assigned request sequence number.
-  pub sequence_number: i64,
 }
 
 /// Errors from service calls.
@@ -212,7 +203,7 @@ impl<Req: DeserializeOwned, Resp: Serialize> Server<Req, Resp> {
     let attachment = query.attachment().ok_or(ServiceError::Malformed)?;
     let a = AttachmentData::from_zbytes(attachment).map_err(|_| ServiceError::Malformed)?;
     let id = RmwRequestId {
-      writer_gid: a.source_gid,
+      writer_gid: Gid::from(a.source_gid),
       sequence_number: a.sequence_number,
     };
     self
@@ -248,14 +239,14 @@ impl<Req: DeserializeOwned, Resp: Serialize> Server<Req, Resp> {
       .pending
       .lock()
       .unwrap()
-      .remove(&(gid_key(id.writer_gid), id.sequence_number))
+      .remove(&(gid_key(id.writer_gid.to_bytes16()), id.sequence_number))
       .ok_or(ServiceError::UnknownRequest)?;
     let payload = cdr::to_cdr(&resp).map_err(ServiceError::Cdr)?;
     // Echo the request's seq + client gid; fresh reply timestamp.
     let attachment = AttachmentData {
       sequence_number: id.sequence_number,
       source_timestamp: now_nanos(),
-      source_gid: id.writer_gid,
+      source_gid: id.writer_gid.to_bytes16(),
     }
     .to_zbytes();
     query

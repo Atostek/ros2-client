@@ -5,39 +5,11 @@
 //! those records on the corresponding Zenoh key, plus an optional inbound
 //! [`Subscription`] for reading `/rosout` (the `read_rosout` capability).
 //!
-//! The record carries an owned [`builtin_interfaces::Time`] timestamp, keeping
-//! the Zenoh backend independent of RustDDS (ADR-0004); the DDS backend's
-//! [`crate::log::Log`] uses `rustdds::Timestamp` instead. The field layout (and
-//! thus the CDR wire format) matches `rcl_interfaces/msg/Log`, so
-//! `ros2 topic echo /rosout` shows records logged by a `ros2-client` node.
-
-use serde::{Deserialize, Serialize};
+//! Records use the shared [`crate::log::Log`] type (`stamp:
+//! builtin_interfaces::Time`).
 
 use super::pubsub::Publisher;
-use crate::{builtin_interfaces::Time, log::LogLevel};
-
-/// A `rcl_interfaces/msg/Log` record with an owned
-/// [`builtin_interfaces::Time`] timestamp.
-///
-/// Field order matches ROS 2's `Log.msg`: `stamp`, `level`, `name`, `msg`,
-/// `file`, `function`, `line`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Log {
-  /// When the record was produced.
-  pub stamp: Time,
-  /// Severity level (see [`LogLevel`]).
-  pub level: u8,
-  /// Name of the logger (usually the node name).
-  pub name: String,
-  /// The log message.
-  pub msg: String,
-  /// Source file the record came from.
-  pub file: String,
-  /// Source function the record came from.
-  pub function: String,
-  /// Source line the record came from.
-  pub line: u32,
-}
+use crate::log::{Log, LogLevel};
 
 /// A rosout logger: publishes [`Log`] records to the global `/rosout` topic.
 ///
@@ -69,7 +41,7 @@ impl Logger {
   /// from the call site.
   pub fn log_at(&self, level: LogLevel, msg: &str, file: &str, function: &str, line: u32) {
     let record = Log {
-      stamp: Time::now(),
+      stamp: crate::builtin_interfaces::Time::now(),
       level: level as u8,
       name: self.node_name.clone(),
       msg: msg.to_string(),

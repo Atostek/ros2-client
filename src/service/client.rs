@@ -10,7 +10,7 @@ use rustdds::{
   *,
 };
 
-use crate::{message_info::MessageInfo, node::Node, qos::QosProfile, service::*};
+use crate::{gid::Gid, message_info::MessageInfo, node::Node, qos::QosProfile, service::*};
 
 /// Client end of a ROS2 Service
 pub struct Client<S>
@@ -67,8 +67,8 @@ where
   pub fn send_request(&self, request: S::Request) -> WriteResult<RmwRequestId, ()> {
     self.increment_sequence_number();
     let gen_rmw_req_id = RmwRequestId {
-      writer_guid: self.client_guid,
-      sequence_number: self.sequence_number(),
+      writer_gid: Gid::from(self.client_guid),
+      sequence_number: i64::from(self.sequence_number()),
     };
     let req_wrapper = RequestWrapper::<S::Request>::new(
       self.service_mapping,
@@ -126,8 +126,8 @@ where
       async {
         self.increment_sequence_number();
          RmwRequestId {
-          writer_guid: self.client_guid,
-          sequence_number: self.sequence_number(),
+          writer_gid: Gid::from(self.client_guid),
+          sequence_number: i64::from(self.sequence_number()),
         }
       }.await;
 
@@ -225,7 +225,7 @@ where
       .fetch_add(1, atomic::Ordering::Acquire);
   }
 
-  fn sequence_number(&self) -> request_id::SequenceNumber {
+  fn sequence_number(&self) -> SequenceNumber {
     self
       .sequence_number_gen
       .load(atomic::Ordering::Acquire)

@@ -113,11 +113,12 @@ pub mod action;
 pub mod distributions;
 #[cfg(feature = "dds")]
 pub mod entities_info;
-#[cfg(feature = "dds")]
-mod gid;
+pub mod gid;
+/// Backend-neutral ROS 2 graph / discovery types (`GraphEvent`, `GraphEntity`,
+/// `EntityKind`, `DiscoveredTopic`). Always compiled; see ADR-0005 / ADR-0010.
+pub mod graph;
 pub mod log;
 pub mod message;
-#[cfg(feature = "dds")]
 pub mod message_info;
 pub mod names;
 /// Rust-like representation of ROS 2 Parameters (backend-neutral).
@@ -127,6 +128,8 @@ pub mod parameters;
 pub mod pubsub;
 /// Backend-neutral Quality-of-Service profile.
 pub mod qos;
+/// Owned service request identity ([`RmwRequestId`](request_id::RmwRequestId)).
+pub mod request_id;
 /// `rcl_interfaces` message/service payload types (backend-neutral).
 pub mod rcl_interfaces;
 pub mod ros_time;
@@ -160,9 +163,14 @@ pub use distributions::{RosDistro, COMPILED_ROS_DISTRO};
 pub use message::Message;
 #[doc(inline)]
 pub use names::{ActionTypeName, MessageTypeName, Name, NodeName, ServiceTypeName};
-#[cfg(feature = "dds")]
+#[doc(inline)]
+pub use gid::Gid;
+#[doc(inline)]
+pub use graph::{DiscoveredTopic, EntityKind, GraphEntity, GraphEvent};
 #[doc(inline)]
 pub use message_info::MessageInfo;
+#[doc(inline)]
+pub use request_id::RmwRequestId;
 #[cfg(feature = "dds")]
 #[doc(inline)]
 pub use node::*;
@@ -195,10 +203,10 @@ pub use zenoh_backend::context::{Context, ContextOptions};
 pub use zenoh_backend::node::{Node, NodeOptions, Topic};
 #[cfg(feature = "zenoh")]
 #[doc(inline)]
-pub use zenoh_backend::pubsub::{MessageInfo, Publisher, Subscription};
+pub use zenoh_backend::pubsub::{Publisher, Subscription};
 #[cfg(feature = "zenoh")]
 #[doc(inline)]
-pub use zenoh_backend::service::{Client, RmwRequestId, Server};
+pub use zenoh_backend::service::{Client, Server};
 #[cfg(feature = "zenoh")]
 #[doc(inline)]
 pub use zenoh_backend::action::{ActionClient, ActionServer, GoalId};
@@ -207,13 +215,10 @@ pub use zenoh_backend::action::{ActionClient, ActionServer, GoalId};
 pub use zenoh_backend::parameters::{ParameterClient, ParameterEvent, ParameterServer};
 #[cfg(feature = "zenoh")]
 #[doc(inline)]
-pub use zenoh_backend::rosout::{Log, Logger};
+pub use zenoh_backend::rosout::Logger;
 #[cfg(feature = "zenoh")]
 #[doc(inline)]
-pub use zenoh_backend::{
-  graph_cache::{GraphEntity, GraphEvent},
-  keyexpr::EntityKind,
-};
+pub use log::Log;
 
 /// Module for stuff we do not want to export from top level;
 pub mod ros2 {

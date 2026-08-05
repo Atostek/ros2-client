@@ -20,9 +20,10 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use super::{
   pubsub::{PublishError, Publisher, Subscription},
-  service::{Client, RmwRequestId, Server, ServiceError},
+  service::{Client, Server, ServiceError},
 };
 use crate::{
+  request_id::RmwRequestId,
   action_msgs::{
     CancelGoalRequest, CancelGoalResponse, CancelGoalResponseEnum, GoalInfo, GoalStatus,
     GoalStatusArray,

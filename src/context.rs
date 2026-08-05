@@ -20,6 +20,7 @@ use crate::{
   builtin_topics,
   entities_info::{NodeEntitiesInfo, ParticipantEntitiesInfo},
   gid::Gid,
+  graph::DiscoveredTopic,
   names::*,
   node::{Node, NodeOptions},
   pubsub::{Publisher, Subscription},
@@ -161,8 +162,22 @@ impl Context {
     self.inner.lock().unwrap().domain_participant.domain_id()
   }
 
-  /// Which topics have been discovered?
-  pub fn discovered_topics(&self) -> Vec<rustdds::discovery::DiscoveredTopicData> {
+  /// Which topics have been discovered? Owned, backend-neutral view (ADR-0010
+  /// Phase 2). For the raw RustDDS data, see [`Self::discovered_topics_raw`].
+  pub fn discovered_topics(&self) -> Vec<DiscoveredTopic> {
+    self
+      .discovered_topics_raw()
+      .iter()
+      .map(|t| DiscoveredTopic {
+        name: t.topic_name().clone(),
+        type_name: t.type_name().clone(),
+      })
+      .collect()
+  }
+
+  /// Which topics have been discovered? Raw RustDDS escape hatch (ADR-0010 §5);
+  /// prefer [`Self::discovered_topics`] on the stable public surface.
+  pub fn discovered_topics_raw(&self) -> Vec<rustdds::discovery::DiscoveredTopicData> {
     self.domain_participant().discovered_topics()
   }
 

@@ -22,32 +22,7 @@ use zenoh::{
 };
 
 use super::{attachment::AttachmentData, cdr};
-
-/// Metadata about a received message, extracted from its Zenoh attachment.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct MessageInfo {
-  source_timestamp_nanos: i64,
-  sequence_number: i64,
-  source_gid: [u8; 16],
-}
-
-impl MessageInfo {
-  /// Source timestamp (ns since UNIX epoch) set by the publisher, or 0 if the
-  /// message carried no ROS attachment.
-  pub fn source_timestamp_nanos(&self) -> i64 {
-    self.source_timestamp_nanos
-  }
-
-  /// Per-publisher sequence number of this message.
-  pub fn sequence_number(&self) -> i64 {
-    self.sequence_number
-  }
-
-  /// 16-byte GID of the publishing entity.
-  pub fn source_gid(&self) -> [u8; 16] {
-    self.source_gid
-  }
-}
+use crate::{gid::Gid, message_info::MessageInfo, ros_time::ROSTime};
 
 /// Failure to publish a message.
 #[derive(Debug)]
@@ -188,13 +163,15 @@ impl<M: DeserializeOwned> Subscription<M> {
     let info = match sample.attachment() {
       Some(zbytes) => {
         let a = AttachmentData::from_zbytes(zbytes).map_err(|_| TakeError::Attachment)?;
-        MessageInfo {
-          source_timestamp_nanos: a.source_timestamp,
-          sequence_number: a.sequence_number,
-          source_gid: a.source_gid,
-        }
+        MessageInfo::new(
+          None,
+          Some(ROSTime::from_nanos(a.source_timestamp)),
+          a.sequence_number,
+          Gid::from(a.source_gid),
+          None,
+        )
       }
-      None => MessageInfo::default(),
+      None => MessageInfo::new(None, None, 0, Gid::default(), None),
     };
     Ok((msg, info))
   }
@@ -228,7 +205,9 @@ mod tests {
   use zenoh::Config;
 
   use super::{Publisher, Subscription};
-  use crate::{Context, ContextOptions, MessageTypeName, Name, NodeName, NodeOptions, QosProfile};
+  use crate::{
+    Context, ContextOptions, Gid, MessageTypeName, Name, NodeName, NodeOptions, QosProfile,
+  };
 
   // Build a peer config on IPv4 loopback with multicast off. `listen`/`connect`
   // pin explicit ports so two in-process peers connect directly — no router
@@ -298,6 +277,6 @@ mod tests {
     let (msg, info) = got.expect("no message received within timeout");
     assert_eq!(msg, "hello zenoh!");
     assert!(info.sequence_number() >= 1);
-    assert_ne!(info.source_gid(), [0u8; 16]);
+    assert_ne!(info.publisher_gid(), Gid::default());
   }
 }

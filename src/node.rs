@@ -27,6 +27,7 @@ use crate::{
   context::{Context, DEFAULT_SUBSCRIPTION_QOS},
   entities_info::{NodeEntitiesInfo, ParticipantEntitiesInfo},
   gid::Gid,
+  graph::{EntityKind, GraphEntity, GraphEvent},
   log::Log,
   names::*,
   parameters::*,
@@ -119,12 +120,39 @@ impl Default for NodeOptions {
 // ----------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------
 
-/// DDS or ROS 2 Discovery events.
+/// ROS 2 Discovery events.
+///
+/// `Graph` carries the backend-neutral [`GraphEvent`] (ADR-0005 / ADR-0010
+/// Phase 2), mapped from RustDDS's `DomainParticipantStatusEvent` matched-
+/// entity events (see the [`Spinner::spin`] loop and module docs on
+/// [`crate::graph`] for the DDS mapping's limitations). `ParticipantEntities`
+/// carries the raw `ros_discovery_info` update (`rmw_dds_common`); there is no
+/// owned equivalent yet.
+///
+/// The former `NodeEvent::DDS(DomainParticipantStatusEvent)` variant, which
+/// leaked a RustDDS type, has been removed.
 #[allow(clippy::large_enum_variant)] // TODO: fix this
 #[derive(Clone, Debug)]
 pub enum NodeEvent {
-  DDS(DomainParticipantStatusEvent),
-  ROS(ParticipantEntitiesInfo),
+  /// A backend-neutral ROS 2 graph change (entity declared/undeclared).
+  Graph(GraphEvent),
+  /// A `ros_discovery_info` update from another Participant.
+  ParticipantEntities(ParticipantEntitiesInfo),
+}
+
+/// Best-effort [`GraphEntity`] for a DDS-matched remote entity.
+///
+/// DDS SEDP matched-entity events (`RemoteReaderMatched`/`RemoteWriterMatched`/
+/// `ReaderLost`/`WriterLost`) only carry a [`GUID`], not the topic name or
+/// owning node name, so those fields are unavailable here (see
+/// [`crate::graph`] module docs).
+fn guid_entity(kind: EntityKind, guid: GUID) -> GraphEntity {
+  GraphEntity {
+    kind,
+    node_name: format!("guid:{guid:?}"),
+    name: None,
+    type_name: None,
+  }
 }
 
 struct ParameterServers {
@@ -406,7 +434,7 @@ impl Spinner {
               let mut info_map = self.external_nodes.lock().unwrap();
               info_map.insert( part_update.gid, part_update.node_entities_info_seq.clone());
               // also notify any status listeneners
-              self.send_status_event( &NodeEvent::ROS(part_update) );
+              self.send_status_event( &NodeEvent::ParticipantEntities(part_update) );
             }
             Err(e) => {
               warn!("ros_discovery_info error {e:?}");
@@ -417,38 +445,48 @@ impl Spinner {
         dp_status_event = dds_status_stream.select_next_some() => {
           //println!("{:?}", dp_status_event );
 
-          // update remote reader/writer databases
-          match dp_status_event {
+          // update remote reader/writer databases, and map onto the
+          // backend-neutral GraphEvent (ADR-0005 / ADR-0010 Phase 2).
+          // See `crate::graph` module docs for the mapping's limitations
+          // (DDS matched-entity events only carry GUIDs, not topic/node
+          // names).
+          let graph_event = match dp_status_event {
             DomainParticipantStatusEvent::RemoteReaderMatched { local_writer, remote_reader } => {
               self.writers_to_remote_readers.lock().unwrap()
                 .entry(local_writer)
                 .and_modify(|s| {s.insert(remote_reader);} )
                 .or_insert(BTreeSet::from([remote_reader]));
+              Some(GraphEvent::EntityDeclared(guid_entity(EntityKind::Subscription, remote_reader)))
             }
             DomainParticipantStatusEvent::RemoteWriterMatched { local_reader, remote_writer } => {
               self.readers_to_remote_writers.lock().unwrap()
                 .entry(local_reader)
                 .and_modify(|s| {s.insert(remote_writer);} )
                 .or_insert(BTreeSet::from([remote_writer]));
+              Some(GraphEvent::EntityDeclared(guid_entity(EntityKind::Publisher, remote_writer)))
             }
             DomainParticipantStatusEvent::ReaderLost {guid, ..} => {
               for readers
               in self.writers_to_remote_readers.lock().unwrap().values_mut() {
                 readers.remove(&guid);
               }
+              Some(GraphEvent::EntityUndeclared(guid_entity(EntityKind::Subscription, guid)))
             }
             DomainParticipantStatusEvent::WriterLost {guid, ..} => {
               for writers
               in self.readers_to_remote_writers.lock().unwrap().values_mut() {
                 writers.remove(&guid);
               }
+              Some(GraphEvent::EntityUndeclared(guid_entity(EntityKind::Publisher, guid)))
             }
 
-            _ => {}
-          }
+            _ => None,
+          };
 
           // also notify any status listeneners
-          self.send_status_event( &NodeEvent::DDS(dp_status_event) );
+          if let Some(graph_event) = graph_event {
+            self.send_status_event( &NodeEvent::Graph(graph_event) );
+          }
         }
       }
     }
@@ -553,7 +591,7 @@ impl Spinner {
       self
         .parameter_events_writer
         .publish(raw::ParameterEvent {
-          timestamp: rustdds::Timestamp::now(), // differs from version in Node!!!
+          stamp: crate::builtin_interfaces::Time::now(),
           node: self.fully_qualified_node_name.clone(),
           new_parameters,
           changed_parameters,
@@ -961,7 +999,7 @@ impl Node {
       self
         .parameter_events_writer
         .publish(raw::ParameterEvent {
-          timestamp: self.time_now().into(),
+          stamp: self.time_now().into(),
           node: self.fully_qualified_name(),
           new_parameters: vec![],
           changed_parameters: vec![],
@@ -1016,7 +1054,7 @@ impl Node {
       self
         .parameter_events_writer
         .publish(raw::ParameterEvent {
-          timestamp: self.time_now().into(),
+          stamp: self.time_now().into(),
           node: self.fully_qualified_name(),
           new_parameters,
           changed_parameters,
@@ -1137,6 +1175,7 @@ impl Node {
     } else {
       WriterWait::Wait {
         this_reader: reader,
+        readers_to_remote_writers: Arc::clone(&self.readers_to_remote_writers),
         status_event_stream: Box::pin(status_receiver),
       }
     }
@@ -1163,6 +1202,7 @@ impl Node {
     } else {
       ReaderWait::Wait {
         this_writer: writer,
+        writers_to_remote_readers: Arc::clone(&self.writers_to_remote_readers),
         status_event_stream: Box::pin(status_receiver),
       }
     }
@@ -1628,7 +1668,7 @@ macro_rules! rosout {
     ($node:expr, $lvl:expr, $($arg:tt)+) => (
         $crate::rosout::RosoutRaw::rosout_raw(
             &$node,
-            $crate::ros2::Timestamp::now(),
+            $crate::builtin_interfaces::Time::now(),
             $lvl,
             $crate::rosout::RosoutRaw::base_name(&$node),
             &std::format!($($arg)+), // msg
@@ -1651,6 +1691,9 @@ pub enum ReaderWait<'a> {
   // We need to wait for an event that is for us
   Wait {
     this_writer: GUID, // Writer who is waiting for Readers to appear
+    // Same map as `Node::writers_to_remote_readers`, kept up to date by the
+    // Spinner from the raw DDS event, independently of `GraphEvent` mapping.
+    writers_to_remote_readers: Arc<Mutex<BTreeMap<GUID, BTreeSet<GUID>>>>,
     status_event_stream: stream::BoxStream<'a, NodeEvent>,
   },
   // No need to wait, can resolve immediately.
@@ -1666,22 +1709,33 @@ impl Future for ReaderWait<'_> {
 
       ReaderWait::Wait {
         this_writer,
+        ref writers_to_remote_readers,
         ref mut status_event_stream,
       } => {
         debug!("wait_for_reader: Waiting for a reader.");
         loop {
           match status_event_stream.poll_next_unpin(cx) {
-            // Check if we have RemoteReaderMatched event and it is for this_writer
-            Poll::Ready(Some(NodeEvent::DDS(
-              DomainParticipantStatusEvent::RemoteReaderMatched {
-                local_writer,
-                remote_reader,
-              },
-            )))
-              if local_writer == this_writer =>
+            // A GraphEvent carries only the *remote* entity (see `crate::graph`
+            // docs), not which local writer it matched, so we cannot filter by
+            // identity here as the old `NodeEvent::DDS` match did. Instead,
+            // treat any newly-declared Subscription as a cue to re-check the
+            // (unchanged) `writers_to_remote_readers` map, which the Spinner
+            // updates from the raw DDS event before it is mapped to a
+            // GraphEvent.
+            Poll::Ready(Some(NodeEvent::Graph(GraphEvent::EntityDeclared(entity))))
+              if entity.kind == EntityKind::Subscription =>
             {
-              debug!("wait_for_reader: Matched remote reader {remote_reader:?}.");
-              return Poll::Ready(());
+              if writers_to_remote_readers
+                .lock()
+                .unwrap()
+                .get(&this_writer)
+                .map(|readers| !readers.is_empty())
+                .unwrap_or(false)
+              {
+                debug!("wait_for_reader: Matched remote reader.");
+                return Poll::Ready(());
+              }
+              // Not (yet) for this_writer; keep polling.
             }
 
             Poll::Ready(_) => {
@@ -1709,6 +1763,9 @@ pub enum WriterWait<'a> {
   // We need to wait for an event that is for us
   Wait {
     this_reader: GUID,
+    // Same map as `Node::readers_to_remote_writers`, kept up to date by the
+    // Spinner from the raw DDS event, independently of `GraphEvent` mapping.
+    readers_to_remote_writers: Arc<Mutex<BTreeMap<GUID, BTreeSet<GUID>>>>,
     status_event_stream: stream::BoxStream<'a, NodeEvent>,
   },
   // No need to wait, can resolve immediately.
@@ -1724,6 +1781,7 @@ impl Future for WriterWait<'_> {
 
       WriterWait::Wait {
         this_reader,
+        ref readers_to_remote_writers,
         ref mut status_event_stream,
       } => {
         debug!("wait_for_writer: Waiting for a writer.");
@@ -1732,17 +1790,27 @@ impl Future for WriterWait<'_> {
           // or "Pending". If we stop at the first event, then there is no waker
           // installed and we are stuck.
           match status_event_stream.poll_next_unpin(cx) {
-            // Check if we have RemoteWriterMatched event and it is for this_writer
-            Poll::Ready(Some(NodeEvent::DDS(
-              DomainParticipantStatusEvent::RemoteWriterMatched {
-                local_reader,
-                remote_writer,
-              },
-            )))
-              if local_reader == this_reader =>
+            // A GraphEvent carries only the *remote* entity (see `crate::graph`
+            // docs), not which local reader it matched, so we cannot filter by
+            // identity here as the old `NodeEvent::DDS` match did. Instead,
+            // treat any newly-declared Publisher as a cue to re-check the
+            // (unchanged) `readers_to_remote_writers` map, which the Spinner
+            // updates from the raw DDS event before it is mapped to a
+            // GraphEvent.
+            Poll::Ready(Some(NodeEvent::Graph(GraphEvent::EntityDeclared(entity))))
+              if entity.kind == EntityKind::Publisher =>
             {
-              debug!("wait_for_writer: Matched remote writer {remote_writer:?}.");
-              return Poll::Ready(());
+              if readers_to_remote_writers
+                .lock()
+                .unwrap()
+                .get(&this_reader)
+                .map(|writers| !writers.is_empty())
+                .unwrap_or(false)
+              {
+                debug!("wait_for_writer: Matched remote writer.");
+                return Poll::Ready(());
+              }
+              // Not (yet) for this_reader; keep polling.
             }
 
             Poll::Ready(_) => {

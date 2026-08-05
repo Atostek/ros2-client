@@ -23,12 +23,13 @@ use super::{
   parameters::{ParameterClient, ParameterEvent, ParameterServer},
   pubsub::{Publisher, Subscription},
   qos_encoding,
-  rosout::{Log, Logger},
+  rosout::Logger,
   service::{Client, Server},
   type_hash,
 };
 use crate::{
   action_msgs::{CancelGoalRequest, CancelGoalResponse, GoalStatusArray},
+  log::Log,
   names::{ActionTypeName, MessageTypeName, Name, NodeName, ServiceTypeName},
   parameters::Parameter,
   qos::QosProfile,

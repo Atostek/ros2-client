@@ -73,6 +73,22 @@ as `DEFAULT_SUBSCRIPTION_QOS` / `DEFAULT_PUBLISHER_QOS`) and the builder-style
 setters. See [ADR-0010](docs/decisions/0010-converge-api-surfaces.md).
 `ros2::QosPolicies` remains re-exported temporarily as an escape hatch.
 
+### Metadata and discovery (API convergence Phase 2)
+
+Breaking renames / types on branch `zenoh` (both backends where applicable):
+
+* `MessageInfo`: use `publisher_gid()`, `source_timestamp()`,
+  `sequence_number()`, etc. (no `writer_guid` / Zenoh-only `source_gid()`).
+* `RmwRequestId.writer_gid` (was DDS `writer_guid` / Zenoh `[u8; 16]`).
+* `Log.stamp` and `ParameterEvent.stamp` are `builtin_interfaces::Time`
+  (not `rustdds::Timestamp`; field was previously `timestamp` on some DDS
+  paths).
+* Discovery: match `NodeEvent::Graph(GraphEvent::…)` instead of
+  `NodeEvent::DDS(DomainParticipantStatusEvent::…)`.
+  `Context::discovered_topics()` returns owned `DiscoveredTopic` summaries.
+
+See [ADR-0010](docs/decisions/0010-converge-api-surfaces.md).
+
 ### Zenoh router requirement
 
 Like `rmw_zenoh`, the Zenoh backend discovers peers and exchanges the ROS graph

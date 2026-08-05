@@ -15,35 +15,9 @@
 /// Admin-space prefix for ROS 2 liveliness tokens (`rmw_zenoh` `ADMIN_SPACE`).
 pub const ADMIN_SPACE: &str = "@ros2_lv";
 
-/// Two-letter entity kind codes used in liveliness keys.
-///
-/// From `rmw_zenoh` `liveliness_utils.cpp`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EntityKind {
-  /// Node.
-  Node,
-  /// Message publisher.
-  Publisher,
-  /// Message subscription.
-  Subscription,
-  /// Service server.
-  ServiceServer,
-  /// Service client.
-  ServiceClient,
-}
-
-impl EntityKind {
-  /// The two-letter code as it appears in a liveliness key.
-  pub const fn code(self) -> &'static str {
-    match self {
-      EntityKind::Node => "NN",
-      EntityKind::Publisher => "MP",
-      EntityKind::Subscription => "MS",
-      EntityKind::ServiceServer => "SS",
-      EntityKind::ServiceClient => "SC",
-    }
-  }
-}
+// `EntityKind` (and its liveliness-key `code()`) now lives in `crate::graph`
+// so it is shared with the DDS backend's discovery mapping (ADR-0010 Phase 2).
+pub use crate::graph::EntityKind;
 
 /// Mangle a ROS name for use in a liveliness key: `/`→`%`, and an empty string
 /// becomes a single `%` (Zenoh keys cannot contain empty chunks).

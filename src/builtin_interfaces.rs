@@ -54,7 +54,7 @@ impl Time {
   /// Returns the current time for the system clock.
   ///
   /// To use simulation-capable time, ask from `Node`.
-  pub(crate) fn now() -> Self {
+  pub fn now() -> Self {
     chrono::Utc::now()
       .timestamp_nanos_opt()
       .map(Self::from_nanos)

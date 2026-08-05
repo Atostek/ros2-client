@@ -96,7 +96,7 @@ fn main() {
       println!(
         "chatter: {data:?}  (seq {}, gid {:02x?}…)",
         info.sequence_number(),
-        &info.source_gid()[..4]
+        &info.publisher_gid().as_bytes()[..4]
       );
     }
     while let Ok(Some((log, _))) = rosout_reader.try_take() {

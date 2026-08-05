@@ -2,8 +2,8 @@
 use std::sync::Arc;
 
 use crate::{
+  builtin_interfaces::Time,
   log::{Log, LogLevel},
-  ros2::Timestamp,
   Publisher,
 };
 
@@ -20,7 +20,7 @@ pub trait RosoutRaw {
   #[tracing::instrument(skip_all)]
   fn rosout_raw(
     &self,
-    timestamp: Timestamp,
+    stamp: Time,
     level: impl Into<LogLevel>,
     log_name: &str,
     log_msg: &str,
@@ -40,7 +40,7 @@ pub trait RosoutRaw {
     // publish a log
     _ = rosout_writer
       .publish(Log {
-        timestamp,
+        stamp,
         level: log_level as u8,
         name: log_name.into(),
         msg: log_msg.into(),

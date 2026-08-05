@@ -59,11 +59,11 @@ In priority order for unblocking a shared API:
    action QoS structs; `DEFAULT_*_QOS`.
 2. **Errors** — `CreateError` / `ReadError` / `WriteError` / `WaitError` (and
    `CreateResult`).
-3. **Time / identity** — `Timestamp` in `Log`, `ParameterEvent`, `MessageInfo`;
-   `GUID` / `SampleIdentity` in metadata; `RmwRequestId` ≡ DDS sample identity.
-4. **Discovery / events / info** — `NodeEvent::DDS(DomainParticipantStatusEvent)`,
-   `discovered_topics() -> DiscoveredTopicData`, and any other graph snapshots
-   that expose RustDDS types. Replace with owned graph types (ADR-0005).
+3. **Time / identity** — largely addressed in Phase 2 (`Log`/`ParameterEvent`
+   stamps, owned `MessageInfo` / `RmwRequestId` / `Gid`). Residual: any remaining
+   `Timestamp` / `GUID` in DDS-only helpers.
+4. **Discovery / events / info** — addressed in Phase 2 (`GraphEvent`,
+   `DiscoveredTopic`); residual raw escape `discovered_topics_raw()`.
 5. **Escape hatches** — `domain_participant()`, `from_domain_participant()`,
    crate-root `pub use rustdds`.
 6. **Service plumbing** — `Service` / `AService` / `ServiceMapping` (DDS RPC
@@ -98,15 +98,21 @@ pattern.
 - DDS-only knobs (`max_blocking_time`, `Ownership`, …): fixed defaults in the
   adapter — **not** fields on `QosProfile`.
 
-**Phase 2 — Metadata, IDs, and discovery**
+**Phase 2 — Metadata, IDs, and discovery** — **done on branch `zenoh` (2026-08-05)**
 
-- Owned `MessageInfo`: times as `ROSTime` / `builtin_interfaces::Time`, publisher
-  as `Gid` / `[u8; 16]`, sequence as an integer.
-- `Log` / `ParameterEvent` drop `rustdds::Timestamp`.
-- One `RmwRequestId { writer_guid: Gid, sequence_number }` for both backends.
-- Owned **graph events and discovery info** (ADR-0005); deprecate
-  `NodeEvent::DDS(...)` and RustDDS-typed discovery getters. Both DDS and Zenoh
-  backends map into the same types.
+- Shared owned `MessageInfo` (`source_timestamp` / `received_timestamp` as
+  `Option<ROSTime>`, `publisher_gid: Gid`, `sequence_number`, optional
+  `related_request_id`). DDS maps from `SampleInfo` / cache changes; Zenoh from
+  attachments.
+- Backend-neutral `Gid` (16-byte Zenoh GIDs via `From<[u8; 16]>` /
+  `to_bytes16()`; distro-gated 16 vs 24 length preserved).
+- One `RmwRequestId { writer_gid: Gid, sequence_number: i64 }` for both backends.
+- Shared `Log` / `raw::ParameterEvent` use `stamp: builtin_interfaces::Time`
+  (ROS IDL field name); DDS `rosout!` no longer stamps with `rustdds::Timestamp`.
+- Shared `graph::{GraphEvent, GraphEntity, EntityKind, DiscoveredTopic}`;
+  `NodeEvent::DDS(...)` removed — status stream uses `NodeEvent::Graph(...)`
+  (plus `ParticipantEntities` on DDS). `Context::discovered_topics()` returns
+  owned summaries; raw DDS data via `discovered_topics_raw()`.
 
 **Phase 3 — Errors**
 

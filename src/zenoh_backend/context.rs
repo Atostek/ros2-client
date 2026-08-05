@@ -15,11 +15,11 @@ use async_channel::Receiver;
 use zenoh::{pubsub::Subscriber, sample::SampleKind, Config, Session, Wait};
 
 use super::{
-  graph_cache::{GraphCache, GraphEvent},
+  graph_cache::GraphCache,
   keyexpr::{self, EntityKind},
   node::{Node, NodeOptions},
 };
-use crate::names::NodeName;
+use crate::{graph::GraphEvent, names::NodeName};
 
 /// Builder for configuring a [`Context`] on the Zenoh backend.
 pub struct ContextOptions {

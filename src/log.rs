@@ -1,22 +1,22 @@
 //! `rosout` logging data types
+//!
+//! Shared by DDS and Zenoh backends. Wire field layout matches
+//! [`rcl_interfaces/msg/Log`](https://github.com/ros2/rcl_interfaces/blob/master/rcl_interfaces/msg/Log.msg)
+//! (`stamp` is [`builtin_interfaces::Time`]).
 
-#[cfg(feature = "dds")]
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "dds")]
-use rustdds::*;
+
+use crate::builtin_interfaces::Time;
 
 /// Log message structure, communicated over the rosout Topic.
 ///
 /// [Log](https://github.com/ros2/rcl_interfaces/blob/master/rcl_interfaces/msg/Log.msg)
 ///
 /// To write log messages, use the [`rosout`](crate::rosout!) macro.
-///
-/// Currently only available on the `dds` backend (uses a RustDDS `Timestamp`);
-/// the `zenoh` backend's rosout support lands with an owned timestamp (E9).
-#[cfg(feature = "dds")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Log {
-  pub timestamp: Timestamp,
+  /// When the record was produced (`builtin_interfaces/Time stamp`).
+  pub stamp: Time,
   pub level: u8,
   pub name: String,
   pub msg: String,
@@ -25,7 +25,6 @@ pub struct Log {
   pub line: u32,
 }
 
-#[cfg(feature = "dds")]
 impl Log {
   /// ROS2 logging severity level
   pub const DEBUG: u8 = 10;
@@ -35,8 +34,8 @@ impl Log {
   pub const FATAL: u8 = 50;
 
   /// Timestamp when rosout message was sent
-  pub fn get_timestamp(&self) -> &Timestamp {
-    &self.timestamp
+  pub fn get_stamp(&self) -> &Time {
+    &self.stamp
   }
 
   /// Rosout level
