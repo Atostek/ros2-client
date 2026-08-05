@@ -78,10 +78,14 @@ async fn make_publisher() {
 
   // send messages every 0.25 seconds
   loop {
-    publisher
-      .async_publish("hello subscriber!".into())
-      .await
-      .unwrap();
+    // A Reliable writer can legitimately return `WouldBlock` on the first
+    // attempts, before a matching subscription has been discovered (a
+    // discovery race that shows up on fast/loopback CI runners). Tolerate it
+    // and keep trying; the subscriber only needs one message to arrive within
+    // its timeout.
+    if let Err(e) = publisher.async_publish("hello subscriber!".into()).await {
+      eprintln!("Publish not ready yet, retrying: {e:?}");
+    }
 
     tokio::time::sleep(Duration::from_millis(250)).await;
   }

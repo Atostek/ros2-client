@@ -1,6 +1,8 @@
 //! `rosout` logging data types
 
+#[cfg(feature = "dds")]
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "dds")]
 use rustdds::*;
 
 /// Log message structure, communicated over the rosout Topic.
@@ -8,6 +10,10 @@ use rustdds::*;
 /// [Log](https://github.com/ros2/rcl_interfaces/blob/master/rcl_interfaces/msg/Log.msg)
 ///
 /// To write log messages, use the [`rosout`](crate::rosout!) macro.
+///
+/// Currently only available on the `dds` backend (uses a RustDDS `Timestamp`);
+/// the `zenoh` backend's rosout support lands with an owned timestamp (E9).
+#[cfg(feature = "dds")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Log {
   pub timestamp: Timestamp,
@@ -19,6 +25,7 @@ pub struct Log {
   pub line: u32,
 }
 
+#[cfg(feature = "dds")]
 impl Log {
   /// ROS2 logging severity level
   pub const DEBUG: u8 = 10;

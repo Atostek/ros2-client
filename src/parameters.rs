@@ -289,10 +289,20 @@ impl From<ParameterDescriptor> for raw::ParameterDescriptor {
 /// Raw, ROS2-compatible Parameters for sending over the wire.
 /// Not for use in a Rust application.
 pub mod raw {
-  use rustdds::*;
+  // `Timestamp` is only needed by the DDS backend's `ParameterEvent` (below).
+  // The Zenoh backend uses an owned `builtin_interfaces::Time` timestamp
+  // instead (see `zenoh_backend::parameters`), so the rest of this module is
+  // backend-neutral.
+  #[cfg(feature = "dds")]
+  use rustdds::Timestamp;
   use serde::{Deserialize, Serialize};
 
   /// ROS2 [ParameterEvent](https://github.com/ros2/rcl_interfaces/blob/master/rcl_interfaces/msg/ParameterEvent.msg)
+  ///
+  /// Only available on the `dds` backend, because its timestamp is a
+  /// `rustdds::Timestamp`. The Zenoh backend defines an owned equivalent in
+  /// [`crate::zenoh_backend::parameters`].
+  #[cfg(feature = "dds")]
   #[derive(Debug, Clone, Serialize, Deserialize)]
   pub struct ParameterEvent {
     pub timestamp: Timestamp,

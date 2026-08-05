@@ -1,0 +1,43 @@
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+name: CI / Zenoh backend
+
+permissions: read-all
+
+jobs:
+
+  build-zenoh:
+    name: build & test (zenoh feature)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      # The Zenoh backend is built with the DDS default turned off.
+      - name: check (zenoh)
+        run: cargo check --no-default-features --features zenoh
+
+      - name: clippy (zenoh)
+        run: cargo clippy --no-default-features --features zenoh --lib --bins -- -D warnings
+
+      # The zenoh-backend example must compile (and lint clean). The DDS
+      # examples are gated on the `dds` feature (Cargo.toml `required-features`)
+      # and are skipped under this feature set.
+      - name: clippy examples (zenoh)
+        run: cargo clippy --no-default-features --features zenoh --examples -- -D warnings
+
+      # `--lib` only: the crate-level doctest exercises the DDS API and is not
+      # meant to compile under the zenoh backend. Serial to keep session ports
+      # from contending.
+      - name: test (zenoh, lib)
+        run: cargo test --no-default-features --features zenoh --lib -- --test-threads=1
+
+      # Guard the feature exclusivity: the DDS backend must also build when
+      # selected explicitly with default features off.
+      - name: check (dds, explicit)
+        run: cargo check --no-default-features --features dds

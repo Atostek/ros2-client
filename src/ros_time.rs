@@ -14,6 +14,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use log::error;
+#[cfg(feature = "dds")]
 use rustdds::Timestamp;
 
 /// ROS Time with nanosecond precision
@@ -83,6 +84,7 @@ impl From<ROSTime> for chrono::DateTime<Utc> {
 
 // rustDDS::Timestamp <-> ROSTime
 
+#[cfg(feature = "dds")]
 impl From<ROSTime> for Timestamp {
   fn from(rt: ROSTime) -> Timestamp {
     let chrono_time = chrono::DateTime::<Utc>::from(rt);
@@ -99,13 +101,15 @@ impl From<ROSTime> for Timestamp {
 /// and "2.3.3 DCPS PSM : IDL" for DDS `Time_t` type definitions and RTPS
 /// Specification v2.5 Section "8.3.2 Type Definitions" for RTPS view of
 /// `Time_t`.
+#[cfg(feature = "dds")]
 pub enum TimestampConversionError {
   /// DDS Timestamp indicates an invalid value
   Invalid,
-  /// DDS Timestamp indicates "infinity"  
+  /// DDS Timestamp indicates "infinity"
   Infinite,
 }
 
+#[cfg(feature = "dds")]
 impl TryFrom<Timestamp> for ROSTime {
   type Error = TimestampConversionError;
   fn try_from(ts: Timestamp) -> Result<ROSTime, TimestampConversionError> {

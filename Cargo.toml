@@ -10,14 +10,35 @@ keywords = ["network","protocol","dds","rtps"]
 license = "Apache-2.0"
 homepage = "https://atostek.com/en/products/rustdds/"  
 repository = "https://github.com/Atostek/ros2-client/"
-categories = ["network-programming", "science::robotics"] 
+categories = ["network-programming", "science::robotics"]
+
+# Examples are declared explicitly (below) rather than auto-discovered, so each
+# can carry `required-features`. The bundled examples use the DDS backend API;
+# they are gated on `dds` so a `--no-default-features --features zenoh` build of
+# `--examples` skips them instead of failing. The `zenoh` backend has its own
+# example, `zenoh_demo`.
+autoexamples = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-# declare the existence of "security" feature (Secure ROS 2 support)
-security = [ 
-  "rustdds/security" # Requires "security" in RustDDS also
+
+# ---------------------------------------------------------------------------
+# Middleware backend selection (mutually exclusive). See
+# docs/decisions/0002-dual-backend-compile-time-feature-selection.md
+#
+# Exactly one of `dds` (default) or `zenoh` must be enabled; lib.rs emits a
+# compile_error! if both or neither are active. Build the Zenoh backend with:
+#   cargo build --no-default-features --features zenoh
+# ---------------------------------------------------------------------------
+dds   = ["dep:rustdds"]
+zenoh = ["dep:zenoh", "dep:zenoh-ext", "dep:cdr-encoding", "dep:byteorder"]
+
+# declare the existence of "security" feature (Secure ROS 2 support).
+# Security is a DDS-only capability (RustDDS security); it implies `dds`.
+security = [
+  "dds",
+  "rustdds/security", # Requires "security" in RustDDS also
 ]
 
 # ROS 2 distribution selection.
@@ -48,14 +69,27 @@ jazzy    = ["iron"]
 kilted   = ["jazzy"]
 lyrical  = ["kilted"]
 
-default = ["jazzy"]
+# Default build: the DDS backend on the jazzy distribution.
+default = ["dds", "jazzy"]
 
 
 [dependencies]
 
+# RustDDS backend (feature `dds`). Optional so the `zenoh` backend can be built
+# without pulling RustDDS in.
 # rustdds = {  path = "../RustDDS"  } # dev setting
 # rustdds = {   git = "https://github.com/Atostek/RustDDS.git" }
-rustdds = {  version = "0.14"  } # release setting
+rustdds = { version = "0.14", optional = true } # release setting
+
+# Zenoh backend (feature `zenoh`). Optional; only compiled when `zenoh` is
+# enabled. `unstable` is required for liveliness, advanced pub/sub and matching
+# (see docs/zenoh_study/research/zenoh_api.md).
+zenoh     = { version = "1", optional = true, features = ["unstable"] }
+zenoh-ext = { version = "1", optional = true, features = ["unstable"] }
+# Standalone CDR (de)serialization for the Zenoh backend (the DDS backend gets
+# CDR via RustDDS). Same author as RustDDS, so byte output matches (ADR-0003).
+cdr-encoding = { version = "0.10", optional = true }
+byteorder = { version = "1", optional = true } # CDR byte-order selector
 
 mio = "^0.6.23"
 mio-extras = "2.0.6"
@@ -80,6 +114,17 @@ widestring = "1.0" # msggen
 libc = "0.2.153"
 tracing = "0.1.41"
 
+# Entity GID for the Zenoh backend is XXH3-128 of the liveliness key
+# (docs/decisions/0008). The algorithm is backend-neutral spec code, so the
+# dependency is unconditional (it is tiny and pure-Rust) to keep the wire-format
+# modules unit-testable on any build.
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+# REP-2016 `RIHS01_…` type hashes are SHA-256 over a canonical JSON type
+# description (docs/decisions/0007). Like the GID hashing above, this is
+# backend-neutral spec code, so the (pure-Rust) dependency is unconditional to
+# keep the type-hash module unit-testable on any build.
+sha2 = "0.10"
+
 [dev-dependencies]
 log = "0.4"
 pretty_env_logger = "0.5.0"
@@ -95,3 +140,106 @@ smol = "2.0"
 async-io = "2.2.0"
 async-ctrlc = "1.2"
 tokio = { version = "1", features=["rt", "macros", "time", "sync"]}
+
+
+# ---------------------------------------------------------------------------
+# Examples
+# ---------------------------------------------------------------------------
+# DDS-backend examples (the default build). Gated on `dds` so they are skipped
+# on a `zenoh` build rather than failing to compile.
+
+[[example]]
+name = "talker"
+path = "examples/talker/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "listener"
+path = "examples/listener/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "async_talker"
+path = "examples/async_talker/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "async_listener"
+path = "examples/async_listener/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "async_smart_talker"
+path = "examples/async_smart_talker/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "async_service_client"
+path = "examples/async_service_client/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "async_service_server"
+path = "examples/async_service_server/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "ros2_service_client"
+path = "examples/ros2_service_client/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "ros2_service_server"
+path = "examples/ros2_service_server/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "minimal_action_client"
+path = "examples/minimal_action_client/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "minimal_action_server"
+path = "examples/minimal_action_server/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "concurrent_action_server"
+path = "examples/concurrent_action_server/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "client_get_parameters"
+path = "examples/client_get_parameters/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "client_list_parameters"
+path = "examples/client_list_parameters/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "discovery_listener"
+path = "examples/discovery_listener/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "time_broadcaster"
+path = "examples/time_broadcaster/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "time_reporter"
+path = "examples/time_reporter/main.rs"
+required-features = ["dds"]
+
+[[example]]
+name = "turtle_teleop"
+path = "examples/turtle_teleop/main.rs"
+required-features = ["dds"]
+
+# Zenoh-backend example.
+[[example]]
+name = "zenoh_demo"
+path = "examples/zenoh_demo/main.rs"
+required-features = ["zenoh"]

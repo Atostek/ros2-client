@@ -4,21 +4,33 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{parameters, service::AService, Message};
+use crate::{parameters, Message};
+// The `AService` type aliases below are DDS-service plumbing. The Zenoh backend
+// consumes the request/response structs directly (as `Server<Req, Resp>` /
+// `Client<Req, Resp>` payloads), so those structs stay backend-neutral while
+// the aliases are gated behind the `dds` feature.
+#[cfg(feature = "dds")]
+use crate::service::AService;
 
+#[cfg(feature = "dds")]
 pub type ListParametersService = AService<ListParametersRequest, ListParametersResponse>;
 
+#[cfg(feature = "dds")]
 pub type GetParametersService = AService<GetParametersRequest, GetParametersResponse>;
 
+#[cfg(feature = "dds")]
 pub type GetParameterTypesService = AService<GetParameterTypesRequest, GetParameterTypesResponse>;
 
+#[cfg(feature = "dds")]
 pub type SetParametersService = AService<SetParametersRequest, SetParametersResponse>;
 
+#[cfg(feature = "dds")]
 pub type DescribeParametersService =
   AService<DescribeParametersRequest, DescribeParametersResponse>;
 
 // This is structurally identical to SetParamtersService, but the operation
 // of the service is slightly different.
+#[cfg(feature = "dds")]
 pub type SetParametersAtomicallyService = AService<SetParametersRequest, SetParametersResponse>;
 
 #[allow(non_snake_case)]

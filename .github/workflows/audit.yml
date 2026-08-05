@@ -2,10 +2,11 @@ name: Security audit
 
 on:
   push:
-    paths: 
+    paths:
       - '**/Cargo.toml'
       - '**/Cargo.lock'
       - '.github/workflows/audit.yml'
+      - '.cargo/audit.toml' # advisory ignore list (see file for rationale)
 
 permissions:
   issues: write

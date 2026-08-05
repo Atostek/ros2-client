@@ -1,0 +1,21 @@
+# cargo-audit configuration (read by `cargo audit` / rustsec/audit-check).
+#
+# The advisories below are in TRANSITIVE dependencies pulled in only by the
+# optional `zenoh` feature (Zenoh's transport stack). They cannot be resolved
+# from this crate — they need an upstream Zenoh dependency bump — so they are
+# ignored here with justification and should be revisited when Zenoh updates.
+# The default `dds` build does not compile any of these crates.
+
+[advisories]
+ignore = [
+  # lz4_flex < 0.11.6: memory exposure when decompressing invalid LZ4 block
+  # data. Pulled transitively by `zenoh` (compression); `zenoh` pins the 0.10.x
+  # line, so no patched version is selectable until Zenoh upgrades. ros2-client
+  # never calls the affected block-decompress APIs directly.
+  "RUSTSEC-2026-0041",
+  # rsa 0.9.x: "Marvin" timing side-channel in RSA. Transitive via `zenoh`'s
+  # TLS stack. No patched release exists upstream at time of writing; only
+  # relevant to the optional `zenoh` feature and only in adversarial-timing
+  # network settings.
+  "RUSTSEC-2023-0071",
+]

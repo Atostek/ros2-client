@@ -368,6 +368,16 @@ impl ServiceTypeName {
     self.msg.type_name()
   }
 
+  /// The base DDS-form service type name, e.g.
+  /// `example_interfaces::srv::dds_::AddTwoInts_` — used as the `<type>`
+  /// component of a Zenoh service key expression.
+  #[cfg(feature = "zenoh")]
+  pub(crate) fn dds_service_type(&self) -> String {
+    slash_to_colons(
+      self.package_name().to_owned() + "/" + &self.prefix + "/dds_/" + self.type_name() + "_",
+    )
+  }
+
   pub(crate) fn dds_request_type(&self) -> String {
     slash_to_colons(
       self.package_name().to_owned()

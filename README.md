@@ -35,6 +35,67 @@ Please see the included examples on how to use the various features.
 * Message generation: from `.msg` to `.rs`- experimental
 * ROS 2 Security - experimental
 
+## Middleware backends: DDS and Zenoh
+
+`ros2-client` can talk to ROS 2 over either of two middleware backends,
+selected at compile time by **mutually exclusive** Cargo features:
+
+* **`dds`** (default) — communicates via [RustDDS](https://github.com/jhelovuo/RustDDS),
+  interoperating with ROS 2's default DDS RMWs (`rmw_fastrtps`, `rmw_cyclonedds`, …).
+* **`zenoh`** — communicates via [Zenoh](https://zenoh.io/), mirroring the wire
+  protocol of the official [`rmw_zenoh`](https://github.com/ros2/rmw_zenoh)
+  middleware, so it interoperates with ROS 2 nodes running `rmw_zenoh`.
+
+Exactly one backend must be enabled; the build emits a `compile_error!` if both
+or neither are active. The default build uses `dds`. Build the Zenoh backend
+with:
+
+```console
+cargo build --no-default-features --features zenoh
+```
+
+Run the bundled Zenoh example (a self-contained talker + listener over
+loopback):
+
+```console
+cargo run --no-default-features --features zenoh --example zenoh_demo
+```
+
+### Zenoh router requirement
+
+Like `rmw_zenoh`, the Zenoh backend discovers peers and exchanges the ROS graph
+through Zenoh's infrastructure. For anything beyond a single process you
+normally run a **Zenoh router** (`zenohd`), exactly as `rmw_zenoh` does, or
+configure explicit peer `connect`/`listen` endpoints. The in-process examples
+and tests connect two peers directly over loopback, so they need no router. See
+[`docs/decisions/0009-zenoh-router-and-config.md`](docs/decisions/0009-zenoh-router-and-config.md)
+for configuration details.
+
+### Feature support on the Zenoh backend
+
+| Capability | Zenoh backend | Notes |
+| ---------- | :-----------: | ----- |
+| Topics (publish/subscribe) | ✅ | CDR payload + `(seq, timestamp, gid)` attachment, per `rmw_zenoh` |
+| Services (client/server)   | ✅ | Zenoh queryable / get |
+| Actions                    | ✅ | Composed of services + a feedback topic, as in ROS 2 |
+| Parameters + `parameter_events` | ✅ | Six `rcl_interfaces` services + events topic |
+| `rosout` logging           | ✅ | `/rosout` publisher + optional reader |
+| Discovery / ROS graph      | ✅ | Zenoh liveliness tokens + a graph cache |
+| QoS                        | ⚠️ | Backend-neutral profile carried in liveliness keys; not all policies enforced |
+| ROS 2 Security             | ❌ | DDS-only (RustDDS security) |
+| Message generation (`msggen`) | ✅ | Backend-neutral |
+
+The design, the `rmw_zenoh` mapping, and the wire-format details are documented
+under [`docs/zenoh_study/`](docs/zenoh_study/); the design decisions are recorded
+under [`docs/decisions/`](docs/decisions/). To validate interoperability against
+a real ROS 2 + `rmw_zenoh` stack, follow
+[`docs/zenoh_study/interop_runbook.md`](docs/zenoh_study/interop_runbook.md).
+
+> **Type hashes (send direction):** REP-2016 `RIHS01_…` type hashes are emitted
+> from a table of known interop types; types outside that table use a wildcard
+> on receive and a placeholder on send. Computing hashes from parsed IDL is a
+> tracked post-MVP follow-up (ADR-0007).
+
 ## ROS 2 Releases Compatibility
 
 This is what is expected to work. There are no routine tests against older releases.
@@ -64,6 +125,8 @@ distribution with, e.g., `cargo build --no-default-features --features humble`
 Please see [test results](interop/results) for details.  
 
 ## Version 0.10
+* Experimental **Zenoh** middleware backend (Cargo feature `zenoh`), mirroring
+  `rmw_zenoh`. See "Middleware backends: DDS and Zenoh" above.
 * Add interoperability tests and results.
 * ROS 2 distribution selection via a feature (`galactic` .. `lyrical`; default `jazzy`). 
 * `Context` now checks the `ROS_DISTRO` environment variable against the compiled distribution.
