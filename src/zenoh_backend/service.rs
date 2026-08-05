@@ -31,7 +31,11 @@ use zenoh::{
 };
 
 use super::{attachment::AttachmentData, cdr};
-use crate::{gid::Gid, request_id::RmwRequestId};
+use crate::{
+  error::{ServiceError, ServiceResult},
+  gid::Gid,
+  request_id::RmwRequestId,
+};
 
 fn now_nanos() -> i64 {
   SystemTime::now()
@@ -39,34 +43,6 @@ fn now_nanos() -> i64 {
     .map(|d| d.as_nanos() as i64)
     .unwrap_or(0)
 }
-
-/// Errors from service calls.
-#[derive(Debug)]
-pub enum ServiceError {
-  /// CDR (de)serialization failed.
-  Cdr(cdr::CdrError),
-  /// Underlying Zenoh error.
-  Zenoh(zenoh::Error),
-  /// A received request/reply lacked the expected payload or attachment.
-  Malformed,
-  /// The client received no reply.
-  NoReply,
-  /// `send_response` referenced an unknown request id.
-  UnknownRequest,
-}
-
-impl std::fmt::Display for ServiceError {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      ServiceError::Cdr(e) => write!(f, "service: {e}"),
-      ServiceError::Zenoh(e) => write!(f, "service: zenoh error: {e}"),
-      ServiceError::Malformed => write!(f, "service: malformed request/reply"),
-      ServiceError::NoReply => write!(f, "service: no reply received"),
-      ServiceError::UnknownRequest => write!(f, "service: unknown request id"),
-    }
-  }
-}
-impl std::error::Error for ServiceError {}
 
 fn gid_key(gid: [u8; 16]) -> u128 {
   u128::from_le_bytes(gid)
@@ -113,8 +89,8 @@ impl<Req: Serialize, Resp: DeserializeOwned> Client<Req, Resp> {
     }
   }
 
-  fn request_bytes(&self, req: &Req) -> Result<(Vec<u8>, zenoh::bytes::ZBytes), ServiceError> {
-    let payload = cdr::to_cdr(req).map_err(ServiceError::Cdr)?;
+  fn request_bytes(&self, req: &Req) -> ServiceResult<(Vec<u8>, zenoh::bytes::ZBytes)> {
+    let payload = cdr::to_cdr(req)?;
     let seq = self.seq.fetch_add(1, Ordering::Relaxed) + 1;
     let attachment = AttachmentData {
       sequence_number: seq,
@@ -125,14 +101,14 @@ impl<Req: Serialize, Resp: DeserializeOwned> Client<Req, Resp> {
     Ok((payload, attachment))
   }
 
-  fn decode_reply(reply: &zenoh::query::Reply) -> Option<Result<Resp, ServiceError>> {
+  fn decode_reply(reply: &zenoh::query::Reply) -> Option<ServiceResult<Resp>> {
     let sample = reply.result().ok()?;
     let bytes = sample.payload().to_bytes();
-    Some(cdr::from_cdr::<Resp>(&bytes).map_err(ServiceError::Cdr))
+    Some(cdr::from_cdr::<Resp>(&bytes).map_err(Into::into))
   }
 
   /// Call the service and wait (blocking) for the first reply.
-  pub fn call(&self, req: Req) -> Result<Resp, ServiceError> {
+  pub fn call(&self, req: Req) -> ServiceResult<Resp> {
     let (payload, attachment) = self.request_bytes(&req)?;
     let mut builder = self
       .session
@@ -144,7 +120,7 @@ impl<Req: Serialize, Resp: DeserializeOwned> Client<Req, Resp> {
     if let Some(t) = self.timeout {
       builder = builder.timeout(t);
     }
-    let replies = builder.wait().map_err(ServiceError::Zenoh)?;
+    let replies = builder.wait()?;
     while let Ok(reply) = replies.recv() {
       if let Some(res) = Self::decode_reply(&reply) {
         return res;
@@ -154,7 +130,7 @@ impl<Req: Serialize, Resp: DeserializeOwned> Client<Req, Resp> {
   }
 
   /// Call the service and await the first reply.
-  pub async fn async_call(&self, req: Req) -> Result<Resp, ServiceError> {
+  pub async fn async_call(&self, req: Req) -> ServiceResult<Resp> {
     let (payload, attachment) = self.request_bytes(&req)?;
     let mut builder = self
       .session
@@ -166,7 +142,7 @@ impl<Req: Serialize, Resp: DeserializeOwned> Client<Req, Resp> {
     if let Some(t) = self.timeout {
       builder = builder.timeout(t);
     }
-    let replies = builder.await.map_err(ServiceError::Zenoh)?;
+    let replies = builder.await?;
     while let Ok(reply) = replies.recv_async().await {
       if let Some(res) = Self::decode_reply(&reply) {
         return res;
@@ -197,9 +173,9 @@ impl<Req: DeserializeOwned, Resp: Serialize> Server<Req, Resp> {
     }
   }
 
-  fn accept(&self, query: Query) -> Result<(RmwRequestId, Req), ServiceError> {
+  fn accept(&self, query: Query) -> ServiceResult<(RmwRequestId, Req)> {
     let payload = query.payload().ok_or(ServiceError::Malformed)?;
-    let req = cdr::from_cdr::<Req>(&payload.to_bytes()).map_err(ServiceError::Cdr)?;
+    let req = cdr::from_cdr::<Req>(&payload.to_bytes())?;
     let attachment = query.attachment().ok_or(ServiceError::Malformed)?;
     let a = AttachmentData::from_zbytes(attachment).map_err(|_| ServiceError::Malformed)?;
     let id = RmwRequestId {
@@ -215,7 +191,7 @@ impl<Req: DeserializeOwned, Resp: Serialize> Server<Req, Resp> {
   }
 
   /// Take the next pending request if one is immediately available.
-  pub fn try_receive_request(&self) -> Result<Option<(RmwRequestId, Req)>, ServiceError> {
+  pub fn try_receive_request(&self) -> ServiceResult<Option<(RmwRequestId, Req)>> {
     match self.queryable.try_recv() {
       Ok(Some(query)) => self.accept(query).map(Some),
       Ok(None) => Ok(None),
@@ -224,7 +200,7 @@ impl<Req: DeserializeOwned, Resp: Serialize> Server<Req, Resp> {
   }
 
   /// Await the next request.
-  pub async fn async_receive_request(&self) -> Result<(RmwRequestId, Req), ServiceError> {
+  pub async fn async_receive_request(&self) -> ServiceResult<(RmwRequestId, Req)> {
     let query = self
       .queryable
       .recv_async()
@@ -234,14 +210,14 @@ impl<Req: DeserializeOwned, Resp: Serialize> Server<Req, Resp> {
   }
 
   /// Send the response for a previously received request.
-  pub fn send_response(&self, id: RmwRequestId, resp: Resp) -> Result<(), ServiceError> {
+  pub fn send_response(&self, id: RmwRequestId, resp: Resp) -> ServiceResult<()> {
     let query = self
       .pending
       .lock()
       .unwrap()
       .remove(&(gid_key(id.writer_gid.to_bytes16()), id.sequence_number))
       .ok_or(ServiceError::UnknownRequest)?;
-    let payload = cdr::to_cdr(&resp).map_err(ServiceError::Cdr)?;
+    let payload = cdr::to_cdr(&resp)?;
     // Echo the request's seq + client gid; fresh reply timestamp.
     let attachment = AttachmentData {
       sequence_number: id.sequence_number,
@@ -252,8 +228,7 @@ impl<Req: DeserializeOwned, Resp: Serialize> Server<Req, Resp> {
     query
       .reply(query.key_expr().clone(), payload)
       .attachment(attachment)
-      .wait()
-      .map_err(ServiceError::Zenoh)?;
+      .wait()?;
     Ok(())
   }
 }

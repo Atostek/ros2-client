@@ -7,11 +7,11 @@ use std::{
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 use futures::{pin_mut, stream::StreamExt};
-use rustdds::dds::{ReadError, ReadResult, WriteError, WriteResult};
 pub use action_msgs::{CancelGoalRequest, GoalId, GoalInfo, GoalStatusEnum};
 
 use crate::{
   action_msgs, builtin_interfaces,
+  error::{ReadError, ReadResult, WriteError, WriteResult},
   message::Message,
   names::Name,
   service::{request_id::RmwRequestId, AService, Server},

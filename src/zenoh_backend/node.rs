@@ -29,6 +29,7 @@ use super::{
 };
 use crate::{
   action_msgs::{CancelGoalRequest, CancelGoalResponse, GoalStatusArray},
+  error::CreateResult,
   log::Log,
   names::{ActionTypeName, MessageTypeName, Name, NodeName, ServiceTypeName},
   parameters::Parameter,
@@ -145,7 +146,7 @@ impl Node {
     &self,
     topic: &Topic,
     qos: Option<QosProfile>,
-  ) -> zenoh::Result<Publisher<M>> {
+  ) -> CreateResult<Publisher<M>> {
     let qos = qos.unwrap_or_else(|| topic.qos.clone());
     let domain = self.context.domain_id();
     let sender_hash = type_hash::sender_hash(&topic.dds_type_name);
@@ -177,7 +178,7 @@ impl Node {
     &self,
     topic: &Topic,
     qos: Option<QosProfile>,
-  ) -> zenoh::Result<Subscription<M>> {
+  ) -> CreateResult<Subscription<M>> {
     let qos = qos.unwrap_or_else(|| topic.qos.clone());
     let domain = self.context.domain_id();
     // A subscription listens with a wildcard type-hash to receive from any
@@ -260,7 +261,7 @@ impl Node {
     &self,
     service: &Name,
     service_type: &ServiceTypeName,
-  ) -> zenoh::Result<Client<Req, Resp>> {
+  ) -> CreateResult<Client<Req, Resp>> {
     self.create_client_inner(service, service_type, None)
   }
 
@@ -269,7 +270,7 @@ impl Node {
     service: &Name,
     service_type: &ServiceTypeName,
     timeout: Option<Duration>,
-  ) -> zenoh::Result<Client<Req, Resp>> {
+  ) -> CreateResult<Client<Req, Resp>> {
     let fqn = resolve_fqn(service, &self.node_name);
     let dds_type = service_type.dds_service_type();
     let domain = self.context.domain_id();
@@ -306,7 +307,7 @@ impl Node {
     &self,
     service: &Name,
     service_type: &ServiceTypeName,
-  ) -> zenoh::Result<Server<Req, Resp>> {
+  ) -> CreateResult<Server<Req, Resp>> {
     let fqn = resolve_fqn(service, &self.node_name);
     let dds_type = service_type.dds_service_type();
     let domain = self.context.domain_id();
@@ -339,7 +340,7 @@ impl Node {
     &self,
     action: &Name,
     action_type: &ActionTypeName,
-  ) -> zenoh::Result<ActionClient<G, R, F>>
+  ) -> CreateResult<ActionClient<G, R, F>>
   where
     G: Serialize,
     R: DeserializeOwned,
@@ -387,7 +388,7 @@ impl Node {
     &self,
     action: &Name,
     action_type: &ActionTypeName,
-  ) -> zenoh::Result<ActionServer<G, R, F>>
+  ) -> CreateResult<ActionServer<G, R, F>>
   where
     G: DeserializeOwned,
     R: Serialize,
@@ -437,7 +438,7 @@ impl Node {
   pub fn create_parameter_server(
     &self,
     initial_parameters: impl IntoIterator<Item = Parameter>,
-  ) -> zenoh::Result<ParameterServer> {
+  ) -> CreateResult<ParameterServer> {
     let node_fqn = self.node_name.fully_qualified_name();
     let svc = |base: &str| param_service_name(&node_fqn, base);
     let param_type = |ty: &str| ServiceTypeName::new("rcl_interfaces", ty);
@@ -482,7 +483,7 @@ impl Node {
   }
 
   /// Create a [`ParameterClient`] targeting `remote_node`'s parameter services.
-  pub fn create_parameter_client(&self, remote_node: &NodeName) -> zenoh::Result<ParameterClient> {
+  pub fn create_parameter_client(&self, remote_node: &NodeName) -> CreateResult<ParameterClient> {
     let remote_fqn = remote_node.fully_qualified_name();
     let svc = |base: &str| param_service_name(&remote_fqn, base);
     let param_type = |ty: &str| ServiceTypeName::new("rcl_interfaces", ty);
@@ -514,7 +515,7 @@ impl Node {
   /// Create a rosout [`Logger`] for this node: a publisher on the global
   /// `/rosout` topic (`rcl_interfaces/msg/Log`). Records are stamped with this
   /// node's base name. Use the [`rosout!`](crate::rosout!) macro to log.
-  pub fn create_logger(&self) -> zenoh::Result<Logger> {
+  pub fn create_logger(&self) -> CreateResult<Logger> {
     let publisher = self.create_publisher::<Log>(&self.rosout_topic()?, None)?;
     Ok(Logger::new(
       self.node_name.base_name().to_string(),
@@ -524,7 +525,7 @@ impl Node {
 
   /// Subscribe to the global `/rosout` topic to read log records published by
   /// any node (the `read_rosout` capability).
-  pub fn read_rosout(&self) -> zenoh::Result<Subscription<Log>> {
+  pub fn read_rosout(&self) -> CreateResult<Subscription<Log>> {
     self.create_subscription::<Log>(&self.rosout_topic()?, None)
   }
 

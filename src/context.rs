@@ -11,7 +11,6 @@ use log::{debug, error, info, trace, warn};
 //use mio::Evented;
 use serde::Serialize;
 use rustdds::{
-  dds::CreateResult,
   no_key::{DeserializerAdapter, SerializerAdapter},
   *,
 };
@@ -19,6 +18,7 @@ use rustdds::{
 use crate::{
   builtin_topics,
   entities_info::{NodeEntitiesInfo, ParticipantEntitiesInfo},
+  error::CreateResult,
   gid::Gid,
   graph::DiscoveredTopic,
   names::*,
@@ -242,7 +242,7 @@ impl Context {
     &self,
     topic: &Topic,
     qos: Option<QosProfile>,
-  ) -> dds::CreateResult<Publisher<M>>
+  ) -> CreateResult<Publisher<M>>
   where
     M: Serialize,
   {
@@ -258,7 +258,7 @@ impl Context {
     &self,
     topic: &Topic,
     qos: Option<QosProfile>,
-  ) -> dds::CreateResult<Subscription<M>>
+  ) -> CreateResult<Subscription<M>>
   where
     M: 'static,
   {
@@ -273,29 +273,33 @@ impl Context {
     &self,
     topic: &Topic,
     qos: Option<QosProfile>,
-  ) -> dds::CreateResult<no_key::DataWriter<M, SA>>
+  ) -> CreateResult<no_key::DataWriter<M, SA>>
   where
     SA: SerializerAdapter<M>,
   {
     let dds_qos = qos.map(QosPolicies::from);
-    self
-      .get_ros_default_publisher()
-      .create_datawriter_no_key(topic, dds_qos)
+    Ok(
+      self
+        .get_ros_default_publisher()
+        .create_datawriter_no_key(topic, dds_qos)?,
+    )
   }
 
   pub(crate) fn create_simpledatareader<M, DA>(
     &self,
     topic: &Topic,
     qos: Option<QosProfile>,
-  ) -> dds::CreateResult<no_key::SimpleDataReader<M, DA>>
+  ) -> CreateResult<no_key::SimpleDataReader<M, DA>>
   where
     M: 'static,
     DA: 'static + DeserializerAdapter<M>,
   {
     let dds_qos = qos.map(QosPolicies::from);
-    self
-      .get_ros_default_subscriber()
-      .create_simple_datareader_no_key(topic, dds_qos)
+    Ok(
+      self
+        .get_ros_default_subscriber()
+        .create_simple_datareader_no_key(topic, dds_qos)?,
+    )
   }
 
   pub(crate) fn update_node(&mut self, node_info: NodeEntitiesInfo) {

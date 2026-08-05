@@ -1,6 +1,5 @@
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
-use rustdds::dds::{ReadResult, WriteResult};
 pub use action_msgs::{CancelGoalRequest, CancelGoalResponse, GoalId, GoalInfo, GoalStatusEnum};
 use builtin_interfaces::Time;
 use futures::{
@@ -11,6 +10,7 @@ use futures::{
 
 use crate::{
   action_msgs, builtin_interfaces,
+  error::{ReadResult, WriteResult},
   message::Message,
   names::Name,
   service::{request_id::RmwRequestId, AService, CallServiceError, Client},

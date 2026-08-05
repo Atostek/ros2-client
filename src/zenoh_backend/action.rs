@@ -19,8 +19,8 @@
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use super::{
-  pubsub::{PublishError, Publisher, Subscription},
-  service::{Client, Server, ServiceError},
+  pubsub::{Publisher, Subscription},
+  service::{Client, Server},
 };
 use crate::{
   request_id::RmwRequestId,
@@ -29,6 +29,7 @@ use crate::{
     GoalStatusArray,
   },
   builtin_interfaces::Time,
+  error::{ServiceError, WriteResult},
   unique_identifier_msgs::UUID,
 };
 
@@ -219,7 +220,11 @@ impl<G: DeserializeOwned, R: Serialize, F: Serialize> ActionServer<G, R, F> {
   }
 
   /// Publish feedback for a goal.
-  pub fn publish_feedback(&self, goal_id: GoalId, feedback: F) -> Result<(), PublishError> {
+  pub fn publish_feedback(
+    &self,
+    goal_id: GoalId,
+    feedback: F,
+  ) -> WriteResult<(), FeedbackMessage<F>> {
     self.feedback.publish(FeedbackMessage { goal_id, feedback })
   }
 
@@ -270,7 +275,7 @@ impl<G: DeserializeOwned, R: Serialize, F: Serialize> ActionServer<G, R, F> {
   }
 
   /// Publish the current goal-status array on the `status` topic.
-  pub fn publish_status(&self, status_list: Vec<GoalStatus>) -> Result<(), PublishError> {
+  pub fn publish_status(&self, status_list: Vec<GoalStatus>) -> WriteResult<(), GoalStatusArray> {
     self.status.publish(GoalStatusArray { status_list })
   }
 }

@@ -4,13 +4,16 @@ use mio::{Evented, Poll, PollOpt, Ready, Token};
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 use futures::{join, pin_mut, StreamExt};
-use rustdds::{
-  dds::{CreateResult, ReadError, ReadResult, WriteError, WriteResult},
-  rpc::*,
-  *,
-};
+use rustdds::{rpc::*, *};
 
-use crate::{gid::Gid, message_info::MessageInfo, node::Node, qos::QosProfile, service::*};
+use crate::{
+  error::{CreateResult, ReadError, ReadResult, WriteError, WriteResult},
+  gid::Gid,
+  message_info::MessageInfo,
+  node::Node,
+  qos::QosProfile,
+  service::*,
+};
 
 /// Client end of a ROS2 Service
 pub struct Client<S>
@@ -172,7 +175,7 @@ where
 
     loop {
       match dcc_stream.next().await {
-        Some(Err(e)) => return Err(e),
+        Some(Err(e)) => return Err(e.into()),
         Some(Ok(dcc)) => {
           let mi = MessageInfo::from(&dcc);
           let (req_id, response) =

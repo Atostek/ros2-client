@@ -6,14 +6,11 @@ use futures::{
   stream::{FusedStream, StreamExt},
   Future,
 };
-use rustdds::{
-  dds::{ReadError, ReadResult, WriteResult},
-  serialization::CdrDeserializeSeedDecoder,
-  *,
-};
+use rustdds::{serialization::CdrDeserializeSeedDecoder, *};
 use serde::{de::DeserializeOwned, Serialize};
 
 use super::{gid::Gid, message_info::MessageInfo, node::Node};
+use crate::error::{ReadError, ReadResult, WriteResult};
 
 /// A ROS2 Publisher
 ///
@@ -30,7 +27,10 @@ impl<M: Serialize> Publisher<M> {
   }
 
   pub fn publish(&self, message: M) -> WriteResult<(), M> {
-    self.datawriter.write(message, Some(Timestamp::now()))
+    self
+      .datawriter
+      .write(message, Some(Timestamp::now()))
+      .map_err(Into::into)
   }
 
   // pub(crate) fn publish_with_options(
@@ -42,7 +42,7 @@ impl<M: Serialize> Publisher<M> {
   // }
 
   pub fn assert_liveliness(&self) -> WriteResult<(), ()> {
-    self.datawriter.assert_liveliness()
+    self.datawriter.assert_liveliness().map_err(Into::into)
   }
 
   pub fn guid(&self) -> rustdds::GUID {
@@ -75,6 +75,7 @@ impl<M: Serialize> Publisher<M> {
       .datawriter
       .async_write(message, Some(Timestamp::now()))
       .await
+      .map_err(Into::into)
   }
 
   #[allow(dead_code)] // This is for async Service implementation. Remove this when it is implemented.
@@ -82,8 +83,12 @@ impl<M: Serialize> Publisher<M> {
     &self,
     message: M,
     wo: WriteOptions,
-  ) -> dds::WriteResult<rustdds::rpc::SampleIdentity, M> {
-    self.datawriter.async_write_with_options(message, wo).await
+  ) -> WriteResult<rustdds::rpc::SampleIdentity, M> {
+    self
+      .datawriter
+      .async_write_with_options(message, wo)
+      .await
+      .map_err(Into::into)
   }
 }
 // ----------------------------------------------------
@@ -134,7 +139,7 @@ where
     self
       .datareader
       .as_async_stream_with(decoder)
-      .map(|result| result.map(dcc_to_value_and_messageinfo))
+      .map(|result| result.map_err(Into::into).map(dcc_to_value_and_messageinfo))
   }
 }
 
@@ -149,7 +154,7 @@ impl<M: 'static + DeserializeOwned> Subscription<M> {
     let async_stream = self.datareader.as_async_stream();
     pin_mut!(async_stream);
     match async_stream.next().await {
-      Some(Err(e)) => Err(e),
+      Some(Err(e)) => Err(e.into()),
       Some(Ok(ds)) => Ok(dcc_to_value_and_messageinfo(ds)),
       // Stream from SimpleDataReader is not supposed to ever end.
       None => {
@@ -163,7 +168,7 @@ impl<M: 'static + DeserializeOwned> Subscription<M> {
     self
       .datareader
       .as_async_stream()
-      .map(|result| result.map(dcc_to_value_and_messageinfo))
+      .map(|result| result.map_err(Into::into).map(dcc_to_value_and_messageinfo))
   }
 }
 

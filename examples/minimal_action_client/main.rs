@@ -8,7 +8,7 @@ use ros2_client::{
   action, action_msgs, qos::{Durability, History},
   ActionTypeName, Context, Name, NodeName, NodeOptions, QosProfile, ServiceMapping,
 };
-use rustdds::dds::WriteError;
+use ros2_client::WriteError;
 
 // Test / demo program of ROS2 Action, client side.
 //

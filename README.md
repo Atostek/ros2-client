@@ -89,6 +89,17 @@ Breaking renames / types on branch `zenoh` (both backends where applicable):
 
 See [ADR-0010](docs/decisions/0010-converge-api-surfaces.md).
 
+### Errors (API convergence Phase 3)
+
+Public create/read/write/wait/service APIs return owned
+[`CreateError`](src/error.rs) / `ReadError` / `WriteError` / `WaitError` /
+`ServiceError` (and matching `*Result` aliases) on **both** backends — not
+`rustdds::dds::*` or `zenoh::Result`. `ros2::WriteError` etc. re-export the
+owned types. Match portable variants such as `WriteError::WouldBlock`;
+unclassified backend failures use `Middleware { reason }`.
+
+See [ADR-0010](docs/decisions/0010-converge-api-surfaces.md).
+
 ### Zenoh router requirement
 
 Like `rmw_zenoh`, the Zenoh backend discovers peers and exchanges the ROS graph

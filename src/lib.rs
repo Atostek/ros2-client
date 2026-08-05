@@ -117,6 +117,8 @@ pub mod gid;
 /// Backend-neutral ROS 2 graph / discovery types (`GraphEvent`, `GraphEntity`,
 /// `EntityKind`, `DiscoveredTopic`). Always compiled; see ADR-0005 / ADR-0010.
 pub mod graph;
+/// Owned create/read/write/wait/service errors (ADR-0010 Phase 3).
+pub mod error;
 pub mod log;
 pub mod message;
 pub mod message_info;
@@ -167,6 +169,11 @@ pub use names::{ActionTypeName, MessageTypeName, Name, NodeName, ServiceTypeName
 pub use gid::Gid;
 #[doc(inline)]
 pub use graph::{DiscoveredTopic, EntityKind, GraphEntity, GraphEvent};
+#[doc(inline)]
+pub use error::{
+  CreateError, CreateResult, ReadError, ReadResult, ServiceError, ServiceResult, WaitError,
+  WaitResult, WriteError, WriteResult,
+};
 #[doc(inline)]
 pub use message_info::MessageInfo;
 #[doc(inline)]
@@ -226,9 +233,9 @@ pub mod ros2 {
   // The `zenoh` backend provides owned equivalents (see issue E1 / ADR-0004).
   #[cfg(feature = "dds")]
   pub use rustdds::{qos::policy, Duration, QosPolicies, QosPolicyBuilder, Timestamp};
-  //TODO: re-export RustDDS error types until ros2-client defines its own
-  #[cfg(feature = "dds")]
-  pub use rustdds::dds::{CreateError, ReadError, WaitError, WriteError};
+
+  // Owned operation errors (ADR-0010 Phase 3); previously RustDDS types.
+  pub use crate::error::{CreateError, ReadError, WaitError, WriteError};
 
   pub use crate::log::LogLevel;
   // TODO: What to do about SecurityError (exists based on feature "security")

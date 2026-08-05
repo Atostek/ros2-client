@@ -19,7 +19,7 @@ use super::{
   keyexpr::{self, EntityKind},
   node::{Node, NodeOptions},
 };
-use crate::{graph::GraphEvent, names::NodeName};
+use crate::{error::CreateResult, graph::GraphEvent, names::NodeName};
 
 /// Builder for configuring a [`Context`] on the Zenoh backend.
 pub struct ContextOptions {
@@ -80,7 +80,7 @@ impl Context {
   /// Open a new context with default settings (domain id 0, default peer
   /// config). Requires a reachable Zenoh router in the default configuration
   /// (see ADR-0009); opening still succeeds without one and connects later.
-  pub fn new() -> zenoh::Result<Context> {
+  pub fn new() -> CreateResult<Context> {
     Self::with_options(ContextOptions::new())
   }
 
@@ -90,7 +90,7 @@ impl Context {
   /// config is taken from the environment (see [`config_from_env`]): a JSON5
   /// file named by `ZENOH_SESSION_CONFIG_URI`, or the built-in peer default,
   /// with `ZENOH_CONFIG_OVERRIDE` applied on top. This matches `rmw_zenoh`.
-  pub fn with_options(opt: ContextOptions) -> zenoh::Result<Context> {
+  pub fn with_options(opt: ContextOptions) -> CreateResult<Context> {
     let config = match opt.config {
       Some(config) => config,
       None => config_from_env()?,

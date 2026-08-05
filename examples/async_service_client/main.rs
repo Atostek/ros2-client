@@ -10,7 +10,7 @@ use ros2_client::{
   service::CallServiceError, AService, Context, Message, Name, Node, NodeName, NodeOptions,
   QosProfile, ServiceMapping, ServiceTypeName,
 };
-use rustdds::dds::WriteError;
+use ros2_client::WriteError;
 
 // Test / demo program of ROS2 services, client side.
 //

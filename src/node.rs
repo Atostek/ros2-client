@@ -16,16 +16,14 @@ use async_channel::Receiver;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use serde::Serialize;
-use rustdds::{
-  dds::{CreateError, CreateResult},
-  *,
-};
+use rustdds::*;
 
 use crate::{
   action::*,
   builtin_interfaces,
   context::{Context, DEFAULT_SUBSCRIPTION_QOS},
   entities_info::{NodeEntitiesInfo, ParticipantEntitiesInfo},
+  error::{CreateError, CreateResult},
   gid::Gid,
   graph::{EntityKind, GraphEntity, GraphEvent},
   log::Log,

@@ -25,10 +25,11 @@ use std::{collections::BTreeMap, sync::Mutex};
 
 use super::{
   pubsub::Publisher,
-  service::{Client, Server, ServiceError},
+  service::{Client, Server},
 };
 use crate::{
   builtin_interfaces::Time,
+  error::ServiceError,
   parameters::{raw, Parameter, ParameterDescriptor, ParameterValue, SetParametersResult},
   rcl_interfaces::{
     DescribeParametersRequest, DescribeParametersResponse, GetParameterTypesRequest,

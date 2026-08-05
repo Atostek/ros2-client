@@ -55,10 +55,11 @@ Crate-root `pub use rustdds` should eventually move or drop.
 
 In priority order for unblocking a shared API:
 
-1. **QoS** — `QosPolicies` / `QosPolicyBuilder` / `policy::*` on create APIs;
-   action QoS structs; `DEFAULT_*_QOS`.
-2. **Errors** — `CreateError` / `ReadError` / `WriteError` / `WaitError` (and
-   `CreateResult`).
+1. **QoS** — Phase 1 moved create APIs to `QosProfile`; residual
+   `ros2::QosPolicies` re-exports until Phase 5.
+2. **Errors** — addressed in Phase 3 (owned `Create`/`Read`/`Write`/`Wait`/
+   `Service` errors); residual: private helpers may still use middleware
+   Results internally.
 3. **Time / identity** — largely addressed in Phase 2 (`Log`/`ParameterEvent`
    stamps, owned `MessageInfo` / `RmwRequestId` / `Gid`). Residual: any remaining
    `Timestamp` / `GUID` in DDS-only helpers.
@@ -114,12 +115,17 @@ pattern.
   (plus `ParticipantEntities` on DDS). `Context::discovered_topics()` returns
   owned summaries; raw DDS data via `discovered_topics_raw()`.
 
-**Phase 3 — Errors**
+**Phase 3 — Errors** — **done on branch `zenoh` (2026-08-05)**
 
-- Owned error enums with `#[cfg]`-gated backend variants or `Error::source()` to
-  middleware errors (including when both backends are linked).
-- Public methods return `Result<T, ros2_client::…Error>`, never `zenoh::Result`
-  or RustDDS error types at the boundary.
+- Owned `CreateError` / `ReadError` / `WriteError<D>` / `WaitError` /
+  `ServiceError` in [`src/error.rs`](../../src/error.rs), with
+  `CreateResult` / `ReadResult` / `WriteResult` / `WaitResult` /
+  `ServiceResult` aliases.
+- Semantic variants for portable matching; unclassified backend failures as
+  `Middleware { reason }`. DDS/Zenoh map via `From` at the adapter boundary.
+- Public APIs return these owned Results — not `zenoh::Result` or
+  `rustdds::dds::*` error types. `ros2::{Create,Read,Write,Wait}Error` now
+  re-export the owned types.
 
 **Phase 4 — Entity API parity**
 

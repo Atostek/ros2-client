@@ -22,48 +22,12 @@ use zenoh::{
 };
 
 use super::{attachment::AttachmentData, cdr};
-use crate::{gid::Gid, message_info::MessageInfo, ros_time::ROSTime};
-
-/// Failure to publish a message.
-#[derive(Debug)]
-pub enum PublishError {
-  /// CDR serialization of the message failed.
-  Cdr(cdr::CdrError),
-  /// The Zenoh `put` failed.
-  Zenoh(zenoh::Error),
-}
-
-impl std::fmt::Display for PublishError {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      PublishError::Cdr(e) => write!(f, "publish: {e}"),
-      PublishError::Zenoh(e) => write!(f, "publish: zenoh error: {e}"),
-    }
-  }
-}
-impl std::error::Error for PublishError {}
-
-/// Failure to receive/decode a message.
-#[derive(Debug)]
-pub enum TakeError {
-  /// CDR deserialization failed.
-  Cdr(cdr::CdrError),
-  /// The message attachment was malformed.
-  Attachment,
-  /// The subscriber channel was closed.
-  Closed,
-}
-
-impl std::fmt::Display for TakeError {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      TakeError::Cdr(e) => write!(f, "take: {e}"),
-      TakeError::Attachment => write!(f, "take: malformed attachment"),
-      TakeError::Closed => write!(f, "take: subscriber closed"),
-    }
-  }
-}
-impl std::error::Error for TakeError {}
+use crate::{
+  error::{write_middleware, write_serialization, ReadError, ReadResult, WriteResult},
+  gid::Gid,
+  message_info::MessageInfo,
+  ros_time::ROSTime,
+};
 
 fn now_nanos() -> i64 {
   SystemTime::now()
@@ -97,8 +61,8 @@ impl<M: Serialize> Publisher<M> {
     }
   }
 
-  fn encode(&self, msg: &M) -> Result<(Vec<u8>, zenoh::bytes::ZBytes), PublishError> {
-    let payload = cdr::to_cdr(msg).map_err(PublishError::Cdr)?;
+  fn encode(&self, msg: &M) -> Result<(Vec<u8>, zenoh::bytes::ZBytes), cdr::CdrError> {
+    let payload = cdr::to_cdr(msg)?;
     let sequence_number = self.seq.fetch_add(1, Ordering::Relaxed) + 1; // start at 1
     let attachment = AttachmentData {
       sequence_number,
@@ -110,25 +74,31 @@ impl<M: Serialize> Publisher<M> {
   }
 
   /// Publish a message (async).
-  pub async fn async_publish(&self, msg: M) -> Result<(), PublishError> {
-    let (payload, attachment) = self.encode(&msg)?;
+  pub async fn async_publish(&self, msg: M) -> WriteResult<(), M> {
+    let (payload, attachment) = match self.encode(&msg) {
+      Ok(encoded) => encoded,
+      Err(e) => return Err(write_serialization(e.to_string(), msg)),
+    };
     self
       .zenoh_publisher
       .put(payload)
       .attachment(attachment)
       .await
-      .map_err(PublishError::Zenoh)
+      .map_err(|e| write_middleware(e.to_string(), msg))
   }
 
   /// Publish a message (blocking).
-  pub fn publish(&self, msg: M) -> Result<(), PublishError> {
-    let (payload, attachment) = self.encode(&msg)?;
+  pub fn publish(&self, msg: M) -> WriteResult<(), M> {
+    let (payload, attachment) = match self.encode(&msg) {
+      Ok(encoded) => encoded,
+      Err(e) => return Err(write_serialization(e.to_string(), msg)),
+    };
     self
       .zenoh_publisher
       .put(payload)
       .attachment(attachment)
       .wait()
-      .map_err(PublishError::Zenoh)
+      .map_err(|e| write_middleware(e.to_string(), msg))
   }
 
   /// This publisher's 16-byte source GID.
@@ -157,12 +127,12 @@ impl<M: DeserializeOwned> Subscription<M> {
     }
   }
 
-  fn decode(sample: &Sample) -> Result<(M, MessageInfo), TakeError> {
+  fn decode(sample: &Sample) -> ReadResult<(M, MessageInfo)> {
     let payload = sample.payload().to_bytes();
-    let msg = cdr::from_cdr::<M>(&payload).map_err(TakeError::Cdr)?;
+    let msg = cdr::from_cdr::<M>(&payload)?;
     let info = match sample.attachment() {
       Some(zbytes) => {
-        let a = AttachmentData::from_zbytes(zbytes).map_err(|_| TakeError::Attachment)?;
+        let a = AttachmentData::from_zbytes(zbytes).map_err(|_| ReadError::Malformed)?;
         MessageInfo::new(
           None,
           Some(ROSTime::from_nanos(a.source_timestamp)),
@@ -177,21 +147,21 @@ impl<M: DeserializeOwned> Subscription<M> {
   }
 
   /// Await the next message and its metadata.
-  pub async fn async_take(&self) -> Result<(M, MessageInfo), TakeError> {
+  pub async fn async_take(&self) -> ReadResult<(M, MessageInfo)> {
     let sample = self
       .zenoh_subscriber
       .recv_async()
       .await
-      .map_err(|_| TakeError::Closed)?;
+      .map_err(|_| ReadError::Closed)?;
     Self::decode(&sample)
   }
 
   /// Take a message if one is immediately available (non-blocking).
-  pub fn try_take(&self) -> Result<Option<(M, MessageInfo)>, TakeError> {
+  pub fn try_take(&self) -> ReadResult<Option<(M, MessageInfo)>> {
     match self.zenoh_subscriber.try_recv() {
       Ok(Some(sample)) => Self::decode(&sample).map(Some),
       Ok(None) => Ok(None),
-      Err(_) => Err(TakeError::Closed),
+      Err(_) => Err(ReadError::Closed),
     }
   }
 }

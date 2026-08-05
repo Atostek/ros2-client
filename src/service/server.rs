@@ -4,13 +4,15 @@ use mio::{Evented, Poll, PollOpt, Ready, Token};
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 use futures::{pin_mut, stream::FusedStream, StreamExt};
-use rustdds::{
-  dds::{CreateResult, ReadError, ReadResult, WriteResult},
-  rpc::*,
-  *,
-};
+use rustdds::{rpc::*, *};
 
-use crate::{message_info::MessageInfo, node::Node, qos::QosProfile, service::*};
+use crate::{
+  error::{CreateResult, ReadError, ReadResult, WriteError, WriteResult},
+  message_info::MessageInfo,
+  node::Node,
+  qos::QosProfile,
+  service::*,
+};
 
 // --------------------------------------------
 // --------------------------------------------
@@ -103,7 +105,7 @@ where
       .response_sender
       .write_with_options(resp_wrapper, write_opts)
       .map(|_| ())
-      .map_err(|e| e.forget_data()) // lose SampleIdentity result
+      .map_err(|e| WriteError::from(e.forget_data())) // lose SampleIdentity result
   }
 
   /// The request_id must be sent back with the response to identify which
@@ -113,7 +115,7 @@ where
     pin_mut!(dcc_stream);
 
     match dcc_stream.next().await {
-      Some(Err(e)) => Err(e),
+      Some(Err(e)) => Err(e.into()),
       Some(Ok(dcc)) => {
         let mi = MessageInfo::from(&dcc);
         let req_wrapper = dcc.into_value();
@@ -135,7 +137,7 @@ where
     Box::pin(self.request_receiver.as_async_stream().then(
       move |dcc_r| async move {
         match dcc_r {
-          Err(e) => Err(e),
+          Err(e) => Err(e.into()),
           Ok(dcc) => {
             let mi = MessageInfo::from(&dcc);
             let req_wrapper = dcc.into_value();
@@ -152,7 +154,7 @@ where
     &self,
     rmw_req_id: RmwRequestId,
     response: S::Response,
-  ) -> dds::WriteResult<(), ()> {
+  ) -> WriteResult<(), ()> {
     let resp_wrapper = ResponseWrapper::<S::Response>::new(
       self.service_mapping,
       rmw_req_id,
@@ -177,7 +179,7 @@ where
       .async_write_with_options(resp_wrapper, write_opts)
       .await
       .map(|_| ())
-      .map_err(|e| e.forget_data()) // lose SampleIdentity result
+      .map_err(|e| WriteError::from(e.forget_data())) // lose SampleIdentity result
   }
 }
 

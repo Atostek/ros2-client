@@ -4,14 +4,13 @@ use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 use bytes::{BufMut, Bytes, BytesMut};
-use rustdds::{
-  dds::{ReadError, ReadResult, WriteError, WriteResult},
-  rpc::*,
-  serialization::deserialize_from_cdr_with_rep_id,
-  *,
-};
+use rustdds::{rpc::*, serialization::deserialize_from_cdr_with_rep_id, *};
 
-use crate::{message::Message, message_info::MessageInfo};
+use crate::{
+  error::{ReadError, ReadResult, WriteError, WriteResult},
+  message::Message,
+  message_info::MessageInfo,
+};
 use super::{RmwRequestId, ServiceMapping};
 
 // trait Wrapper is for interfacing to Service-specific (De)SerializerAdapter.
