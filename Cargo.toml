@@ -2,7 +2,7 @@
 name = "ros2-client"
 version = "0.10.0" 
 edition = "2018"
-rust-version = "1.82.0"
+rust-version = "1.88.0"
 authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>"]
 description = "ROS2 client library based on RustDDS"
 readme = "README.md"
@@ -55,7 +55,7 @@ default = ["jazzy"]
 
 # rustdds = {  path = "../RustDDS"  } # dev setting
 # rustdds = {   git = "https://github.com/Atostek/RustDDS.git" }
-rustdds = {  version = "0.13"  } # release setting
+rustdds = {  version = "0.14"  } # release setting
 
 mio = "^0.6.23"
 mio-extras = "2.0.6"
