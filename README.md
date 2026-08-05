@@ -38,17 +38,20 @@ Please see the included examples on how to use the various features.
 ## Middleware backends: DDS and Zenoh
 
 `ros2-client` can talk to ROS 2 over either of two middleware backends,
-selected at compile time by **mutually exclusive** Cargo features:
+selected at compile time with Cargo features (see
+[`docs/decisions/0002-dual-backend-compile-time-feature-selection.md`](docs/decisions/0002-dual-backend-compile-time-feature-selection.md)):
 
-* **`dds`** (default) — communicates via [RustDDS](https://github.com/jhelovuo/RustDDS),
+* **`dds`** (default) — communicates via [RustDDS](https://github.com/Atostek/RustDDS),
   interoperating with ROS 2's default DDS RMWs (`rmw_fastrtps`, `rmw_cyclonedds`, …).
 * **`zenoh`** — communicates via [Zenoh](https://zenoh.io/), mirroring the wire
   protocol of the official [`rmw_zenoh`](https://github.com/ros2/rmw_zenoh)
   middleware, so it interoperates with ROS 2 nodes running `rmw_zenoh`.
 
-Exactly one backend must be enabled; the build emits a `compile_error!` if both
-or neither are active. The default build uses `dds`. Build the Zenoh backend
-with:
+**Current (MVP) rule:** exactly one backend must be enabled; the build emits a
+`compile_error!` if both or neither are active. **Direction:** allowing both
+`dds` and `zenoh` in the same build once owned public types and module layout
+are ready (ADR-0002 / ADR-0010). The default build uses `dds`. Build the Zenoh
+backend with:
 
 ```console
 cargo build --no-default-features --features zenoh

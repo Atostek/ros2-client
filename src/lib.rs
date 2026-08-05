@@ -54,20 +54,23 @@
 #![cfg_attr(not(feature = "dds"), allow(dead_code))]
 
 // ---------------------------------------------------------------------------
-// Middleware backend selection. Exactly one of `dds` (default) or `zenoh` must
-// be enabled. See
+// Middleware backend selection. See
 // docs/decisions/0002-dual-backend-compile-time-feature-selection.md
+//
+// MVP: exactly one of `dds` (default) or `zenoh`. Direction: allow both in one
+// build once owned types / namespacing are ready (ADR-0002 / ADR-0010).
 // ---------------------------------------------------------------------------
 #[cfg(all(feature = "dds", feature = "zenoh"))]
 compile_error!(
-  "features `dds` and `zenoh` are mutually exclusive: enable exactly one. \
-   To use the Zenoh backend, build with `--no-default-features --features zenoh`."
+  "features `dds` and `zenoh` are mutually exclusive for now (MVP): enable exactly one. \
+   Dual-backend builds are planned (ADR-0002). To use Zenoh today, build with \
+   `--no-default-features --features zenoh`."
 );
 #[cfg(not(any(feature = "dds", feature = "zenoh")))]
 compile_error!(
-  "no middleware backend selected: enable exactly one of `dds` (default) or \
-   `zenoh`. You likely used `--no-default-features` without `--features dds` \
-   or `--features zenoh`."
+  "no middleware backend selected: enable `dds` (default) and/or `zenoh` \
+   (MVP: exactly one). You likely used `--no-default-features` without \
+   `--features dds` or `--features zenoh`."
 );
 
 // lazy_static is only used by DDS-backend modules (builtin_topics, context).

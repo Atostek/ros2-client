@@ -24,11 +24,13 @@ autoexamples = false
 [features]
 
 # ---------------------------------------------------------------------------
-# Middleware backend selection (mutually exclusive). See
+# Middleware backend selection. See
 # docs/decisions/0002-dual-backend-compile-time-feature-selection.md
 #
-# Exactly one of `dds` (default) or `zenoh` must be enabled; lib.rs emits a
-# compile_error! if both or neither are active. Build the Zenoh backend with:
+# MVP: exactly one of `dds` (default) or `zenoh` must be enabled; lib.rs emits a
+# compile_error! if both or neither are active. Direction: allow both in one
+# build once owned types / namespacing are ready (ADR-0002 / ADR-0010).
+# Build the Zenoh backend with:
 #   cargo build --no-default-features --features zenoh
 # ---------------------------------------------------------------------------
 dds   = ["dep:rustdds"]

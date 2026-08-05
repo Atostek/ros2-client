@@ -1,10 +1,16 @@
 # Refactoring & implementation plan
 
 Derived from [`feature_map.md`](feature_map.md). Goal: add a Zenoh backend to
-`ros2-client` behind a `zenoh` cargo feature, **mutually exclusive** with the
-default `dds` feature, with **minimal** disruption to the existing DDS code and
-public API (per issue [#71](https://github.com/Atostek/ros2-client/issues/71)
-and the user's explicit "keep it minimal" constraint).
+`ros2-client` behind a `zenoh` cargo feature, with **minimal** disruption to the
+existing DDS code and public API (per issue
+[#71](https://github.com/Atostek/ros2-client/issues/71) and the user's explicit
+"keep it minimal" constraint).
+
+> **Note (2026-08-05):** ADR-0002 was revised — compile-time features remain,
+> but **mutual exclusion is interim MVP only**; the direction is to allow both
+> `dds` and `zenoh` in one build. Prefer
+> [`../decisions/`](../decisions/) (especially 0002, 0004, 0005, 0010) over
+> older “forever exclusive” wording in this study doc.
 
 ## Guiding principles
 
@@ -24,16 +30,17 @@ and the user's explicit "keep it minimal" constraint).
 **A. Trait-object backend abstraction** — define `trait Middleware` with
 associated `Publisher`/`Subscription`/`Client`/... and make `Context`/`Node`
 generic. *Rejected for MVP:* it forces generics through the entire public API
-(huge churn), fighting the "minimal" constraint, and the two backends are never
-used together (mutually exclusive features), so runtime polymorphism buys
-nothing.
+(huge churn), fighting the "minimal" constraint. A later dual-backend build
+(ADR-0002) can still use modules or selective generics without adopting a full
+`dyn Middleware` stack for MVP.
 
-**B. Compile-time backend selection (`#[cfg(feature)]`)** — one public API;
-backend-specific *internals* selected by feature; a small set of owned public
-types (QoS, timestamp, errors, events, Gid provenance) shared by both. **Chosen**
-(ADR-0002). It matches the mutually-exclusive-feature model, keeps the DDS path
-byte-for-byte unchanged, and confines Zenoh code to new modules + `#[cfg]`
-branches in `context.rs`/`node.rs`/`pubsub.rs`/`service`.
+**B. Compile-time backend selection (`#[cfg(feature)]`)** — shared owned public
+types (QoS, timestamp, errors, discovery events, Gid provenance); backend-
+specific *internals* selected by feature. **Chosen** (ADR-0002). MVP may still
+require exactly one backend feature to avoid crate-root type collisions; the
+direction is to allow both features in one build with explicit namespacing
+(ADR-0002 / ADR-0010). Keeps optional deps lean and confines Zenoh code to new
+modules + `#[cfg]` branches.
 
 Concretely, the internals become:
 

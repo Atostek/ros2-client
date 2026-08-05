@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-07-07
+- Updated: 2026-08-05 (revision policy clarified)
 
 ## Context
 
@@ -23,6 +24,11 @@ their trade-offs so they can be reviewed independently of the code.
 ## Consequences
 
 - Reviewers can audit decisions without reading every diff.
-- ADRs are append-only; a later decision that reverses an earlier one adds a new
-  record and marks the old one superseded, rather than editing history.
 - Numbering is global across the project, not per-feature.
+- **While a decision is not yet implemented (or only on an experimental
+  branch), ADRs may be revised in place** and stamped with an `Updated:` date.
+  Once behaviour has shipped on `master` and dependents may rely on it, prefer
+  append-only changes: a new ADR that supersedes the old one, rather than
+  silently rewriting history.
+- A later decision that reverses an implemented one adds a new record and marks
+  the old one superseded.

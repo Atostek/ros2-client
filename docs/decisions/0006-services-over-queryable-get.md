@@ -2,6 +2,8 @@
 
 - Status: accepted
 - Date: 2026-07-07
+- Updated: 2026-08-05 (cross-ref only)
+- Relates to: ADR-0002, ADR-0004, ADR-0010
 
 ## Context
 
@@ -41,6 +43,9 @@ Under `zenoh`, implement services with queryable/get exactly as `rmw_zenoh` does
 - **Pro:** correct, interoperable services without RTPS inline QoS; one code path
   instead of three mappings; actions and parameters inherit it for free.
 - **Con:** `ServiceMapping` selection is silently ignored under `zenoh` (a
-  documented compromise). `RmwRequestId`'s field meaning changes across backends.
+  documented compromise). `RmwRequestId`'s field meaning changes across backends
+  until owned correlation types fully settle (ADR-0004 / ADR-0010).
 - Correlation now lives entirely in the attachment (payload-adjacent), which is
   simpler and matches the ground truth.
+- In a future dual-backend build (ADR-0002), `ServiceMapping` remains a
+  DDS-stack concern; the Zenoh stack does not grow parallel mapping enums.

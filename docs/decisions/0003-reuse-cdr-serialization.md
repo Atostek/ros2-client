@@ -2,6 +2,8 @@
 
 - Status: accepted
 - Date: 2026-07-07
+- Updated: 2026-08-05
+- Relates to: ADR-0004, RustDDS / `cdr-encoding` evolution
 
 ## Context
 
@@ -10,24 +12,43 @@ Zenoh backend has no DataWriter/Reader but must produce **byte-identical** CDR
 payloads (including the 4-byte CDR encapsulation header) because `rmw_zenoh`
 carries the same CDR bytes as the Zenoh payload.
 
+ROS 2 / DDS also define **XCDR2** (and DataRepresentation QoS). RustDDS is
+gaining representation awareness; the standalone [`cdr-encoding`] crate may
+grow XCDR2 support later. The Zenoh path should not paint itself into an
+XCDR1-only corner in the public or helper API.
+
+[`cdr-encoding`]: https://lib.rs/crates/cdr-encoding
+
 ## Decision
 
 Serialize/deserialize messages for the Zenoh path with the standalone
-[`cdr-encoding`](https://lib.rs/crates/cdr-encoding) crate
-(`to_vec::<M, LittleEndian>()` / `from_bytes::<M, LittleEndian>()`), and prepend
-the 4-byte encapsulation header (`00 01 00 00` for CDR_LE) via a small shared
-helper. `cdr-encoding` is already a transitive dependency and is authored by the
-RustDDS author, maximising the chance of byte parity.
+`cdr-encoding` crate (`to_vec` / `from_bytes` with an explicit endianness), and
+apply the encapsulation header via a small shared helper. Prefer the same
+`cdr-encoding` lineage as RustDDS so byte parity stays realistic.
 
-A unit test (Tier A7) pins the encapsulation-header handling and a first live
-pub/sub round-trip confirms header presence/duplication.
+**MVP encoding:** plain CDR / **XCDR1** with CDR_LE encapsulation
+(`00 01 00 00`), matching current DDS defaults and `rmw_zenoh` interop targets.
+
+**Future room for XCDR2:**
+
+- Keep representation choice out of call sites that can stay representation-
+  agnostic; concentrate header + encode/decode in the helper (or a thin
+  `Representation` / encoding selector).
+- When `cdr-encoding` (and interop peers) support XCDR2, extend the helper and
+  QoS/DataRepresentation mapping rather than replacing the whole stack.
+- Do not hard-code “XCDR1 forever” into public types; document MVP as XCDR1
+  without closing the door on XCDR2.
+
+Unit tests (Tier A7) pin encapsulation-header handling; live pub/sub confirms
+header presence/duplication for the MVP representation.
 
 ## Consequences
 
-- **Pro:** no need to pull RustDDS under the `zenoh` feature; the same serde
-  `Message` types work unchanged; minimal new code.
-- **Con:** a dependency on `cdr-encoding` matching RustDDS's CDR output exactly —
-  guarded by unit tests and interop tests. If a discrepancy appears (e.g. header
-  emitted by `to_vec` vs added by us), the helper is the single place to fix it.
-- XCDR2/`RIHS`-driven type support is out of scope; plain CDR (XCDR1) only, which
-  is what the current DDS path and the interop targets use.
+- **Pro:** no need to pull RustDDS under a zenoh-only build; the same serde
+  `Message` types work unchanged; a single place to evolve representation
+  support.
+- **Con:** MVP is still XCDR1-only until toolchain and peers are ready; must
+  track `cdr-encoding` / RustDDS representation APIs; tests must eventually
+  cover more than one representation when XCDR2 lands.
+- Interop with `rmw_zenoh` remains XCDR1 until that ecosystem advertises
+  otherwise; enabling XCDR2 is a coordinated change, not an silent default flip.
