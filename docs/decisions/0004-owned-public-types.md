@@ -1,7 +1,8 @@
 # 4. Introduce owned public types to decouple from RustDDS
 
-- Status: accepted
+- Status: accepted (end-state / DDS-path migration refined by ADR-0010)
 - Date: 2026-07-07
+- See also: ADR-0010 (converge DDS and Zenoh public API surfaces)
 
 ## Context
 
