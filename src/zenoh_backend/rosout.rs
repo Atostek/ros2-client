@@ -143,8 +143,12 @@ mod tests {
     )
     .unwrap();
 
-    let sub_node = sub_ctx.new_node(NodeName::new("/", "listener").unwrap(), NodeOptions::new());
-    let pub_node = pub_ctx.new_node(NodeName::new("/", "talker").unwrap(), NodeOptions::new());
+    let sub_node = sub_ctx
+      .new_node(NodeName::new("/", "listener").unwrap(), NodeOptions::new())
+      .unwrap();
+    let pub_node = pub_ctx
+      .new_node(NodeName::new("/", "talker").unwrap(), NodeOptions::new())
+      .unwrap();
 
     let reader = sub_node.read_rosout().unwrap();
     let logger = pub_node.create_logger().unwrap();

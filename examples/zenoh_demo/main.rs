@@ -57,8 +57,12 @@ fn main() {
   )
   .expect("open listener context");
 
-  let talker = talker_ctx.new_node(NodeName::new("/", "talker").unwrap(), NodeOptions::new());
-  let listener = listener_ctx.new_node(NodeName::new("/", "listener").unwrap(), NodeOptions::new());
+  let talker = talker_ctx
+    .new_node(NodeName::new("/", "talker").unwrap(), NodeOptions::new())
+    .expect("create talker node");
+  let listener = listener_ctx
+    .new_node(NodeName::new("/", "listener").unwrap(), NodeOptions::new())
+    .expect("create listener node");
 
   // A `/chatter` topic carrying `std_msgs/String`.
   let chatter = |node: &ros2_client::Node| {

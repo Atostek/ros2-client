@@ -27,33 +27,23 @@ use super::{
   service::{Client, Server},
   type_hash,
 };
+use async_channel::Receiver;
+
 use crate::{
   action_msgs::{CancelGoalRequest, CancelGoalResponse, GoalStatusArray},
   error::CreateResult,
+  graph::GraphEvent,
   log::Log,
   names::{ActionTypeName, MessageTypeName, Name, NodeName, ServiceTypeName},
   parameters::Parameter,
   qos::QosProfile,
+  NodeOptions,
 };
 
 /// The `get_result` action service is queried with a long timeout, mirroring
 /// rmw_zenoh's `**/_action/get_result/**` heuristic (a goal may take a long
 /// time to finish). Bounded to avoid indefinite hangs; production may raise it.
 const GET_RESULT_TIMEOUT: Duration = Duration::from_secs(60);
-
-/// Options for creating a [`Node`] on the Zenoh backend.
-///
-/// Currently a placeholder (parity with the DDS `NodeOptions`);
-/// rosout/parameter toggles arrive with E8/E9.
-#[derive(Clone, Debug, Default)]
-pub struct NodeOptions {}
-
-impl NodeOptions {
-  /// Default node options.
-  pub fn new() -> Self {
-    Self {}
-  }
-}
 
 /// A handle to a ROS 2 topic: its fully-qualified name, DDS-form type name, and
 /// QoS. Produced by [`Node::create_topic`].
@@ -90,15 +80,27 @@ pub struct Node {
   next_entity_id: AtomicU64,
   // Kept alive so the node stays discoverable; dropped => token undeclared.
   _node_token: Option<LivelinessToken>,
+
+  // Populated from `NodeOptions` at construction time (ADR-0010 Phase 4); see
+  // `Self::new`. Getters below avoid double-creating these when the options
+  // already requested them; `create_logger` / `read_rosout` /
+  // `create_parameter_server` remain available for creating *additional*
+  // instances beyond the options-managed one.
+  logger: Option<Logger>,
+  rosout_reader: Option<Subscription<Log>>,
+  parameter_server: Option<ParameterServer>,
 }
 
 impl Node {
+  /// Fails if [`NodeOptions::enable_rosout`], [`NodeOptions::read_rosout`], or
+  /// the (default-on) [`NodeOptions::start_parameter_services`] wiring fails
+  /// to create its underlying publisher/subscriber/queryables.
   pub(crate) fn new(
     context: Context,
     node_name: NodeName,
     node_id: u64,
-    _options: NodeOptions,
-  ) -> Self {
+    mut options: NodeOptions,
+  ) -> CreateResult<Self> {
     let zid = context.session().zid().to_string();
     // Declare the node (NN) liveliness token so peers discover this node.
     let ids = keyexpr::EntityIds {
@@ -111,14 +113,75 @@ impl Node {
     };
     let node_key = keyexpr::node_liveliness_keyexpr(context.domain_id(), &ids);
     let node_token = declare_liveliness(&context, node_key);
-    Self {
+    let mut node = Self {
       context,
       node_name,
       node_id,
       zid,
       next_entity_id: AtomicU64::new(0),
       _node_token: node_token,
+      logger: None,
+      rosout_reader: None,
+      parameter_server: None,
+    };
+
+    // Fields the Zenoh backend does not (yet) honor: no-op, logged once here.
+    if !options.cli_args.is_empty() {
+      log::debug!(
+        "NodeOptions::cli_args is not supported on the Zenoh backend; ignoring {} entr{}",
+        options.cli_args.len(),
+        if options.cli_args.len() == 1 { "y" } else { "ies" }
+      );
     }
+    if !options.use_global_arguments {
+      log::debug!(
+        "NodeOptions::use_global_arguments(false) is not supported on the Zenoh backend; ignoring"
+      );
+    }
+    if options.parameter_validator.is_some() {
+      log::debug!("NodeOptions::parameter_validator is not supported on the Zenoh backend; ignoring");
+    }
+    if options.parameter_set_action.is_some() {
+      log::debug!(
+        "NodeOptions::parameter_set_action is not supported on the Zenoh backend; ignoring"
+      );
+    }
+
+    // Fields the Zenoh backend does honor.
+    if options.enable_rosout {
+      node.logger = Some(node.create_logger()?);
+    }
+    if options.enable_rosout_reading {
+      node.rosout_reader = Some(node.read_rosout()?);
+    }
+    if options.start_parameter_services {
+      let declared_parameters = std::mem::take(&mut options.declared_parameters);
+      node.parameter_server = Some(node.create_parameter_server(declared_parameters)?);
+    }
+
+    Ok(node)
+  }
+
+  /// The rosout [`Logger`] created because [`NodeOptions::enable_rosout`] was
+  /// set (the default) — `None` if it was disabled. Call
+  /// [`Self::create_logger`] to create an additional, independent `Logger`.
+  pub fn logger(&self) -> Option<&Logger> {
+    self.logger.as_ref()
+  }
+
+  /// The `/rosout` reader created because [`NodeOptions::read_rosout`] was
+  /// enabled — `None` otherwise (it is disabled by default). Call
+  /// [`Self::read_rosout`] to create an additional, independent reader.
+  pub fn rosout_subscription(&self) -> Option<&Subscription<Log>> {
+    self.rosout_reader.as_ref()
+  }
+
+  /// The [`ParameterServer`] created at construction time (parameter
+  /// services start by default, matching the DDS backend's `Spinner`-hosted
+  /// parameter services). Call [`Self::create_parameter_server`] to create an
+  /// additional, independent server.
+  pub fn parameter_server(&self) -> Option<&ParameterServer> {
+    self.parameter_server.as_ref()
   }
 
   /// The node's name.
@@ -170,7 +233,12 @@ impl Node {
     let source_gid = gid::gid_from_liveliness_key(&liveliness_key);
     let token = declare_liveliness(&self.context, liveliness_key);
 
-    Ok(Publisher::new(zenoh_publisher, source_gid, token))
+    Ok(Publisher::new(
+      zenoh_publisher,
+      source_gid,
+      token,
+      topic.fully_qualified_name.clone(),
+    ))
   }
 
   /// Create a subscription for `topic`. `qos` overrides the topic QoS if given.
@@ -204,7 +272,11 @@ impl Node {
     );
     let token = declare_liveliness(&self.context, liveliness_key);
 
-    Ok(Subscription::new(zenoh_subscriber, token))
+    Ok(Subscription::new(
+      zenoh_subscriber,
+      token,
+      topic.fully_qualified_name.clone(),
+    ))
   }
 
   /// Build the liveliness key for a pub/sub entity of this node.
@@ -548,6 +620,24 @@ impl Node {
   pub async fn wait_for_subscription(&self, topic: &str) {
     self.context.wait_for_subscription(topic).await
   }
+
+  /// Number of publishers currently discovered on `topic` (fully-qualified;
+  /// delegates to [`Context::publisher_count`](crate::Context::publisher_count)).
+  pub fn publisher_count(&self, topic: &str) -> usize {
+    self.context.publisher_count(topic)
+  }
+
+  /// Number of subscriptions currently discovered on `topic` (delegates to
+  /// [`Context::subscription_count`](crate::Context::subscription_count)).
+  pub fn subscription_count(&self, topic: &str) -> usize {
+    self.context.subscription_count(topic)
+  }
+
+  /// Subscribe to ROS graph changes (delegates to
+  /// [`Context::graph_event_stream`](crate::Context::graph_event_stream)).
+  pub fn graph_event_stream(&self) -> Receiver<GraphEvent> {
+    self.context.graph_event_stream()
+  }
 }
 
 /// Build the absolute `Name` of a parameter service, e.g.
@@ -656,7 +746,9 @@ mod tests {
       Context::with_options(ContextOptions::new().zenoh_config(make_config(b_port, Some(a_port))))
         .unwrap();
 
-    let node_a = ctx_a.new_node(NodeName::new("/", "talker").unwrap(), NodeOptions::new());
+    let node_a = ctx_a
+      .new_node(NodeName::new("/", "talker").unwrap(), NodeOptions::new())
+      .unwrap();
     let topic = node_a.create_topic(
       &Name::new("/", "chatter").unwrap(),
       MessageTypeName::new("std_msgs", "String"),

@@ -290,14 +290,18 @@ mod tests {
     )
     .unwrap();
 
-    let srv_node = srv_ctx.new_node(
-      NodeName::new("/", "add_server").unwrap(),
-      NodeOptions::new(),
-    );
-    let cli_node = cli_ctx.new_node(
-      NodeName::new("/", "add_client").unwrap(),
-      NodeOptions::new(),
-    );
+    let srv_node = srv_ctx
+      .new_node(
+        NodeName::new("/", "add_server").unwrap(),
+        NodeOptions::new(),
+      )
+      .unwrap();
+    let cli_node = cli_ctx
+      .new_node(
+        NodeName::new("/", "add_client").unwrap(),
+        NodeOptions::new(),
+      )
+      .unwrap();
     let stype = ServiceTypeName::new("example_interfaces", "AddTwoInts");
     let name = Name::new("/", "add_two_ints").unwrap();
 

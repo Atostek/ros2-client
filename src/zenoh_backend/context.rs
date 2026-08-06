@@ -17,9 +17,9 @@ use zenoh::{pubsub::Subscriber, sample::SampleKind, Config, Session, Wait};
 use super::{
   graph_cache::GraphCache,
   keyexpr::{self, EntityKind},
-  node::{Node, NodeOptions},
+  node::Node,
 };
-use crate::{error::CreateResult, graph::GraphEvent, names::NodeName};
+use crate::{error::CreateResult, graph::GraphEvent, names::NodeName, NodeOptions};
 
 /// Builder for configuring a [`Context`] on the Zenoh backend.
 pub struct ContextOptions {
@@ -177,7 +177,11 @@ impl Context {
   }
 
   /// Create a new ROS 2 [`Node`] on this context's session.
-  pub fn new_node(&self, name: NodeName, options: NodeOptions) -> Node {
+  ///
+  /// Fails if the `NodeOptions`-driven wiring (rosout logger / reader,
+  /// parameter server; see [`NodeOptions`]) fails to create its underlying
+  /// Zenoh entities.
+  pub fn new_node(&self, name: NodeName, options: NodeOptions) -> CreateResult<Node> {
     let node_id = self.inner.next_node_id.fetch_add(1, Ordering::Relaxed);
     Node::new(self.clone(), name, node_id, options)
   }
@@ -331,7 +335,9 @@ mod tests {
       Context::with_options(ContextOptions::new().zenoh_config(make_config(b_port, Some(a_port))))
         .unwrap();
 
-    let node_a = ctx_a.new_node(NodeName::new("/", "talker").unwrap(), NodeOptions::new());
+    let node_a = ctx_a
+      .new_node(NodeName::new("/", "talker").unwrap(), NodeOptions::new())
+      .unwrap();
     let topic = node_a.create_topic(
       &Name::new("/", "chatter").unwrap(),
       MessageTypeName::new("std_msgs", "String"),
@@ -390,8 +396,12 @@ mod tests {
       Context::with_options(ContextOptions::new().zenoh_config(client_config(router_port)))
         .expect("publisher client context");
 
-    let sub_node = sub_ctx.new_node(NodeName::new("/", "rsub").unwrap(), NodeOptions::new());
-    let pub_node = pub_ctx.new_node(NodeName::new("/", "rpub").unwrap(), NodeOptions::new());
+    let sub_node = sub_ctx
+      .new_node(NodeName::new("/", "rsub").unwrap(), NodeOptions::new())
+      .unwrap();
+    let pub_node = pub_ctx
+      .new_node(NodeName::new("/", "rpub").unwrap(), NodeOptions::new())
+      .unwrap();
 
     let make_topic = |n: &crate::Node| {
       n.create_topic(
@@ -439,7 +449,9 @@ mod tests {
     });
 
     // Now create the publisher on ctx_a.
-    let node_a = ctx_a.new_node(NodeName::new("/", "talker").unwrap(), NodeOptions::new());
+    let node_a = ctx_a
+      .new_node(NodeName::new("/", "talker").unwrap(), NodeOptions::new())
+      .unwrap();
     let topic = node_a.create_topic(
       &Name::new("/", "chatter").unwrap(),
       MessageTypeName::new("std_msgs", "String"),

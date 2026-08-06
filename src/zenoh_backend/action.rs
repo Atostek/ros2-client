@@ -352,14 +352,18 @@ mod tests {
     )
     .unwrap();
 
-    let srv_node = srv_ctx.new_node(
-      NodeName::new("/", "fib_server").unwrap(),
-      NodeOptions::new(),
-    );
-    let cli_node = cli_ctx.new_node(
-      NodeName::new("/", "fib_client").unwrap(),
-      NodeOptions::new(),
-    );
+    let srv_node = srv_ctx
+      .new_node(
+        NodeName::new("/", "fib_server").unwrap(),
+        NodeOptions::new(),
+      )
+      .unwrap();
+    let cli_node = cli_ctx
+      .new_node(
+        NodeName::new("/", "fib_client").unwrap(),
+        NodeOptions::new(),
+      )
+      .unwrap();
     let atype = ActionTypeName::new("action_tutorials_interfaces", "Fibonacci");
     let name = Name::new("/", "fibonacci").unwrap();
 
@@ -452,14 +456,18 @@ mod tests {
     )
     .unwrap();
 
-    let srv_node = srv_ctx.new_node(
-      NodeName::new("/", "fib_server").unwrap(),
-      NodeOptions::new(),
-    );
-    let cli_node = cli_ctx.new_node(
-      NodeName::new("/", "fib_client").unwrap(),
-      NodeOptions::new(),
-    );
+    let srv_node = srv_ctx
+      .new_node(
+        NodeName::new("/", "fib_server").unwrap(),
+        NodeOptions::new(),
+      )
+      .unwrap();
+    let cli_node = cli_ctx
+      .new_node(
+        NodeName::new("/", "fib_client").unwrap(),
+        NodeOptions::new(),
+      )
+      .unwrap();
     let atype = ActionTypeName::new("action_tutorials_interfaces", "Fibonacci");
     let name = Name::new("/", "fibonacci").unwrap();
 

@@ -7,11 +7,13 @@
 //! plus their [`MessageInfo`].
 
 use std::{
+  future::Future,
   marker::PhantomData,
   sync::atomic::{AtomicI64, Ordering},
   time::{SystemTime, UNIX_EPOCH},
 };
 
+use futures::stream::{self, FusedStream, StreamExt};
 use serde::{de::DeserializeOwned, Serialize};
 use zenoh::{
   handlers::FifoChannelHandler,
@@ -21,7 +23,7 @@ use zenoh::{
   Wait,
 };
 
-use super::{attachment::AttachmentData, cdr};
+use super::{attachment::AttachmentData, cdr, node::Node};
 use crate::{
   error::{write_middleware, write_serialization, ReadError, ReadResult, WriteResult},
   gid::Gid,
@@ -43,6 +45,10 @@ pub struct Publisher<M> {
   source_gid: [u8; 16],
   // Kept alive so the entity stays discoverable; dropped => token undeclared.
   _liveliness_token: Option<LivelinessToken>,
+  // The topic's fully-qualified name, kept for the `Node`-scoped count/wait
+  // helpers below (mirrors the DDS backend, which looks these up via GUID on
+  // the owning `Node` instead).
+  topic_fqn: String,
   phantom: PhantomData<fn() -> M>,
 }
 
@@ -51,12 +57,14 @@ impl<M: Serialize> Publisher<M> {
     zenoh_publisher: ZenohPublisher<'static>,
     source_gid: [u8; 16],
     liveliness_token: Option<LivelinessToken>,
+    topic_fqn: String,
   ) -> Self {
     Self {
       zenoh_publisher,
       seq: AtomicI64::new(0),
       source_gid,
       _liveliness_token: liveliness_token,
+      topic_fqn,
       phantom: PhantomData,
     }
   }
@@ -101,9 +109,28 @@ impl<M: Serialize> Publisher<M> {
       .map_err(|e| write_middleware(e.to_string(), msg))
   }
 
-  /// This publisher's 16-byte source GID.
-  pub fn gid(&self) -> [u8; 16] {
-    self.source_gid
+  /// This publisher's source [`Gid`].
+  pub fn gid(&self) -> Gid {
+    Gid::from(self.source_gid)
+  }
+
+  /// Returns the count of currently discovered subscriptions on this
+  /// publisher's topic.
+  ///
+  /// `node` must be the [`Node`] that created this Publisher (or at least
+  /// share its [`Context`](crate::Context)), or the result is undefined.
+  pub fn get_subscription_count(&self, node: &Node) -> usize {
+    node.subscription_count(&self.topic_fqn)
+  }
+
+  /// Waits until there is at least one matched subscription on this topic,
+  /// possibly forever.
+  ///
+  /// `node` must be the [`Node`] that created this Publisher (or at least
+  /// share its [`Context`](crate::Context)), or the length of the wait is
+  /// undefined.
+  pub fn wait_for_subscription<'a>(&'a self, node: &'a Node) -> impl Future<Output = ()> + 'a {
+    node.wait_for_subscription(&self.topic_fqn)
   }
 }
 
@@ -112,6 +139,8 @@ pub struct Subscription<M> {
   zenoh_subscriber: Subscriber<FifoChannelHandler<Sample>>,
   // Kept alive so the entity stays discoverable; dropped => token undeclared.
   _liveliness_token: Option<LivelinessToken>,
+  // The topic's fully-qualified name; see `Publisher::topic_fqn`.
+  topic_fqn: String,
   phantom: PhantomData<fn() -> M>,
 }
 
@@ -119,10 +148,12 @@ impl<M: DeserializeOwned> Subscription<M> {
   pub(crate) fn new(
     zenoh_subscriber: Subscriber<FifoChannelHandler<Sample>>,
     liveliness_token: Option<LivelinessToken>,
+    topic_fqn: String,
   ) -> Self {
     Self {
       zenoh_subscriber,
       _liveliness_token: liveliness_token,
+      topic_fqn,
       phantom: PhantomData,
     }
   }
@@ -163,6 +194,36 @@ impl<M: DeserializeOwned> Subscription<M> {
       Ok(None) => Ok(None),
       Err(_) => Err(ReadError::Closed),
     }
+  }
+
+  /// An async `Stream` of messages with `MessageInfo` metadata (mirrors the
+  /// DDS backend's `Subscription::async_stream`), built by repeatedly calling
+  /// [`Self::async_take`]. The stream never ends on its own.
+  pub fn async_stream(&self) -> impl FusedStream<Item = ReadResult<(M, MessageInfo)>> + '_ {
+    stream::unfold(self, |sub| async move {
+      let item = sub.async_take().await;
+      Some((item, sub))
+    })
+    .fuse()
+  }
+
+  /// Returns the count of currently discovered publishers on this
+  /// subscription's topic.
+  ///
+  /// `node` must be the [`Node`] that created this Subscription (or at least
+  /// share its [`Context`](crate::Context)), or the result is undefined.
+  pub fn get_publisher_count(&self, node: &Node) -> usize {
+    node.publisher_count(&self.topic_fqn)
+  }
+
+  /// Waits until there is at least one matched publisher on this topic,
+  /// possibly forever.
+  ///
+  /// `node` must be the [`Node`] that created this Subscription (or at least
+  /// share its [`Context`](crate::Context)), or the length of the wait is
+  /// undefined.
+  pub fn wait_for_publisher<'a>(&'a self, node: &'a Node) -> impl Future<Output = ()> + 'a {
+    node.wait_for_publisher(&self.topic_fqn)
   }
 }
 
@@ -213,8 +274,12 @@ mod tests {
     )
     .expect("open publisher context");
 
-    let sub_node = sub_ctx.new_node(NodeName::new("/", "test_sub").unwrap(), NodeOptions::new());
-    let pub_node = pub_ctx.new_node(NodeName::new("/", "test_pub").unwrap(), NodeOptions::new());
+    let sub_node = sub_ctx
+      .new_node(NodeName::new("/", "test_sub").unwrap(), NodeOptions::new())
+      .unwrap();
+    let pub_node = pub_ctx
+      .new_node(NodeName::new("/", "test_pub").unwrap(), NodeOptions::new())
+      .unwrap();
 
     let make_topic = |n: &crate::Node| {
       n.create_topic(

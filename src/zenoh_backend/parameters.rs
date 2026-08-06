@@ -441,11 +441,15 @@ mod tests {
     .unwrap();
 
     let srv_node_name = NodeName::new("/", "param_holder").unwrap();
-    let srv_node = srv_ctx.new_node(srv_node_name.clone(), NodeOptions::new());
-    let cli_node = cli_ctx.new_node(
-      NodeName::new("/", "param_client").unwrap(),
-      NodeOptions::new(),
-    );
+    let srv_node = srv_ctx
+      .new_node(srv_node_name.clone(), NodeOptions::new())
+      .unwrap();
+    let cli_node = cli_ctx
+      .new_node(
+        NodeName::new("/", "param_client").unwrap(),
+        NodeOptions::new(),
+      )
+      .unwrap();
 
     let server = srv_node
       .create_parameter_server([Parameter {

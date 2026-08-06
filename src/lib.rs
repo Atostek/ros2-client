@@ -123,6 +123,8 @@ pub mod log;
 pub mod message;
 pub mod message_info;
 pub mod names;
+/// Shared [`NodeOptions`] builder (ADR-0010 Phase 4), used by both backends.
+pub mod node_options;
 /// Rust-like representation of ROS 2 Parameters (backend-neutral).
 pub mod parameters;
 #[doc(hidden)]
@@ -181,6 +183,9 @@ pub use request_id::RmwRequestId;
 #[cfg(feature = "dds")]
 #[doc(inline)]
 pub use node::*;
+/// Shared by both backends (ADR-0010 Phase 4); see [`node_options`].
+#[doc(inline)]
+pub use node_options::NodeOptions;
 #[doc(inline)]
 pub use parameters::{Parameter, ParameterValue};
 #[doc(inline)]
@@ -207,7 +212,7 @@ pub use rosout::{NodeLoggingHandle, RosoutRaw};
 pub use zenoh_backend::context::{Context, ContextOptions};
 #[cfg(feature = "zenoh")]
 #[doc(inline)]
-pub use zenoh_backend::node::{Node, NodeOptions, Topic};
+pub use zenoh_backend::node::{Node, Topic};
 #[cfg(feature = "zenoh")]
 #[doc(inline)]
 pub use zenoh_backend::pubsub::{Publisher, Subscription};

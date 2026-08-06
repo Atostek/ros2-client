@@ -127,16 +127,18 @@ pattern.
   `rustdds::dds::*` error types. `ros2::{Create,Read,Write,Wait}Error` now
   re-export the owned types.
 
-**Phase 4 — Entity API parity**
+**Phase 4 — Entity API parity** — **done for the scoped items below on branch
+`zenoh`**
 
-| Topic | Convergence target |
-| ----- | ------------------ |
-| Services | Prefer generic `Req`/`Resp` + serde; keep `Service`/`AService` as thin aliases or DDS-only helpers |
-| `NodeOptions` | One options vocabulary; Zenoh no-ops or documents unsupported fields |
-| Parameters / rosout | Same methods on the node API for both |
-| Async | Same stream / async method names; internals differ |
-| Discovery waits | `wait_for_*`, counts, graph stream — same owned types on both backends |
-| Dual-backend builds | Entity types namespaced (or equivalent) so both stacks coexist |
+| Topic | Convergence target | Status |
+| ----- | ------------------ | ------ |
+| `NodeOptions` | One options vocabulary; Zenoh no-ops or documents unsupported fields | **Done** — moved to always-compiled [`src/node_options.rs`](../../src/node_options.rs); both backends' `Node::new` consume the same builder. Zenoh now honors `enable_rosout` / `read_rosout` / `start_parameter_services` (default on) / `declare_parameter`, wiring up an optional `Logger` / rosout `Subscription` / `ParameterServer` at construction; unsupported fields (`cli_args`, `use_global_arguments`, `parameter_validator`, `parameter_set_action`) are no-ops logged once at `debug`. `Context::new_node` / `Node::new` are now fallible (`CreateResult<Node>`) on Zenoh, since this wiring can fail. |
+| Parameters / rosout | Same methods on the node API for both | **Done** — Zenoh `Node::logger()` / `rosout_subscription()` / `parameter_server()` getters expose the options-created instances (avoiding a double-create); `create_logger` / `read_rosout` / `create_parameter_server` remain for creating additional, independent instances. DDS gets a `Node::create_logger()` alias for `logging_handle()` (naming parity). |
+| Discovery waits | `wait_for_*`, counts, graph stream — same owned types on both backends | **Done, DDS best-effort** — DDS `Node` gained `wait_for_publisher`/`wait_for_subscription`/`publisher_count`/`subscription_count`/`graph_event_stream`, matching the Zenoh `Node`/`Context` API shape. DDS counts/waits match by (mangled) topic name via `DomainParticipant::discovered_writers`/`discovered_readers` rather than the exact GUID-keyed maps used internally by `Publisher`/`Subscription`; only absolute topic names are recognized (see doc comments on those methods for the caveats). Zenoh `Node` gained `graph_event_stream`/`publisher_count`/`subscription_count` forwarding to `Context`. |
+| Async | Same stream / async method names; internals differ | **Done** — Zenoh `Subscription::async_stream()` added (built from `async_take` in a loop), matching the DDS `Subscription::async_stream()` signature/semantics (a `FusedStream`). |
+| Pub/sub helpers | Same count/wait helpers and portable GID on `Publisher`/`Subscription` | **Done** — Zenoh `Publisher::gid()` now returns the portable [`Gid`](../../src/gid.rs) (was a raw `[u8; 16]`); `Publisher`/`Subscription` gained `get_subscription_count`/`wait_for_subscription` and `get_publisher_count`/`wait_for_publisher` taking `&Node`, mirroring [`src/pubsub.rs`](../../src/pubsub.rs). |
+| Services | Prefer generic `Req`/`Resp` + serde; keep `Service`/`AService` as thin aliases or DDS-only helpers | **Deferred to Phase 5** — explicit non-goal for this slice (see plan below); DDS keeps `create_client<S: Service>` / `Server<S>`, Zenoh keeps `create_client<Req, Resp>` / `Server<Req, Resp>`. This is the main remaining Phase 4 divergence. |
+| Dual-backend builds | Entity types namespaced (or equivalent) so both stacks coexist | **Deferred to Phase 5** — no change to the `compile_error!` / feature-exclusivity in this slice. |
 
 **Phase 5 — Escape hatches and re-exports**
 

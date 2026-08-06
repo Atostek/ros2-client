@@ -100,6 +100,43 @@ unclassified backend failures use `Middleware { reason }`.
 
 See [ADR-0010](docs/decisions/0010-converge-api-surfaces.md).
 
+### Entity API parity (API convergence Phase 4)
+
+On branch `zenoh`:
+
+* `NodeOptions` is one shared, always-compiled builder
+  ([`src/node_options.rs`](src/node_options.rs)) used by **both** backends.
+  Zenoh now honors `enable_rosout` / `read_rosout` /
+  `start_parameter_services` (on by default) / `declare_parameter`, creating
+  an optional rosout `Logger` / `/rosout` reader / `ParameterServer` at node
+  construction; `Node::logger()` / `rosout_subscription()` /
+  `parameter_server()` getters expose those (unsupported fields like
+  `cli_args` are no-ops, logged once at `debug`). Because this wiring can
+  fail, `Context::new_node` now returns `CreateResult<Node>` on Zenoh (it was
+  previously infallible).
+* Zenoh `Subscription::async_stream()` — same shape as the DDS
+  `Subscription::async_stream()` (a `FusedStream` of `(message, MessageInfo)`).
+* Zenoh `Publisher::gid()` now returns the portable [`Gid`](src/gid.rs) (was a
+  raw `[u8; 16]`).
+* Topic-name discovery helpers on both backends' `Node`:
+  `wait_for_publisher` / `wait_for_subscription` /
+  `publisher_count` / `subscription_count`, plus a `graph_event_stream()`
+  yielding [`GraphEvent`](src/graph.rs)s. On DDS these are best-effort (see
+  doc comments): they match by mangled topic name via RustDDS's discovered
+  writers/readers, separately from the exact GUID-keyed helpers
+  `Publisher`/`Subscription` already used internally.
+* `Publisher`/`Subscription` gained `get_subscription_count` /
+  `wait_for_subscription` and `get_publisher_count` / `wait_for_publisher` on
+  the Zenoh backend, taking `&Node` — mirroring the DDS helpers in
+  [`src/pubsub.rs`](src/pubsub.rs).
+
+**Residual divergence:** service/action generics are not unified — DDS keeps
+`create_client<S: Service>` / `Server<S>` (`Service`/`AService` traits),
+Zenoh keeps plain `create_client<Req, Resp>` / `Server<Req, Resp>`. This, and
+allowing `{dds,zenoh}` in the same build, are deferred to Phase 5.
+
+See [ADR-0010](docs/decisions/0010-converge-api-surfaces.md).
+
 ### Zenoh router requirement
 
 Like `rmw_zenoh`, the Zenoh backend discovers peers and exchanges the ROS graph

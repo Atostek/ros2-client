@@ -28,6 +28,7 @@ use crate::{
   graph::{EntityKind, GraphEntity, GraphEvent},
   log::Log,
   names::*,
+  node_options::{NodeOptions, ParameterFunc},
   parameters::*,
   pubsub::{Publisher, Subscription},
   qos::{History, QosProfile},
@@ -37,84 +38,6 @@ use crate::{
   service::{Client, Server, Service, ServiceMapping},
 };
 
-type ParameterFunc = dyn Fn(&str, &ParameterValue) -> SetParametersResult + Send + Sync;
-/// Configuration of [Node]
-/// This is a builder-like struct.
-///
-/// The NodeOptions struct does not contain
-/// node_name, context, or namespace, because
-/// they ae always needed and have no reasonable default.
-#[must_use]
-pub struct NodeOptions {
-  #[allow(dead_code)]
-  cli_args: Vec<String>,
-  #[allow(dead_code)]
-  use_global_arguments: bool, // process-wide command line args
-  enable_rosout: bool, // use rosout topic for logging?
-  enable_rosout_reading: bool,
-  start_parameter_services: bool,
-  declared_parameters: Vec<Parameter>,
-  allow_undeclared_parameters: bool,
-  parameter_validator: Option<Box<ParameterFunc>>,
-  parameter_set_action: Option<Box<ParameterFunc>>,
-}
-
-impl NodeOptions {
-  /// Get a default NodeOptions
-  pub fn new() -> NodeOptions {
-    // These defaults are from rclpy reference
-    // https://docs.ros2.org/latest/api/rclpy/api/node.html
-    NodeOptions {
-      cli_args: Vec::new(),
-      use_global_arguments: true,
-      enable_rosout: true,
-      enable_rosout_reading: false,
-      start_parameter_services: true,
-      declared_parameters: Vec::new(),
-      allow_undeclared_parameters: false,
-      parameter_validator: None,
-      parameter_set_action: None,
-    }
-  }
-  pub fn enable_rosout(self, enable_rosout: bool) -> NodeOptions {
-    NodeOptions {
-      enable_rosout,
-      ..self
-    }
-  }
-
-  pub fn read_rosout(self, enable_rosout_reading: bool) -> NodeOptions {
-    NodeOptions {
-      enable_rosout_reading,
-      ..self
-    }
-  }
-
-  pub fn declare_parameter(mut self, name: &str, value: ParameterValue) -> NodeOptions {
-    self.declared_parameters.push(Parameter {
-      name: name.to_owned(),
-      value,
-    });
-    // TODO: check for duplicate parameter names
-    self
-  }
-
-  pub fn parameter_validator(mut self, validator: Box<ParameterFunc>) -> NodeOptions {
-    self.parameter_validator = Some(validator);
-    self
-  }
-
-  pub fn parameter_set_action(mut self, action: Box<ParameterFunc>) -> NodeOptions {
-    self.parameter_set_action = Some(action);
-    self
-  }
-}
-
-impl Default for NodeOptions {
-  fn default() -> Self {
-    Self::new()
-  }
-}
 // ----------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------
 
@@ -150,6 +73,21 @@ fn guid_entity(kind: EntityKind, guid: GUID) -> GraphEntity {
     node_name: format!("guid:{guid:?}"),
     name: None,
     type_name: None,
+  }
+}
+
+/// Best-effort mangling of a fully-qualified ROS 2 topic name (e.g.
+/// `/chatter`) into the DDS wire-level topic name (`rt/chatter`), mirroring
+/// [`Name::to_dds_name`] for the `"rt"` (ROS Topic) prefix. Used by
+/// [`Node::publisher_count`] / [`Node::subscription_count`] /
+/// [`Node::wait_for_publisher`] / [`Node::wait_for_subscription`], which only
+/// have a bare topic string (no `Name`/node-namespace context to resolve a
+/// relative name against), so this only handles the common case of an
+/// already-absolute name.
+fn ros_topic_dds_name(topic: &str) -> String {
+  match topic.strip_prefix('/') {
+    Some(rest) => format!("rt/{rest}"),
+    None => format!("rt/{topic}"),
   }
 }
 
@@ -1232,6 +1170,101 @@ impl Node {
       })
   }
 
+  /// Number of publishers currently discovered on `topic` (a fully-qualified
+  /// ROS 2 topic name, e.g. `/chatter`). API parity with the Zenoh backend's
+  /// `Node`/`Context::publisher_count`.
+  ///
+  /// **Best-effort / limitation:** this is a different (and less exact)
+  /// mechanism than the GUID-keyed `get_publisher_count`/`get_subscription_count`
+  /// used internally by [`Publisher::get_subscription_count`](crate::Publisher::get_subscription_count)
+  /// and friends: it counts DDS SEDP-discovered writers
+  /// ([`rustdds::discovery::DiscoveredWriterData`]) whose (DDS-mangled) topic
+  /// name matches `topic`, via
+  /// [`rustdds::DomainParticipant::discovered_writers`]. It only recognizes
+  /// the common case of an already-absolute ROS name (leading `/`) and does
+  /// not resolve relative names against a node namespace.
+  pub fn publisher_count(&self, topic: &str) -> usize {
+    let dds_name = ros_topic_dds_name(topic);
+    self
+      .ros_context
+      .domain_participant()
+      .discovered_writers()
+      .iter()
+      .filter(|w| w.publication_topic_data.topic_name == dds_name)
+      .count()
+  }
+
+  /// Number of subscriptions currently discovered on `topic`. See
+  /// [`Self::publisher_count`] for the matching best-effort caveats.
+  pub fn subscription_count(&self, topic: &str) -> usize {
+    let dds_name = ros_topic_dds_name(topic);
+    self
+      .ros_context
+      .domain_participant()
+      .discovered_readers()
+      .iter()
+      .filter(|r| r.subscription_topic_data.topic_name == dds_name)
+      .count()
+  }
+
+  /// Resolve once at least one publisher on `topic` (a fully-qualified ROS 2
+  /// topic name) is discovered — immediately if one already exists. For API
+  /// parity with the Zenoh backend's `Node`/`Context::wait_for_publisher`.
+  ///
+  /// Requires a running [`Spinner`] (like [`Self::status_receiver`], which
+  /// this uses internally to wake up and re-check
+  /// [`Self::publisher_count`] on every graph change); panics otherwise.
+  /// Subject to the same best-effort topic-name-matching caveats as
+  /// [`Self::publisher_count`].
+  pub async fn wait_for_publisher(&self, topic: &str) {
+    self.wait_for_topic_count(topic, Self::publisher_count).await;
+  }
+
+  /// Resolve once at least one subscription on `topic` is discovered. See
+  /// [`Self::wait_for_publisher`] for the requirements and caveats.
+  pub async fn wait_for_subscription(&self, topic: &str) {
+    self.wait_for_topic_count(topic, Self::subscription_count).await;
+  }
+
+  async fn wait_for_topic_count(&self, topic: &str, count_fn: impl Fn(&Self, &str) -> usize) {
+    if count_fn(self, topic) > 0 {
+      return;
+    }
+    let status_receiver = self.status_receiver();
+    // Any graph change is a cue to re-check the (topic-name-based) count;
+    // we do not attempt to filter by topic here, since a `GraphEvent`'s
+    // `GraphEntity::name` is usually `None` for DDS-sourced events (see
+    // `crate::graph` module docs).
+    loop {
+      match status_receiver.recv().await {
+        Ok(_event) => {
+          if count_fn(self, topic) > 0 {
+            return;
+          }
+        }
+        Err(_closed) => return, // Spinner gone; give up waiting.
+      }
+    }
+  }
+
+  /// A stream of just the [`GraphEvent`]s from [`Self::status_receiver`]
+  /// (filtering out `NodeEvent::ParticipantEntities`), for API parity with
+  /// the Zenoh backend's
+  /// [`Context::graph_event_stream`](crate::Context::graph_event_stream).
+  ///
+  /// Same requirements/limitations as [`Self::status_receiver`] (needs a
+  /// running [`Spinner`]; only sees events after this call) and the DDS
+  /// [`GraphEvent`] mapping in general (see the [`crate::graph`] module
+  /// docs: `node_name` is a GUID placeholder, `name`/`type_name` are `None`).
+  pub fn graph_event_stream(&self) -> impl Stream<Item = GraphEvent> + Send + '_ {
+    self.status_receiver().filter_map(|event| async move {
+      match event {
+        NodeEvent::Graph(g) => Some(g),
+        NodeEvent::ParticipantEntities(_) => None,
+      }
+    })
+  }
+
   /// Borrow the Subscription to our ROSOut Reader.
   ///
   /// Availability depends on Node configuration.
@@ -1608,6 +1641,13 @@ impl Node {
     }
   }
 
+  /// Alias for [`Self::logging_handle`], for naming parity with the Zenoh
+  /// backend's `Node::create_logger`. Writing via the returned handle is a
+  /// no-op unless [`NodeOptions::enable_rosout`] was set (the default).
+  pub fn create_logger(&self) -> NodeLoggingHandle {
+    self.logging_handle()
+  }
+
   pub fn stop_spinner(&self) {
     info!("Signalling spinner to stop (manual)");
     if let Some(ref stop_spin_sender) = self.stop_spin_sender {
@@ -1827,8 +1867,8 @@ impl Future for WriterWait<'_> {
 
 #[cfg(test)]
 mod tests {
-  use crate::Context;
-  use super::{Node, NodeName, NodeOptions};
+  use crate::{Context, NodeOptions};
+  use super::{Node, NodeName};
 
   #[test]
   fn node_is_sync() {
