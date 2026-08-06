@@ -14,8 +14,8 @@ use crate::{
   error::{ReadError, ReadResult, WriteError, WriteResult},
   message::Message,
   names::Name,
+  pubsub::Publisher,
   service::{request_id::RmwRequestId, AService, Server},
-  Publisher,
 };
 use super::{
   ActionTypes, FeedbackMessage, GetResultRequest, GetResultResponse, SendGoalRequest,

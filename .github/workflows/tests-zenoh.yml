@@ -37,7 +37,18 @@ jobs:
       - name: test (zenoh, lib)
         run: cargo test --no-default-features --features zenoh --lib -- --test-threads=1
 
-      # Guard the feature exclusivity: the DDS backend must also build when
-      # selected explicitly with default features off.
+      # The DDS backend must also build when selected explicitly with default
+      # features off.
       - name: check (dds, explicit)
         run: cargo check --no-default-features --features dds
+
+      # Both backends may be enabled in the same build (ADR-0010 Phase 5):
+      # entity types are namespaced under `ros2_client::dds` /
+      # `ros2_client::zenoh`, so there is no more feature exclusivity to
+      # enforce. `--lib` only: examples/tests are written against a single
+      # backend's crate-root re-exports and are not meant to compile dual.
+      - name: check (dds + zenoh, lib)
+        run: cargo check --features dds,zenoh --lib
+
+      - name: clippy (dds + zenoh, lib)
+        run: cargo clippy --features dds,zenoh --lib -- -D warnings

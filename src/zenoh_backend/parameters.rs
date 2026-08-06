@@ -13,7 +13,8 @@
 //!   services (`rcl_interfaces/srv/*`)
 //! * `parameter_events` topic (`rcl_interfaces/msg/ParameterEvent`)
 //!
-//! Events use shared [`raw::ParameterEvent`] (`stamp: builtin_interfaces::Time`).
+//! Events use shared [`raw::ParameterEvent`] (`stamp:
+//! builtin_interfaces::Time`).
 //!
 //! Like the DDS backend's parameter machinery (which runs inside a `Spinner`),
 //! the server here is driven by the application: call [`ParameterServer::spin`]
@@ -22,6 +23,10 @@
 //! failure result, mirroring the DDS backend).
 
 use std::{collections::BTreeMap, sync::Mutex};
+
+/// Re-export shared wire type for callers that historically imported
+/// `ParameterEvent` from this module.
+pub use raw::ParameterEvent;
 
 use super::{
   pubsub::Publisher,
@@ -37,10 +42,6 @@ use crate::{
     ListParametersResponse, ListParametersResult, SetParametersRequest, SetParametersResponse,
   },
 };
-
-/// Re-export shared wire type for callers that historically imported
-/// `ParameterEvent` from this module.
-pub use raw::ParameterEvent;
 
 /// A ROS 2 parameter server over Zenoh: a parameter store plus the six
 /// `rcl_interfaces` services and the `parameter_events` publisher.
@@ -407,8 +408,9 @@ mod tests {
   use zenoh::Config;
 
   use crate::{
-    parameters::ParameterType, Context, ContextOptions, Name, NodeName, NodeOptions, Parameter,
-    ParameterValue,
+    parameters::ParameterType,
+    zenoh_backend::context::{Context, ContextOptions},
+    Name, NodeName, NodeOptions, Parameter, ParameterValue,
   };
 
   fn make_config(listen_port: u16, connect_port: Option<u16>) -> Config {

@@ -12,6 +12,7 @@ use std::{
 
 use serde::{de::DeserializeOwned, Serialize};
 use zenoh::{liveliness::LivelinessToken, Wait};
+use async_channel::Receiver;
 
 use super::{
   action::{
@@ -27,8 +28,6 @@ use super::{
   service::{Client, Server},
   type_hash,
 };
-use async_channel::Receiver;
-
 use crate::{
   action_msgs::{CancelGoalRequest, CancelGoalResponse, GoalStatusArray},
   error::CreateResult,
@@ -130,7 +129,11 @@ impl Node {
       log::debug!(
         "NodeOptions::cli_args is not supported on the Zenoh backend; ignoring {} entr{}",
         options.cli_args.len(),
-        if options.cli_args.len() == 1 { "y" } else { "ies" }
+        if options.cli_args.len() == 1 {
+          "y"
+        } else {
+          "ies"
+        }
       );
     }
     if !options.use_global_arguments {
@@ -139,7 +142,9 @@ impl Node {
       );
     }
     if options.parameter_validator.is_some() {
-      log::debug!("NodeOptions::parameter_validator is not supported on the Zenoh backend; ignoring");
+      log::debug!(
+        "NodeOptions::parameter_validator is not supported on the Zenoh backend; ignoring"
+      );
     }
     if options.parameter_set_action.is_some() {
       log::debug!(
@@ -622,7 +627,8 @@ impl Node {
   }
 
   /// Number of publishers currently discovered on `topic` (fully-qualified;
-  /// delegates to [`Context::publisher_count`](crate::Context::publisher_count)).
+  /// delegates to
+  /// [`Context::publisher_count`](crate::Context::publisher_count)).
   pub fn publisher_count(&self, topic: &str) -> usize {
     self.context.publisher_count(topic)
   }
@@ -701,7 +707,7 @@ mod tests {
     keyexpr::{graph_cache_keyexpr, parse_liveliness_key, EntityKind},
     *,
   };
-  use crate::{Context, ContextOptions};
+  use crate::zenoh_backend::context::{Context, ContextOptions};
 
   #[test]
   fn fqn_resolution() {

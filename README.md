@@ -47,11 +47,9 @@ selected at compile time with Cargo features (see
   protocol of the official [`rmw_zenoh`](https://github.com/ros2/rmw_zenoh)
   middleware, so it interoperates with ROS 2 nodes running `rmw_zenoh`.
 
-**Current (MVP) rule:** exactly one backend must be enabled; the build emits a
-`compile_error!` if both or neither are active. **Direction:** allowing both
-`dds` and `zenoh` in the same build once owned public types and module layout
-are ready (ADR-0002 / ADR-0010). The default build uses `dds`. Build the Zenoh
-backend with:
+Both may be enabled in the same build (ADR-0002 / ADR-0010 Phase 5); the build
+only emits a `compile_error!` if **neither** is active. The default build uses
+`dds`. Build the Zenoh backend with:
 
 ```console
 cargo build --no-default-features --features zenoh
@@ -62,6 +60,41 @@ loopback):
 
 ```console
 cargo run --no-default-features --features zenoh --example zenoh_demo
+```
+
+#### Feature matrix
+
+| Build | Entity API | Notes |
+| ----- | ---------- | ----- |
+| `--features dds` (default) | `ros2_client::{Context, Node, Publisher, …}` **and** `ros2_client::dds::{…}` | Same types, two paths — crate root is a convenience alias. |
+| `--no-default-features --features zenoh` | `ros2_client::{Context, Node, Publisher, …}` **and** `ros2_client::zenoh::{…}` | Same, for the Zenoh entity API. |
+| `--features dds,zenoh` | `ros2_client::dds::{Context, Node, …}` **and** `ros2_client::zenoh::{Context, Node, …}` only | Crate-root re-exports are suppressed (they would collide); use the namespaced modules explicitly. |
+
+Shared, backend-neutral types — `QosProfile`, `NodeOptions`, the owned error
+types, `MessageInfo`, `Gid`, `RmwRequestId`, the `graph`/discovery types, `Log`
+— are always at the crate root, regardless of which backend(s) are enabled.
+
+`ros2_client::dds::rustdds` re-exports the whole RustDDS crate at the version
+`ros2-client` uses (this used to be `ros2_client::rustdds`; it moved under
+`dds` in ADR-0010 Phase 5 to avoid colliding with the `zenoh` module on a
+dual-backend build). Similarly, `dds::Context::domain_participant` /
+`from_domain_participant` and `zenoh::Context::session` are the two backends'
+raw middleware-handle escape hatches.
+
+#### `rosout!` logging on dual-backend builds
+
+The [`rosout!`](https://wiki.ros.org/rosout) macro is backend-specific under
+the hood (`RosoutRaw::rosout_raw` on DDS vs. `Logger::log_at` on Zenoh) and is
+only defined when **exactly one** of `dds` / `zenoh` is enabled — with both
+enabled there is no single unambiguous `rosout!` to export. On a dual-backend
+build, call the underlying method directly instead:
+
+```rust,ignore
+// DDS
+ros2_client::dds::RosoutRaw::rosout_raw(&node, ros2_client::builtin_interfaces::Time::now(),
+  ros2_client::ros2::LogLevel::Info, node.fully_qualified_name(), "message", file!(), "fn", line!());
+// Zenoh
+logger.log_at(ros2_client::ros2::LogLevel::Info, "message", file!(), "fn", line!());
 ```
 
 ### QoS (API convergence Phase 1)
@@ -130,10 +163,22 @@ On branch `zenoh`:
   the Zenoh backend, taking `&Node` — mirroring the DDS helpers in
   [`src/pubsub.rs`](src/pubsub.rs).
 
-**Residual divergence:** service/action generics are not unified — DDS keeps
-`create_client<S: Service>` / `Server<S>` (`Service`/`AService` traits),
-Zenoh keeps plain `create_client<Req, Resp>` / `Server<Req, Resp>`. This, and
-allowing `{dds,zenoh}` in the same build, are deferred to Phase 5.
+**Residual divergence:** service/action generics are still not unified — DDS
+keeps `create_client<S: Service>` / `Server<S>` (`Service`/`AService` traits),
+Zenoh keeps plain `create_client<Req, Resp>` / `Server<Req, Resp>`. This was an
+explicit non-goal for Phases 4–5; a shared service vocabulary would need
+DDS-side churn not otherwise justified yet.
+
+See [ADR-0010](docs/decisions/0010-converge-api-surfaces.md).
+
+### Escape hatches and dual-backend builds (API convergence Phase 5)
+
+On branch `zenoh`, `dds` and `zenoh` may both be enabled in the same build —
+see "Middleware backends: DDS and Zenoh" above for the feature matrix and
+`rosout!` caveat. `ros2_client::dds::rustdds` re-exports RustDDS (moved from
+the crate root); `dds::Context::domain_participant` /
+`from_domain_participant` and `zenoh::Context::session` are the raw
+middleware-handle escape hatches.
 
 See [ADR-0010](docs/decisions/0010-converge-api-surfaces.md).
 
@@ -203,6 +248,9 @@ Please see [test results](interop/results) for details.
 ## Version 0.10
 * Experimental **Zenoh** middleware backend (Cargo feature `zenoh`), mirroring
   `rmw_zenoh`. See "Middleware backends: DDS and Zenoh" above.
+* `dds` and `zenoh` may now both be enabled in the same build; entity APIs are
+  namespaced under `ros2_client::dds` / `ros2_client::zenoh` (ADR-0010 Phase
+  5). `ros2_client::rustdds` moved to `ros2_client::dds::rustdds`.
 * Add interoperability tests and results.
 * ROS 2 distribution selection via a feature (`galactic` .. `lyrical`; default `jazzy`). 
 * `Context` now checks the `ROS_DISTRO` environment variable against the compiled distribution.

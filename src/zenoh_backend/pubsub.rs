@@ -237,7 +237,11 @@ mod tests {
 
   use super::{Publisher, Subscription};
   use crate::{
-    Context, ContextOptions, Gid, MessageTypeName, Name, NodeName, NodeOptions, QosProfile,
+    zenoh_backend::{
+      context::{Context, ContextOptions},
+      node::Node,
+    },
+    Gid, MessageTypeName, Name, NodeName, NodeOptions, QosProfile,
   };
 
   // Build a peer config on IPv4 loopback with multicast off. `listen`/`connect`
@@ -281,7 +285,7 @@ mod tests {
       .new_node(NodeName::new("/", "test_pub").unwrap(), NodeOptions::new())
       .unwrap();
 
-    let make_topic = |n: &crate::Node| {
+    let make_topic = |n: &Node| {
       n.create_topic(
         &Name::new("/", "chatter").unwrap(),
         MessageTypeName::new("std_msgs", "String"),

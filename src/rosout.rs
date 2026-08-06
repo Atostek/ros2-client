@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::{
   builtin_interfaces::Time,
   log::{Log, LogLevel},
-  Publisher,
+  pubsub::Publisher,
 };
 
 /// Ability to write to rosout log.
@@ -84,12 +84,14 @@ impl RosoutRaw for NodeLoggingHandle {
   }
 }
 
-#[cfg(test)]
+// These tests exercise the `rosout!` macro, which is only defined when `dds`
+// is enabled and `zenoh` is not (see the macro's doc comment in `node.rs`).
+#[cfg(all(test, not(feature = "zenoh")))]
 mod tests {
-  use crate::{log::LogLevel, rosout, Context, NodeName};
+  use crate::{context::Context, log::LogLevel, rosout, NodeName};
 
   mod new_namespace {
-    use crate::{log::LogLevel, rosout, Context, NodeName};
+    use crate::{context::Context, log::LogLevel, rosout, NodeName};
 
     #[test]
     fn logging_works_without_import() {

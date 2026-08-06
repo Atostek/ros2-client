@@ -1,8 +1,9 @@
 # 10. Converge DDS and Zenoh public API surfaces
 
-- Status: accepted (directional plan; implementation is phased)
+- Status: accepted (directional plan; implementation is phased) — **Phases
+  0–5 done on branch `zenoh`**
 - Date: 2026-08-05
-- Updated: 2026-08-05
+- Updated: 2026-08-06 — Phase 5 (escape hatches and re-exports) done
 - Relates to: ADR-0002, ADR-0003, ADR-0004, ADR-0005, PR #73 / branch `zenoh`,
   issue #71
 - Partially supersedes: the “minimal churn / leave DDS create_* on
@@ -137,16 +138,42 @@ pattern.
 | Discovery waits | `wait_for_*`, counts, graph stream — same owned types on both backends | **Done, DDS best-effort** — DDS `Node` gained `wait_for_publisher`/`wait_for_subscription`/`publisher_count`/`subscription_count`/`graph_event_stream`, matching the Zenoh `Node`/`Context` API shape. DDS counts/waits match by (mangled) topic name via `DomainParticipant::discovered_writers`/`discovered_readers` rather than the exact GUID-keyed maps used internally by `Publisher`/`Subscription`; only absolute topic names are recognized (see doc comments on those methods for the caveats). Zenoh `Node` gained `graph_event_stream`/`publisher_count`/`subscription_count` forwarding to `Context`. |
 | Async | Same stream / async method names; internals differ | **Done** — Zenoh `Subscription::async_stream()` added (built from `async_take` in a loop), matching the DDS `Subscription::async_stream()` signature/semantics (a `FusedStream`). |
 | Pub/sub helpers | Same count/wait helpers and portable GID on `Publisher`/`Subscription` | **Done** — Zenoh `Publisher::gid()` now returns the portable [`Gid`](../../src/gid.rs) (was a raw `[u8; 16]`); `Publisher`/`Subscription` gained `get_subscription_count`/`wait_for_subscription` and `get_publisher_count`/`wait_for_publisher` taking `&Node`, mirroring [`src/pubsub.rs`](../../src/pubsub.rs). |
-| Services | Prefer generic `Req`/`Resp` + serde; keep `Service`/`AService` as thin aliases or DDS-only helpers | **Deferred to Phase 5** — explicit non-goal for this slice (see plan below); DDS keeps `create_client<S: Service>` / `Server<S>`, Zenoh keeps `create_client<Req, Resp>` / `Server<Req, Resp>`. This is the main remaining Phase 4 divergence. |
-| Dual-backend builds | Entity types namespaced (or equivalent) so both stacks coexist | **Deferred to Phase 5** — no change to the `compile_error!` / feature-exclusivity in this slice. |
+| Services | Prefer generic `Req`/`Resp` + serde; keep `Service`/`AService` as thin aliases or DDS-only helpers | **Still residual** — DDS keeps `create_client<S: Service>` / `Server<S>`, Zenoh keeps `create_client<Req, Resp>` / `Server<Req, Resp>`. Not required to declare Phase 5 complete. |
+| Dual-backend builds | Entity types namespaced (or equivalent) so both stacks coexist | **Done** — see Phase 5 below. |
 
-**Phase 5 — Escape hatches and re-exports**
+**Phase 5 — Escape hatches and re-exports** — **done on branch `zenoh`
+(2026-08-06)**
 
-- Move `pub use rustdds` → `ros2_client::dds::rustdds` (or drop).
-- `domain_participant()` / `from_domain_participant()` → `dds`-only module.
-- Symmetric Zenoh: `session()` behind a `zenoh`-only module.
-- Lift interim “exactly one backend” `compile_error!` once namespacing and CI
-  cover `{dds,zenoh}` (ADR-0002).
+- `ros2_client::dds` and `ros2_client::zenoh` modules re-export each backend's
+  entity API (`Context`, `Node`, pub/sub, service, action, rosout types), so
+  both stacks are reachable without a name collision when **both** `dds` and
+  `zenoh` are enabled.
+- Crate-root entity re-exports (`ros2_client::Context`, `Node`, …) now apply
+  only when *exactly one* backend feature is enabled
+  (`#[cfg(all(feature = "dds", not(feature = "zenoh")))]` and the mirror for
+  `zenoh`), preserving the existing single-backend surface unchanged.
+- `pub use rustdds` moved from the crate root to `dds::rustdds` (still the
+  whole RustDDS crate, same version `ros2-client` uses internally).
+- Escape hatches are documented on their owning module: `Context::
+  domain_participant` / `Context::from_domain_participant` on `dds::Context`;
+  `zenoh_backend::context::Context::session` is now `pub` (was
+  `pub(crate)`), reachable as `zenoh::Context::session`.
+- The interim “exactly one backend” `compile_error!` is lifted; the only
+  remaining `compile_error!` fires when **neither** `dds` nor `zenoh` is
+  enabled. `cargo check --features dds,zenoh --lib` compiles cleanly, and CI
+  (`tests-zenoh.yml`) checks and lints it.
+- The `rosout!` macro is backend-specific (`$crate::rosout::RosoutRaw` on DDS
+  vs. `$crate::Logger` on Zenoh) and cannot be defined for both backends at
+  once without a name collision, so each definition is gated
+  `#[cfg(all(feature = "X", not(feature = "Y")))]`: it is only available when
+  exactly one backend is enabled. On a dual-backend build, call
+  `RosoutRaw::rosout_raw` / `Logger::log_at` directly (see README).
+- Internal code that could see both backends' types in scope (mostly
+  `#[cfg(test)]` modules) now spells out `crate::context::…` /
+  `crate::zenoh_backend::…` instead of relying on ambiguous crate-root paths.
+- Added `tests/dual_backend.rs` (`--features dds,zenoh`) constructing both
+  `ros2_client::dds::Context` and `ros2_client::zenoh::Context` from the same
+  build.
 
 ### Migration posture
 
@@ -159,7 +186,8 @@ pattern.
 4. Do **not** rely on docs alone (“almost the same API”) while types diverge.
 5. Do **not** put Zenoh `unstable` APIs or RustDDS discovery types in the stable
    public surface.
-6. Do **not** treat feature mutual exclusion as permanent product policy.
+6. ~~Do **not** treat feature mutual exclusion as permanent product policy.~~
+   Done: as of Phase 5, `dds` and `zenoh` may both be enabled at once.
 
 ### Recommended sequence (summary)
 

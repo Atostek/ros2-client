@@ -192,9 +192,11 @@ impl Context {
   }
 
   /// The underlying Zenoh session, shared by all entities in this context.
-  /// Used by pub/sub, discovery, and services (E4–E6).
-  #[allow(dead_code)] // consumed by later work items
-  pub(crate) fn session(&self) -> &Session {
+  /// Used internally by pub/sub, discovery, and services (E4–E6).
+  ///
+  /// Escape hatch (ADR-0010 Phase 5): exposes the raw [`zenoh::Session`] for
+  /// advanced use cases not covered by the `ros2_client::zenoh` API.
+  pub fn session(&self) -> &Session {
     &self.inner.session
   }
 }
@@ -278,7 +280,13 @@ mod tests {
   use std::time::{Duration, Instant};
 
   use super::*;
-  use crate::{MessageTypeName, Name, NodeName, NodeOptions, Publisher, QosProfile};
+  use crate::{
+    zenoh_backend::{
+      node::Node,
+      pubsub::{Publisher, Subscription},
+    },
+    MessageTypeName, Name, NodeName, NodeOptions, QosProfile,
+  };
 
   #[test]
   fn config_overrides_apply_and_validate() {
@@ -403,14 +411,14 @@ mod tests {
       .new_node(NodeName::new("/", "rpub").unwrap(), NodeOptions::new())
       .unwrap();
 
-    let make_topic = |n: &crate::Node| {
+    let make_topic = |n: &Node| {
       n.create_topic(
         &Name::new("/", "chatter").unwrap(),
         MessageTypeName::new("std_msgs", "String"),
         &QosProfile::default(),
       )
     };
-    let sub: crate::Subscription<String> = sub_node
+    let sub: Subscription<String> = sub_node
       .create_subscription(&make_topic(&sub_node), None)
       .unwrap();
     let publisher: Publisher<String> = pub_node

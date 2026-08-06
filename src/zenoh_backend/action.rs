@@ -23,13 +23,13 @@ use super::{
   service::{Client, Server},
 };
 use crate::{
-  request_id::RmwRequestId,
   action_msgs::{
     CancelGoalRequest, CancelGoalResponse, CancelGoalResponseEnum, GoalInfo, GoalStatus,
     GoalStatusArray,
   },
   builtin_interfaces::Time,
   error::{ServiceError, WriteResult},
+  request_id::RmwRequestId,
   unique_identifier_msgs::UUID,
 };
 
@@ -297,7 +297,10 @@ mod tests {
   use zenoh::Config;
 
   use super::{goal_status, ActionClient, ActionServer, GoalId};
-  use crate::{Context, ContextOptions, Name, NodeName, NodeOptions};
+  use crate::{
+    zenoh_backend::context::{Context, ContextOptions},
+    Name, NodeName, NodeOptions,
+  };
 
   #[derive(Serialize, Deserialize)]
   struct FibGoal {

@@ -22,10 +22,10 @@ use crate::{
   gid::Gid,
   graph::DiscoveredTopic,
   names::*,
-  node::Node,
+  node::{Node, NodeCreateError},
   pubsub::{Publisher, Subscription},
   qos::QosProfile,
-  NodeCreateError, NodeOptions,
+  NodeOptions,
 };
 
 /// Basic BestEffort QoS for subscribers (same as

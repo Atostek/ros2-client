@@ -2,7 +2,8 @@
 
 - Status: accepted
 - Date: 2026-07-07
-- Updated: 2026-08-05
+- Updated: 2026-08-06 — interim mutual-exclusion lifted (ADR-0010 Phase 5); see
+  "Update (2026-08-06)" below.
 - Relates to: issue #71, ADR-0004, ADR-0010, `docs/zenoh_study/refactoring_plan.md`
 
 ## Context
@@ -62,3 +63,24 @@ Adopt **B, compile-time feature selection**, without locking in **C**.
   `{dds}` / `{zenoh}` to also cover `{dds,zenoh}` once allowed.
 - Documentation must distinguish **current** feature rules from the **intended**
   “both allowed” end state so dependents do not treat exclusivity as permanent.
+
+## Update (2026-08-06)
+
+ADR-0010 Phase 5 lifted the interim "exactly one backend" `compile_error!`.
+`dds` and `zenoh` may now both be enabled in the same build:
+
+- Entity types are namespaced under `ros2_client::dds::…` /
+  `ros2_client::zenoh::…` (added in Phase 5), so `Context`/`Node`/`Publisher`/…
+  never collide.
+- When exactly one of `dds` / `zenoh` is enabled, that backend's entity types
+  are *also* re-exported at the crate root (`ros2_client::Context`, …) as
+  before — this is unchanged for existing single-backend callers.
+- The `rosout!` macro remains single-backend only (it is tied to one crate-root
+  logging type); on a dual build, use `Logger::log_at` / `RosoutRaw::rosout_raw`
+  directly. See [README](../../README.md).
+- CI (`tests-zenoh.yml`) now additionally runs `cargo check --features
+  dds,zenoh --lib` (and clippy) instead of asserting exclusivity.
+- The only remaining `compile_error!` is for selecting **neither** backend.
+
+This closes the "interim exclusivity" item from this ADR's Decision and
+Consequences above; see ADR-0010 §Phase 5 for the full rationale.

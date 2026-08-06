@@ -249,7 +249,10 @@ mod tests {
   use zenoh::Config;
 
   use super::{Client, Server};
-  use crate::{Context, ContextOptions, Name, NodeName, NodeOptions, ServiceTypeName};
+  use crate::{
+    zenoh_backend::context::{Context, ContextOptions},
+    Name, NodeName, NodeOptions, ServiceTypeName,
+  };
 
   #[derive(Serialize, Deserialize)]
   struct AddTwoIntsRequest {

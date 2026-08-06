@@ -1175,8 +1175,9 @@ impl Node {
   /// `Node`/`Context::publisher_count`.
   ///
   /// **Best-effort / limitation:** this is a different (and less exact)
-  /// mechanism than the GUID-keyed `get_publisher_count`/`get_subscription_count`
-  /// used internally by [`Publisher::get_subscription_count`](crate::Publisher::get_subscription_count)
+  /// mechanism than the GUID-keyed
+  /// `get_publisher_count`/`get_subscription_count` used internally by
+  /// [`Publisher::get_subscription_count`](crate::Publisher::get_subscription_count)
   /// and friends: it counts DDS SEDP-discovered writers
   /// ([`rustdds::discovery::DiscoveredWriterData`]) whose (DDS-mangled) topic
   /// name matches `topic`, via
@@ -1217,13 +1218,17 @@ impl Node {
   /// Subject to the same best-effort topic-name-matching caveats as
   /// [`Self::publisher_count`].
   pub async fn wait_for_publisher(&self, topic: &str) {
-    self.wait_for_topic_count(topic, Self::publisher_count).await;
+    self
+      .wait_for_topic_count(topic, Self::publisher_count)
+      .await;
   }
 
   /// Resolve once at least one subscription on `topic` is discovered. See
   /// [`Self::wait_for_publisher`] for the requirements and caveats.
   pub async fn wait_for_subscription(&self, topic: &str) {
-    self.wait_for_topic_count(topic, Self::subscription_count).await;
+    self
+      .wait_for_topic_count(topic, Self::subscription_count)
+      .await;
   }
 
   async fn wait_for_topic_count(&self, topic: &str, count_fn: impl Fn(&Self, &str) -> usize) {
@@ -1685,6 +1690,13 @@ impl RosoutRaw for Node {
 
 /// Macro for writing to [rosout](https://wiki.ros.org/rosout) topic.
 ///
+/// Only defined when `dds` is enabled and `zenoh` is not, since it hard-codes
+/// [`RosoutRaw`](crate::rosout::RosoutRaw) (the DDS-side logging trait). On a
+/// dual-backend build (or the Zenoh-only backend), call
+/// [`RosoutRaw::rosout_raw`](crate::rosout::RosoutRaw::rosout_raw) / the
+/// Zenoh backend's `Logger::log_at` directly instead — see the README's
+/// "rosout logging on dual-backend builds" section.
+///
 /// # Example
 ///
 /// ```
@@ -1701,6 +1713,7 @@ impl RosoutRaw for Node {
 ///
 /// rosout!(node, ros2::LogLevel::Info, "A {} event was seen.", kind);
 /// ```
+#[cfg(all(feature = "dds", not(feature = "zenoh")))]
 #[macro_export]
 macro_rules! rosout {
     ($node:expr, $lvl:expr, $($arg:tt)+) => (
@@ -1867,7 +1880,7 @@ impl Future for WriterWait<'_> {
 
 #[cfg(test)]
 mod tests {
-  use crate::{Context, NodeOptions};
+  use crate::{context::Context, NodeOptions};
   use super::{Node, NodeName};
 
   #[test]

@@ -79,17 +79,22 @@ impl Logger {
 /// Write a record to the `/rosout` topic via a [`Logger`], capturing the call
 /// site's file and line.
 ///
+/// Only defined when `zenoh` is enabled and `dds` is not, since
+/// `$crate::Logger` (the crate-root re-export) is only reachable there. On a
+/// dual-backend build (or the DDS-only backend), call [`Logger::log_at`]
+/// directly, or use `ros2_client::zenoh::Logger` explicitly.
+///
 /// # Example
 ///
 /// ```no_run
-/// # #[cfg(feature = "zenoh")]
+/// # #[cfg(all(feature = "zenoh", not(feature = "dds")))]
 /// # fn demo(logger: &ros2_client::Logger) {
 /// use ros2_client::ros2::LogLevel;
 /// let kind = "silly";
 /// ros2_client::rosout!(logger, LogLevel::Info, "A {} event was seen.", kind);
 /// # }
 /// ```
-#[cfg(feature = "zenoh")]
+#[cfg(all(feature = "zenoh", not(feature = "dds")))]
 #[macro_export]
 macro_rules! rosout {
   ($logger:expr, $lvl:expr, $($arg:tt)+) => (
@@ -106,13 +111,19 @@ macro_rules! rosout {
 
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
+// These tests exercise the `rosout!` macro, which is only defined when
+// `zenoh` is enabled and `dds` is not (see the macro's doc comment above).
+#[cfg(all(test, not(feature = "dds")))]
 mod tests {
   use std::time::{Duration, Instant};
 
   use zenoh::Config;
 
-  use crate::{ros2::LogLevel, Context, ContextOptions, NodeName, NodeOptions};
+  use crate::{
+    ros2::LogLevel,
+    zenoh_backend::context::{Context, ContextOptions},
+    NodeName, NodeOptions,
+  };
 
   fn make_config(listen_port: u16, connect_port: Option<u16>) -> Config {
     let mut c = Config::default();

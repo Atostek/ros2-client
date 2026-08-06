@@ -55,22 +55,19 @@
 
 // ---------------------------------------------------------------------------
 // Middleware backend selection. See
-// docs/decisions/0002-dual-backend-compile-time-feature-selection.md
+// docs/decisions/0002-dual-backend-compile-time-feature-selection.md and
+// docs/decisions/0010-converge-api-surfaces.md (Phase 5).
 //
-// MVP: exactly one of `dds` (default) or `zenoh`. Direction: allow both in one
-// build once owned types / namespacing are ready (ADR-0002 / ADR-0010).
+// Both `dds` and `zenoh` may be enabled in the same build: entity types are
+// namespaced under `ros2_client::dds` / `ros2_client::zenoh` so the two
+// backends' `Context`/`Node`/… do not collide. When exactly one backend is
+// enabled, its entity types are additionally re-exported at the crate root
+// for convenience (as before).
 // ---------------------------------------------------------------------------
-#[cfg(all(feature = "dds", feature = "zenoh"))]
-compile_error!(
-  "features `dds` and `zenoh` are mutually exclusive for now (MVP): enable exactly one. \
-   Dual-backend builds are planned (ADR-0002). To use Zenoh today, build with \
-   `--no-default-features --features zenoh`."
-);
 #[cfg(not(any(feature = "dds", feature = "zenoh")))]
 compile_error!(
-  "no middleware backend selected: enable `dds` (default) and/or `zenoh` \
-   (MVP: exactly one). You likely used `--no-default-features` without \
-   `--features dds` or `--features zenoh`."
+  "no middleware backend selected: enable `dds` and/or `zenoh`. \
+   You likely used `--no-default-features` without `--features dds` or `--features zenoh`."
 );
 
 // lazy_static is only used by DDS-backend modules (builtin_topics, context).
@@ -113,12 +110,12 @@ pub mod action;
 pub mod distributions;
 #[cfg(feature = "dds")]
 pub mod entities_info;
+/// Owned create/read/write/wait/service errors (ADR-0010 Phase 3).
+pub mod error;
 pub mod gid;
 /// Backend-neutral ROS 2 graph / discovery types (`GraphEvent`, `GraphEntity`,
 /// `EntityKind`, `DiscoveredTopic`). Always compiled; see ADR-0005 / ADR-0010.
 pub mod graph;
-/// Owned create/read/write/wait/service errors (ADR-0010 Phase 3).
-pub mod error;
 pub mod log;
 pub mod message;
 pub mod message_info;
@@ -132,10 +129,10 @@ pub mod parameters;
 pub mod pubsub;
 /// Backend-neutral Quality-of-Service profile.
 pub mod qos;
-/// Owned service request identity ([`RmwRequestId`](request_id::RmwRequestId)).
-pub mod request_id;
 /// `rcl_interfaces` message/service payload types (backend-neutral).
 pub mod rcl_interfaces;
+/// Owned service request identity ([`RmwRequestId`](request_id::RmwRequestId)).
+pub mod request_id;
 pub mod ros_time;
 #[cfg(feature = "dds")]
 pub mod rosout;
@@ -157,10 +154,85 @@ pub(crate) mod node;
 /// `#[cfg(feature = "zenoh")]` inside the module.
 pub(crate) mod zenoh_backend;
 
-// Re-exports from crate root to simplify usage
+// ---------------------------------------------------------------------------
+// Backend entity API namespaces (ADR-0010 Phase 5).
+//
+// Each backend's `Context` / `Node` / pub-sub / service / action / rosout
+// types live behind an explicit module so a build enabling *both* `dds` and
+// `zenoh` can reach both stacks without a name collision. Shared,
+// backend-neutral types (QoS, errors, `MessageInfo`, `Gid`, discovery, …) are
+// re-exported unconditionally at the crate root below, regardless of how many
+// backends are enabled.
+// ---------------------------------------------------------------------------
+
+/// DDS backend entity API and escape hatches (ADR-0010 Phase 5).
+///
+/// Reachable as `ros2_client::dds::…` regardless of whether `zenoh` is also
+/// enabled. When `zenoh` is *not* enabled, these types are additionally
+/// re-exported at the crate root (e.g. `ros2_client::Context`) for
+/// convenience, same as before this module existed.
+///
+/// # Escape hatches
+///
+/// [`Context::domain_participant`] and [`Context::from_domain_participant`]
+/// give access to the underlying RustDDS
+/// [`DomainParticipant`](rustdds::DomainParticipant). [`dds::rustdds`]
+/// re-exports the whole RustDDS crate at the version `ros2-client` uses.
 #[cfg(feature = "dds")]
-#[doc(inline)]
-pub use context::*;
+pub mod dds {
+  /// Escape hatch: the whole RustDDS crate, at the same version `ros2-client`
+  /// uses internally. Was previously `ros2_client::rustdds` (ADR-0010 Phase 5
+  /// moved it here to avoid crate-root pollution / collisions with `zenoh`).
+  #[doc(inline)]
+  pub use rustdds;
+
+  #[doc(inline)]
+  pub use crate::context::{
+    Context, ContextOptions, DEFAULT_PUBLISHER_QOS, DEFAULT_SUBSCRIPTION_QOS,
+  };
+  #[doc(inline)]
+  pub use crate::node::{
+    Node, NodeCreateError, NodeEvent, ParameterError, ReaderWait, Spinner, WriterWait,
+  };
+  #[doc(inline)]
+  pub use crate::pubsub::{Publisher, Subscription};
+  #[doc(inline)]
+  pub use crate::service::{AService, Client, Server, Service, ServiceMapping};
+  #[doc(inline)]
+  pub use crate::action::{Action, ActionTypes};
+  #[doc(inline)]
+  pub use crate::rosout::{NodeLoggingHandle, RosoutRaw};
+}
+
+/// Zenoh backend entity API (ADR-0010 Phase 5).
+///
+/// Reachable as `ros2_client::zenoh::…` regardless of whether `dds` is also
+/// enabled. When `dds` is *not* enabled, these types are additionally
+/// re-exported at the crate root (e.g. `ros2_client::Context`) for
+/// convenience, same as before this module existed.
+///
+/// # Escape hatches
+///
+/// [`Context::session`] gives access to the underlying [`zenoh::Session`].
+#[cfg(feature = "zenoh")]
+pub mod zenoh {
+  #[doc(inline)]
+  pub use crate::zenoh_backend::context::{Context, ContextOptions};
+  #[doc(inline)]
+  pub use crate::zenoh_backend::node::{Node, Topic};
+  #[doc(inline)]
+  pub use crate::zenoh_backend::pubsub::{Publisher, Subscription};
+  #[doc(inline)]
+  pub use crate::zenoh_backend::service::{Client, Server};
+  #[doc(inline)]
+  pub use crate::zenoh_backend::action::{ActionClient, ActionServer, GoalId};
+  #[doc(inline)]
+  pub use crate::zenoh_backend::parameters::{ParameterClient, ParameterEvent, ParameterServer};
+  #[doc(inline)]
+  pub use crate::zenoh_backend::rosout::Logger;
+}
+
+// Re-exports from crate root to simplify usage
 #[doc(inline)]
 pub use distributions::{RosDistro, COMPILED_ROS_DISTRO};
 #[doc(inline)]
@@ -180,9 +252,6 @@ pub use error::{
 pub use message_info::MessageInfo;
 #[doc(inline)]
 pub use request_id::RmwRequestId;
-#[cfg(feature = "dds")]
-#[doc(inline)]
-pub use node::*;
 /// Shared by both backends (ADR-0010 Phase 4); see [`node_options`].
 #[doc(inline)]
 pub use node_options::NodeOptions;
@@ -190,47 +259,30 @@ pub use node_options::NodeOptions;
 pub use parameters::{Parameter, ParameterValue};
 #[doc(inline)]
 pub use qos::QosProfile;
-#[cfg(feature = "dds")]
-#[doc(inline)]
-pub use pubsub::*;
-#[cfg(feature = "dds")]
-#[doc(inline)]
-pub use service::{AService, Client, Server, Service, ServiceMapping};
-#[cfg(feature = "dds")]
-#[doc(inline)]
-pub use action::{Action, ActionTypes};
 #[doc(inline)]
 pub use wide_string::WString;
 #[doc(inline)]
 pub use ros_time::{ROSTime, SystemTime};
-#[cfg(feature = "dds")]
-#[doc(inline)]
-pub use rosout::{NodeLoggingHandle, RosoutRaw};
-// Zenoh backend public API (incremental; see E3–E9).
-#[cfg(feature = "zenoh")]
-#[doc(inline)]
-pub use zenoh_backend::context::{Context, ContextOptions};
-#[cfg(feature = "zenoh")]
-#[doc(inline)]
-pub use zenoh_backend::node::{Node, Topic};
-#[cfg(feature = "zenoh")]
-#[doc(inline)]
-pub use zenoh_backend::pubsub::{Publisher, Subscription};
-#[cfg(feature = "zenoh")]
-#[doc(inline)]
-pub use zenoh_backend::service::{Client, Server};
-#[cfg(feature = "zenoh")]
-#[doc(inline)]
-pub use zenoh_backend::action::{ActionClient, ActionServer, GoalId};
-#[cfg(feature = "zenoh")]
-#[doc(inline)]
-pub use zenoh_backend::parameters::{ParameterClient, ParameterEvent, ParameterServer};
-#[cfg(feature = "zenoh")]
-#[doc(inline)]
-pub use zenoh_backend::rosout::Logger;
-#[cfg(feature = "zenoh")]
 #[doc(inline)]
 pub use log::Log;
+// Backend entity API re-exports at the crate root: only when exactly one
+// backend feature is enabled, so `Context`/`Node`/… stay unambiguous. With
+// both `dds` and `zenoh` enabled, use `ros2_client::dds::…` /
+// `ros2_client::zenoh::…` explicitly (ADR-0010 Phase 5).
+#[cfg(all(feature = "dds", not(feature = "zenoh")))]
+#[doc(inline)]
+pub use dds::{
+  AService, Action, ActionTypes, Client, Context, ContextOptions, Node, NodeCreateError, NodeEvent,
+  NodeLoggingHandle, ParameterError, Publisher, ReaderWait, RosoutRaw, Server, Service,
+  ServiceMapping, Spinner, Subscription, WriterWait, DEFAULT_PUBLISHER_QOS,
+  DEFAULT_SUBSCRIPTION_QOS,
+};
+#[cfg(all(feature = "zenoh", not(feature = "dds")))]
+#[doc(inline)]
+pub use zenoh::{
+  ActionClient, ActionServer, Client, Context, ContextOptions, GoalId, Logger, Node,
+  ParameterClient, ParameterEvent, ParameterServer, Publisher, Server, Subscription, Topic,
+};
 
 /// Module for stuff we do not want to export from top level;
 pub mod ros2 {
@@ -241,7 +293,6 @@ pub mod ros2 {
 
   // Owned operation errors (ADR-0010 Phase 3); previously RustDDS types.
   pub use crate::error::{CreateError, ReadError, WaitError, WriteError};
-
   pub use crate::log::LogLevel;
   // TODO: What to do about SecurityError (exists based on feature "security")
   pub use crate::names::Name; // import Name as ros2::Name if there is clash
@@ -249,10 +300,3 @@ pub mod ros2 {
   // Backend-neutral QoS (available on both backends).
   pub use crate::qos::QosProfile;
 }
-
-/// Re-export of the entire RustDDS,
-/// to provide access to the same version that ros2-client uses.
-///
-/// Only available on the `dds` backend.
-#[cfg(feature = "dds")]
-pub use rustdds;

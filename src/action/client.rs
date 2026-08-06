@@ -13,8 +13,9 @@ use crate::{
   error::{ReadResult, WriteResult},
   message::Message,
   names::Name,
+  pubsub::Subscription,
   service::{request_id::RmwRequestId, AService, CallServiceError, Client},
-  unique_identifier_msgs, Subscription,
+  unique_identifier_msgs,
 };
 use super::{
   ActionTypes, FeedbackMessage, GetResultRequest, GetResultResponse, SendGoalRequest,
