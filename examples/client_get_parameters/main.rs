@@ -7,8 +7,8 @@ use ros2_client::{
   rcl_interfaces::{GetParametersRequest, GetParametersResponse},
   ros2::WriteError,
   service::CallServiceError,
-  AService, Context, Name, Node, NodeName, NodeOptions, ParameterValue, QosProfile,
-  ServiceMapping, ServiceTypeName,
+  Context, Name, Node, NodeName, NodeOptions, ParameterValue, QosProfile, ServiceMapping,
+  ServiceTypeName,
 };
 
 fn main() {
@@ -39,7 +39,7 @@ fn main() {
   println!(">>> connecting service {service_name:?}");
 
   let client = node
-    .create_client::<AService<GetParametersRequest, GetParametersResponse>>(
+    .create_client::<GetParametersRequest, GetParametersResponse>(
       ServiceMapping::Enhanced,
       &service_name,
       &ServiceTypeName::new("rcl_interfaces", "GetParameters"),

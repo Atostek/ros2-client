@@ -38,8 +38,6 @@ use ros2_client::{
 // just as well use e.g.
 // struct FibonacciActionGoal{ goal: i32 }
 // or any other tuple/struct that contains only an i32.
-type FibonacciAction = action::Action<i32, Vec<i32>, Vec<i32>>;
-
 fn main() {
   pretty_env_logger::init();
   // Use e.g.
@@ -85,7 +83,7 @@ fn main() {
 
   let fibonacci_action_server = Arc::new(action::AsyncActionServer::new(
     node
-      .create_action_server::<FibonacciAction>(
+      .create_action_server::<i32, Vec<i32>, Vec<i32>>(
         ServiceMapping::Enhanced,
         &Name::new("/", "fibonacci").unwrap(),
         &ActionTypeName::new("example_interfaces", "Fibonacci"),
@@ -134,7 +132,7 @@ fn main() {
 }
 
 async fn action_runner(
-  fibonacci_action_server: Arc<AsyncActionServer<FibonacciAction>>,
+  fibonacci_action_server: Arc<AsyncActionServer<i32, Vec<i32>, Vec<i32>>>,
   new_goal_handle: NewGoalHandle<i32>,
   fib_order: usize,
 ) {

@@ -8,6 +8,7 @@ use rustdds::{rpc::*, *};
 
 use crate::{
   error::{CreateResult, ReadError, ReadResult, WriteError, WriteResult},
+  message::Message,
   message_info::MessageInfo,
   node::Node,
   qos::QosProfile,
@@ -17,20 +18,20 @@ use crate::{
 // --------------------------------------------
 // --------------------------------------------
 /// Server end of a ROS2 Service
-pub struct Server<S>
+pub struct Server<Req, Resp>
 where
-  S: Service,
-  S::Request: Message,
-  S::Response: Message,
+  Req: Message,
+  Resp: Message,
 {
   service_mapping: ServiceMapping,
-  request_receiver: SimpleDataReaderR<RequestWrapper<S::Request>>,
-  response_sender: DataWriterR<ResponseWrapper<S::Response>>,
+  request_receiver: SimpleDataReaderR<RequestWrapper<Req>>,
+  response_sender: DataWriterR<ResponseWrapper<Resp>>,
 }
 
-impl<S> Server<S>
+impl<Req, Resp> Server<Req, Resp>
 where
-  S: 'static + Service,
+  Req: Message + 'static,
+  Resp: Message + 'static,
 {
   pub(crate) fn new(
     service_mapping: ServiceMapping,
@@ -42,12 +43,13 @@ where
   ) -> CreateResult<Self> {
     let request_receiver =
       node.create_simpledatareader
-      ::<RequestWrapper<S::Request>, ServiceDeserializerAdapter<RequestWrapper<S::Request>>>(
+      ::<RequestWrapper<Req>, ServiceDeserializerAdapter<RequestWrapper<Req>>>(
         request_topic, qos_request)?;
-    let response_sender =
-      node.create_datawriter
-      ::<ResponseWrapper<S::Response>, ServiceSerializerAdapter<ResponseWrapper<S::Response>>>(
-        response_topic, qos_response)?;
+    let response_sender = node
+      .create_datawriter::<ResponseWrapper<Resp>, ServiceSerializerAdapter<ResponseWrapper<Resp>>>(
+        response_topic,
+        qos_response,
+      )?;
 
     debug!(
       "Created new Server: requests={} response={}",
@@ -55,7 +57,7 @@ where
       response_topic.name()
     );
 
-    Ok(Server::<S> {
+    Ok(Server::<Req, Resp> {
       service_mapping,
       request_receiver,
       response_sender,
@@ -64,9 +66,9 @@ where
 
   /// Receive a request from Client.
   /// Returns `Ok(None)` if no new requests have arrived.
-  pub fn receive_request(&self) -> ReadResult<Option<(RmwRequestId, S::Request)>> {
+  pub fn receive_request(&self) -> ReadResult<Option<(RmwRequestId, Req)>> {
     self.request_receiver.drain_read_notifications();
-    let dcc_rw: Option<no_key::DeserializedCacheChange<RequestWrapper<S::Request>>> =
+    let dcc_rw: Option<no_key::DeserializedCacheChange<RequestWrapper<Req>>> =
       self.request_receiver.try_take_one()?;
 
     match dcc_rw {
@@ -82,12 +84,8 @@ where
 
   /// Send response to request by Client.
   /// rmw_req_id identifies request being responded.
-  pub fn send_response(
-    &self,
-    rmw_req_id: RmwRequestId,
-    response: S::Response,
-  ) -> WriteResult<(), ()> {
-    let resp_wrapper = ResponseWrapper::<S::Response>::new(
+  pub fn send_response(&self, rmw_req_id: RmwRequestId, response: Resp) -> WriteResult<(), ()> {
+    let resp_wrapper = ResponseWrapper::<Resp>::new(
       self.service_mapping,
       rmw_req_id,
       RepresentationIdentifier::CDR_LE,
@@ -105,12 +103,13 @@ where
       .response_sender
       .write_with_options(resp_wrapper, write_opts)
       .map(|_| ())
-      .map_err(|e| WriteError::from(e.forget_data())) // lose SampleIdentity result
+      .map_err(|e| WriteError::from(e.forget_data())) // lose SampleIdentity
+                                                      // result
   }
 
   /// The request_id must be sent back with the response to identify which
   /// request and response belong together.
-  pub async fn async_receive_request(&self) -> ReadResult<(RmwRequestId, S::Request)> {
+  pub async fn async_receive_request(&self) -> ReadResult<(RmwRequestId, Req)> {
     let dcc_stream = self.request_receiver.as_async_stream();
     pin_mut!(dcc_stream);
 
@@ -133,7 +132,7 @@ where
   /// request and response belong together.
   pub fn receive_request_stream(
     &self,
-  ) -> impl FusedStream<Item = ReadResult<(RmwRequestId, S::Request)>> + '_ {
+  ) -> impl FusedStream<Item = ReadResult<(RmwRequestId, Req)>> + '_ {
     Box::pin(self.request_receiver.as_async_stream().then(
       move |dcc_r| async move {
         match dcc_r {
@@ -153,9 +152,9 @@ where
   pub async fn async_send_response(
     &self,
     rmw_req_id: RmwRequestId,
-    response: S::Response,
+    response: Resp,
   ) -> WriteResult<(), ()> {
-    let resp_wrapper = ResponseWrapper::<S::Response>::new(
+    let resp_wrapper = ResponseWrapper::<Resp>::new(
       self.service_mapping,
       rmw_req_id,
       RepresentationIdentifier::CDR_LE,
@@ -179,13 +178,15 @@ where
       .async_write_with_options(resp_wrapper, write_opts)
       .await
       .map(|_| ())
-      .map_err(|e| WriteError::from(e.forget_data())) // lose SampleIdentity result
+      .map_err(|e| WriteError::from(e.forget_data())) // lose SampleIdentity
+                                                      // result
   }
 }
 
-impl<S> Evented for Server<S>
+impl<Req, Resp> Evented for Server<Req, Resp>
 where
-  S: 'static + Service,
+  Req: Message + 'static,
+  Resp: Message + 'static,
 {
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
     self.request_receiver.register(poll, token, interest, opts)

@@ -15,63 +15,56 @@ use crate::{
   message::Message,
   names::Name,
   pubsub::Publisher,
-  service::{request_id::RmwRequestId, AService, Server},
+  service::{request_id::RmwRequestId, Server},
 };
 use super::{
-  ActionTypes, FeedbackMessage, GetResultRequest, GetResultResponse, SendGoalRequest,
-  SendGoalResponse,
+  FeedbackMessage, GetResultRequest, GetResultResponse, SendGoalRequest, SendGoalResponse,
 };
 
 /// ROS 2 Action Server - Synchronous version. Please consider using
 /// `AsyncActionServer`instead.
-pub struct ActionServer<A>
+pub struct ActionServer<G, R, F>
 where
-  A: ActionTypes,
-  A::GoalType: Message + Clone,
-  A::ResultType: Message + Clone,
-  A::FeedbackType: Message,
+  G: Message + Clone,
+  R: Message + Clone,
+  F: Message,
 {
-  pub(crate) my_goal_server: Server<AService<SendGoalRequest<A::GoalType>, SendGoalResponse>>,
+  pub(crate) my_goal_server: Server<SendGoalRequest<G>, SendGoalResponse>,
 
   pub(crate) my_cancel_server:
-    Server<AService<action_msgs::CancelGoalRequest, action_msgs::CancelGoalResponse>>,
+    Server<action_msgs::CancelGoalRequest, action_msgs::CancelGoalResponse>,
 
-  pub(crate) my_result_server: Server<AService<GetResultRequest, GetResultResponse<A::ResultType>>>,
+  pub(crate) my_result_server: Server<GetResultRequest, GetResultResponse<R>>,
 
-  pub(crate) my_feedback_publisher: Publisher<FeedbackMessage<A::FeedbackType>>,
+  pub(crate) my_feedback_publisher: Publisher<FeedbackMessage<F>>,
 
   pub(crate) my_status_publisher: Publisher<action_msgs::GoalStatusArray>,
 
   pub(crate) my_action_name: Name,
 }
 
-impl<A> ActionServer<A>
+impl<G, R, F> ActionServer<G, R, F>
 where
-  A: ActionTypes,
-  A::GoalType: Message + Clone,
-  A::ResultType: Message + Clone,
-  A::FeedbackType: Message,
+  G: Message + Clone,
+  R: Message + Clone,
+  F: Message,
 {
   pub fn name(&self) -> &Name {
     &self.my_action_name
   }
 
-  pub fn goal_server(
-    &mut self,
-  ) -> &mut Server<AService<SendGoalRequest<A::GoalType>, SendGoalResponse>> {
+  pub fn goal_server(&mut self) -> &mut Server<SendGoalRequest<G>, SendGoalResponse> {
     &mut self.my_goal_server
   }
   pub fn cancel_server(
     &mut self,
-  ) -> &mut Server<AService<action_msgs::CancelGoalRequest, action_msgs::CancelGoalResponse>> {
+  ) -> &mut Server<action_msgs::CancelGoalRequest, action_msgs::CancelGoalResponse> {
     &mut self.my_cancel_server
   }
-  pub fn result_server(
-    &mut self,
-  ) -> &mut Server<AService<GetResultRequest, GetResultResponse<A::ResultType>>> {
+  pub fn result_server(&mut self) -> &mut Server<GetResultRequest, GetResultResponse<R>> {
     &mut self.my_result_server
   }
-  pub fn feedback_publisher(&mut self) -> &mut Publisher<FeedbackMessage<A::FeedbackType>> {
+  pub fn feedback_publisher(&mut self) -> &mut Publisher<FeedbackMessage<F>> {
     &mut self.my_feedback_publisher
   }
   pub fn my_status_publisher(&mut self) -> &mut Publisher<action_msgs::GoalStatusArray> {
@@ -79,9 +72,9 @@ where
   }
 
   /// Receive a new goal, if available.
-  pub fn receive_goal(&self) -> ReadResult<Option<(RmwRequestId, SendGoalRequest<A::GoalType>)>>
+  pub fn receive_goal(&self) -> ReadResult<Option<(RmwRequestId, SendGoalRequest<G>)>>
   where
-    <A as ActionTypes>::GoalType: 'static,
+    G: 'static,
   {
     self.my_goal_server.receive_request()
   }
@@ -93,7 +86,7 @@ where
     resp: SendGoalResponse,
   ) -> WriteResult<(), ()>
   where
-    <A as ActionTypes>::GoalType: 'static,
+    G: 'static,
   {
     self.my_goal_server.send_response(req_id, resp)
   }
@@ -116,7 +109,7 @@ where
 
   pub fn receive_result_request(&self) -> ReadResult<Option<(RmwRequestId, GetResultRequest)>>
   where
-    <A as ActionTypes>::ResultType: 'static,
+    R: 'static,
   {
     self.my_result_server.receive_request()
   }
@@ -124,19 +117,15 @@ where
   pub fn send_result(
     &self,
     result_request_id: RmwRequestId,
-    resp: GetResultResponse<A::ResultType>,
+    resp: GetResultResponse<R>,
   ) -> WriteResult<(), ()>
   where
-    <A as ActionTypes>::ResultType: 'static,
+    R: 'static,
   {
     self.my_result_server.send_response(result_request_id, resp)
   }
 
-  pub fn send_feedback(
-    &self,
-    goal_id: GoalId,
-    feedback: A::FeedbackType,
-  ) -> WriteResult<(), FeedbackMessage<A::FeedbackType>> {
+  pub fn send_feedback(&self, goal_id: GoalId, feedback: F) -> WriteResult<(), FeedbackMessage<F>> {
     self
       .my_feedback_publisher
       .publish(FeedbackMessage { goal_id, feedback })
@@ -153,13 +142,10 @@ where
 
 // internal type to keep track of goals executing
 #[derive(Debug, Clone)]
-struct AsyncGoal<A>
-where
-  A: ActionTypes,
-{
+struct AsyncGoal<G> {
   status: GoalStatusEnum,
   accepted_time: Option<builtin_interfaces::Time>,
-  goal: A::GoalType,
+  goal: G,
 }
 
 #[derive(Clone, Copy)]
@@ -265,31 +251,29 @@ impl<T> From<WriteError<T>> for GoalError<T> {
 }
 
 /// ROS 2 Action Server - Asynchronous version.
-pub struct AsyncActionServer<A>
+pub struct AsyncActionServer<G, R, F>
 where
-  A: ActionTypes,
-  A::GoalType: Message + Clone,
-  A::ResultType: Message + Clone,
-  A::FeedbackType: Message,
+  G: Message + Clone,
+  R: Message + Clone,
+  F: Message,
 {
-  actionserver: ActionServer<A>,
+  actionserver: ActionServer<G, R, F>,
   // goals and result_requests are protected by _synchronous_ Mutex (not async)
-  goals: Mutex<BTreeMap<GoalId, AsyncGoal<A>>>,
+  goals: Mutex<BTreeMap<GoalId, AsyncGoal<G>>>,
   finished_goals: Mutex<Vec<GoalId>>,
   result_requests: Mutex<BTreeMap<GoalId, RmwRequestId>>,
 }
 
 const FINISHED_GOAL_BUFFER_SIZE: usize = 2;
 
-impl<A> AsyncActionServer<A>
+impl<G, R, F> AsyncActionServer<G, R, F>
 where
-  A: ActionTypes,
-  A::GoalType: Message + Clone,
-  A::ResultType: Message + Clone,
-  A::FeedbackType: Message,
+  G: Message + Clone,
+  R: Message + Clone,
+  F: Message,
 {
-  pub fn new(actionserver: ActionServer<A>) -> Self {
-    AsyncActionServer::<A> {
+  pub fn new(actionserver: ActionServer<G, R, F>) -> Self {
+    AsyncActionServer::<G, R, F> {
       actionserver,
       goals: Mutex::new(BTreeMap::new()),
       finished_goals: Mutex::new(Vec::with_capacity(FINISHED_GOAL_BUFFER_SIZE)),
@@ -323,7 +307,7 @@ where
     }
   }
 
-  pub fn get_new_goal(&self, handle: NewGoalHandle<A::GoalType>) -> Option<A::GoalType> {
+  pub fn get_new_goal(&self, handle: NewGoalHandle<G>) -> Option<G> {
     self.flush_finisehd_goals();
     self
       .goals
@@ -335,9 +319,9 @@ where
 
   /// Receive a new goal from an action client.
   /// Server should immediately either accept or reject the goal.
-  pub async fn receive_new_goal(&self) -> ReadResult<NewGoalHandle<A::GoalType>>
+  pub async fn receive_new_goal(&self) -> ReadResult<NewGoalHandle<G>>
   where
-    <A as ActionTypes>::GoalType: 'static,
+    G: 'static,
   {
     let (req_id, goal_id) = loop {
       let (req_id, goal_request) = self
@@ -376,10 +360,10 @@ where
   /// `.send_result_response()` even if the goal is canceled or aborted.
   pub async fn accept_goal(
     &self,
-    handle: NewGoalHandle<A::GoalType>,
-  ) -> Result<AcceptedGoalHandle<A::GoalType>, GoalError<()>>
+    handle: NewGoalHandle<G>,
+  ) -> Result<AcceptedGoalHandle<G>, GoalError<()>>
   where
-    A::GoalType: 'static,
+    G: 'static,
   {
     let now = builtin_interfaces::Time::now();
     let result = match self.goals.lock().unwrap().entry(handle.inner.goal_id) {
@@ -426,9 +410,9 @@ where
 
   /// Reject a received goal. Client will be notified of rejection.
   /// Server must not process the goal further.
-  pub async fn reject_goal(&self, handle: NewGoalHandle<A::GoalType>) -> Result<(), GoalError<()>>
+  pub async fn reject_goal(&self, handle: NewGoalHandle<G>) -> Result<(), GoalError<()>>
   where
-    A::GoalType: 'static,
+    G: 'static,
   {
     let result = match self.goals.lock().unwrap().entry(handle.inner.goal_id) {
       Entry::Vacant(_) => Err(GoalError::NoSuchGoal),
@@ -476,8 +460,8 @@ where
   /// Executing goal can publish feedback.
   pub async fn start_executing_goal(
     &self,
-    handle: AcceptedGoalHandle<A::GoalType>,
-  ) -> Result<ExecutingGoalHandle<A::GoalType>, GoalError<()>> {
+    handle: AcceptedGoalHandle<G>,
+  ) -> Result<ExecutingGoalHandle<G>, GoalError<()>> {
     let result = match self.goals.lock().unwrap().entry(handle.inner.goal_id) {
       Entry::Vacant(_) => Err(GoalError::NoSuchGoal),
       Entry::Occupied(o) => match o.get() {
@@ -512,9 +496,9 @@ where
   /// Publish feedback on how the execution is proceeding.
   pub async fn publish_feedback(
     &self,
-    handle: ExecutingGoalHandle<A::GoalType>,
-    feedback: A::FeedbackType,
-  ) -> Result<(), GoalError<FeedbackMessage<A::FeedbackType>>> {
+    handle: ExecutingGoalHandle<G>,
+    feedback: F,
+  ) -> Result<(), GoalError<FeedbackMessage<F>>> {
     match self.goals.lock().unwrap().entry(handle.inner.goal_id) {
       Entry::Vacant(_) => Err(GoalError::NoSuchGoal),
       Entry::Occupied(o) => match o.get() {
@@ -551,12 +535,12 @@ where
   // And where does it say that result is not significant if cancelled or aborted?
   pub async fn send_result_response(
     &self,
-    handle: ExecutingGoalHandle<A::GoalType>,
+    handle: ExecutingGoalHandle<G>,
     result_status: GoalEndStatus,
-    result: A::ResultType,
+    result: R,
   ) -> Result<(), GoalError<()>>
   where
-    A::ResultType: 'static,
+    R: 'static,
   {
     // We translate from interface type to internal type to ensure that
     // the end status is an end status and not e.g. "Accepted".
@@ -651,18 +635,18 @@ where
   /// cannot continue execution.
   pub async fn abort_executing_goal(
     &self,
-    handle: ExecutingGoalHandle<A::GoalType>,
+    handle: ExecutingGoalHandle<G>,
   ) -> Result<(), GoalError<()>> {
     self.abort_goal(handle.inner).await
   }
   pub async fn abort_accepted_goal(
     &self,
-    handle: AcceptedGoalHandle<A::GoalType>,
+    handle: AcceptedGoalHandle<G>,
   ) -> Result<(), GoalError<()>> {
     self.abort_goal(handle.inner).await
   }
 
-  async fn abort_goal(&self, handle: InnerGoalHandle<A::GoalType>) -> Result<(), GoalError<()>> {
+  async fn abort_goal(&self, handle: InnerGoalHandle<G>) -> Result<(), GoalError<()>> {
     let abort_result = match self.goals.lock().unwrap().entry(handle.goal_id) {
       Entry::Vacant(_) => Err(GoalError::NoSuchGoal),
       Entry::Occupied(o) => match o.get() {
@@ -710,7 +694,7 @@ where
       .await?;
 
     #[allow(clippy::type_complexity)] // How would you refactor this type?
-    let goal_filter: Box<dyn FnMut(&(&GoalId, &AsyncGoal<A>)) -> bool> = match goal_info {
+    let goal_filter: Box<dyn FnMut(&(&GoalId, &AsyncGoal<G>)) -> bool> = match goal_info {
       GoalInfo {
         goal_id: GoalId::ZERO,
         stamp: builtin_interfaces::Time::ZERO,

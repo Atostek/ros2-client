@@ -4,8 +4,7 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use ros2_client::{
   qos::{Durability, History, Reliability},
-  AService, Context, Message, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping,
-  ServiceTypeName,
+  Context, Message, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping, ServiceTypeName,
 };
 
 // This is an example / test program.
@@ -39,7 +38,7 @@ fn main() {
   println!(">>> ros2_service node started");
 
   let server = node
-    .create_server::<AService<AddTwoIntsRequest, AddTwoIntsResponse>>(
+    .create_server::<AddTwoIntsRequest, AddTwoIntsResponse>(
       ServiceMapping::Enhanced,
       &Name::new("/", "add_two_ints").unwrap(),
       &ServiceTypeName::new("example_interfaces", "AddTwoInts"),

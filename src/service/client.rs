@@ -9,6 +9,7 @@ use rustdds::{rpc::*, *};
 use crate::{
   error::{CreateResult, ReadError, ReadResult, WriteError, WriteResult},
   gid::Gid,
+  message::Message,
   message_info::MessageInfo,
   node::Node,
   qos::QosProfile,
@@ -16,22 +17,22 @@ use crate::{
 };
 
 /// Client end of a ROS2 Service
-pub struct Client<S>
+pub struct Client<Req, Resp>
 where
-  S: Service,
-  S::Request: Message,
-  S::Response: Message,
+  Req: Message,
+  Resp: Message,
 {
   service_mapping: ServiceMapping,
-  request_sender: DataWriterR<RequestWrapper<S::Request>>,
-  response_receiver: SimpleDataReaderR<ResponseWrapper<S::Response>>,
+  request_sender: DataWriterR<RequestWrapper<Req>>,
+  response_receiver: SimpleDataReaderR<ResponseWrapper<Resp>>,
   sequence_number_gen: atomic::AtomicI64, // used by basic and cyclone
   client_guid: GUID,                      // used by the Cyclone ServiceMapping
 }
 
-impl<S> Client<S>
+impl<Req, Resp> Client<Req, Resp>
 where
-  S: 'static + Service,
+  Req: Message + 'static,
+  Resp: Message + 'static,
 {
   pub(crate) fn new(
     service_mapping: ServiceMapping,
@@ -41,13 +42,14 @@ where
     qos_request: Option<QosProfile>,
     qos_response: Option<QosProfile>,
   ) -> CreateResult<Self> {
-    let request_sender =
-      node.create_datawriter
-      ::<RequestWrapper<S::Request>, ServiceSerializerAdapter<RequestWrapper<S::Request>>>(
-        request_topic, qos_request)?;
+    let request_sender = node
+      .create_datawriter::<RequestWrapper<Req>, ServiceSerializerAdapter<RequestWrapper<Req>>>(
+        request_topic,
+        qos_request,
+      )?;
     let response_receiver =
       node.create_simpledatareader
-      ::<ResponseWrapper<S::Response>, ServiceDeserializerAdapter<ResponseWrapper<S::Response>>>(
+      ::<ResponseWrapper<Resp>, ServiceDeserializerAdapter<ResponseWrapper<Resp>>>(
         response_topic, qos_response)?;
 
     debug!(
@@ -56,7 +58,7 @@ where
       response_topic.name()
     );
     let client_guid = request_sender.guid();
-    Ok(Client::<S> {
+    Ok(Client::<Req, Resp> {
       service_mapping,
       request_sender,
       response_receiver,
@@ -67,13 +69,13 @@ where
 
   /// Send a request to Service Server.
   /// The returned `RmwRequestId` is a token to identify the correct response.
-  pub fn send_request(&self, request: S::Request) -> WriteResult<RmwRequestId, ()> {
+  pub fn send_request(&self, request: Req) -> WriteResult<RmwRequestId, ()> {
     self.increment_sequence_number();
     let gen_rmw_req_id = RmwRequestId {
       writer_gid: Gid::from(self.client_guid),
       sequence_number: i64::from(self.sequence_number()),
     };
-    let req_wrapper = RequestWrapper::<S::Request>::new(
+    let req_wrapper = RequestWrapper::<Req>::new(
       self.service_mapping,
       gen_rmw_req_id,
       RepresentationIdentifier::CDR_LE,
@@ -104,9 +106,9 @@ where
   /// `RmWRequestId` against the one you got when sending request to identify
   /// the correct response. In case you receive someone else's response,
   /// please do receive again.
-  pub fn receive_response(&self) -> ReadResult<Option<(RmwRequestId, S::Response)>> {
+  pub fn receive_response(&self) -> ReadResult<Option<(RmwRequestId, Resp)>> {
     self.response_receiver.drain_read_notifications();
-    let dcc_rw: Option<no_key::DeserializedCacheChange<ResponseWrapper<S::Response>>> =
+    let dcc_rw: Option<no_key::DeserializedCacheChange<ResponseWrapper<Resp>>> =
       self.response_receiver.try_take_one()?;
 
     match dcc_rw {
@@ -122,7 +124,7 @@ where
 
   /// Send a request to Service Server asynchronously.
   /// The returned `RmwRequestId` is a token to identify the correct response.
-  pub async fn async_send_request(&self, request: S::Request) -> WriteResult<RmwRequestId, ()> {
+  pub async fn async_send_request(&self, request: Req) -> WriteResult<RmwRequestId, ()> {
     let gen_rmw_req_id =
       // we do the req_id generation in an async block so that we do not generate
       // multiple sequence numbers if there are multiple polls to this function
@@ -134,7 +136,7 @@ where
         }
       }.await;
 
-    let req_wrapper = RequestWrapper::<S::Request>::new(
+    let req_wrapper = RequestWrapper::<Req>::new(
       self.service_mapping,
       gen_rmw_req_id,
       RepresentationIdentifier::CDR_LE,
@@ -169,7 +171,7 @@ where
   /// Receive a response from Server
   /// The returned Future does not complete until the response has been
   /// received.
-  pub async fn async_receive_response(&self, request_id: RmwRequestId) -> ReadResult<S::Response> {
+  pub async fn async_receive_response(&self, request_id: RmwRequestId) -> ReadResult<Resp> {
     let dcc_stream = self.response_receiver.as_async_stream();
     pin_mut!(dcc_stream);
 
@@ -197,10 +199,7 @@ where
     } // loop
   }
 
-  pub async fn async_call_service(
-    &self,
-    request: S::Request,
-  ) -> Result<S::Response, CallServiceError<()>> {
+  pub async fn async_call_service(&self, request: Req) -> Result<Resp, CallServiceError<()>> {
     let req_id = self.async_send_request(request).await?;
     self
       .async_receive_response(req_id)
@@ -277,9 +276,10 @@ where
   }
 }
 
-impl<S> Evented for Client<S>
+impl<Req, Resp> Evented for Client<Req, Resp>
 where
-  S: 'static + Service,
+  Req: Message + 'static,
+  Resp: Message + 'static,
 {
   fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> io::Result<()> {
     self.response_receiver.register(poll, token, interest, opts)

@@ -6,11 +6,9 @@ use futures::{FutureExt as StdFutureExt, StreamExt, TryFutureExt};
 use smol::{future::FutureExt, pin};
 use serde::{Deserialize, Serialize};
 use ros2_client::{
-  qos::History,
-  service::CallServiceError, AService, Context, Message, Name, Node, NodeName, NodeOptions,
-  QosProfile, ServiceMapping, ServiceTypeName,
+  qos::History, service::CallServiceError, Context, Message, Name, Node, NodeName, NodeOptions,
+  QosProfile, ServiceMapping, ServiceTypeName, WriteError,
 };
-use ros2_client::WriteError;
 
 // Test / demo program of ROS2 services, client side.
 //
@@ -55,7 +53,7 @@ fn main() {
   debug!(">>> ros2_service node started");
 
   let client = node
-    .create_client::<AService<AddTwoIntsRequest, AddTwoIntsResponse>>(
+    .create_client::<AddTwoIntsRequest, AddTwoIntsResponse>(
       ServiceMapping::Enhanced,
       &Name::new("/", "add_two_ints").unwrap(),
       &ServiceTypeName::new("example_interfaces", "AddTwoInts"),

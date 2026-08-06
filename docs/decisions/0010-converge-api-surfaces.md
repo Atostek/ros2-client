@@ -66,10 +66,13 @@ In priority order for unblocking a shared API:
    `Timestamp` / `GUID` in DDS-only helpers.
 4. **Discovery / events / info** — addressed in Phase 2 (`GraphEvent`,
    `DiscoveredTopic`); residual raw escape `discovered_topics_raw()`.
-5. **Escape hatches** — `domain_participant()`, `from_domain_participant()`,
-   crate-root `pub use rustdds`.
-6. **Service plumbing** — `Service` / `AService` / `ServiceMapping` (DDS RPC
-   mapping); Zenoh prefers plain `Req`/`Resp`.
+5. **Escape hatches** — addressed in Phase 5: backend APIs live under
+   `dds::` / `zenoh::`, and RustDDS is re-exported only as `dds::rustdds`.
+6. **Service/action plumbing** — resolved: both backends use free payload
+   generics (`Client<Req, Resp>`, `Server<Req, Resp>`,
+   `ActionClient<G, R, F>`, `ActionServer<G, R, F>`). The historical
+   `Service` / `AService` / `ActionTypes` / `Action` bundles were removed.
+   `ServiceMapping` remains DDS-only RPC configuration.
 
 `Gid` and `ROSTime` are already closer to the desired shape; keep extending that
 pattern.
@@ -138,8 +141,18 @@ pattern.
 | Discovery waits | `wait_for_*`, counts, graph stream — same owned types on both backends | **Done, DDS best-effort** — DDS `Node` gained `wait_for_publisher`/`wait_for_subscription`/`publisher_count`/`subscription_count`/`graph_event_stream`, matching the Zenoh `Node`/`Context` API shape. DDS counts/waits match by (mangled) topic name via `DomainParticipant::discovered_writers`/`discovered_readers` rather than the exact GUID-keyed maps used internally by `Publisher`/`Subscription`; only absolute topic names are recognized (see doc comments on those methods for the caveats). Zenoh `Node` gained `graph_event_stream`/`publisher_count`/`subscription_count` forwarding to `Context`. |
 | Async | Same stream / async method names; internals differ | **Done** — Zenoh `Subscription::async_stream()` added (built from `async_take` in a loop), matching the DDS `Subscription::async_stream()` signature/semantics (a `FusedStream`). |
 | Pub/sub helpers | Same count/wait helpers and portable GID on `Publisher`/`Subscription` | **Done** — Zenoh `Publisher::gid()` now returns the portable [`Gid`](../../src/gid.rs) (was a raw `[u8; 16]`); `Publisher`/`Subscription` gained `get_subscription_count`/`wait_for_subscription` and `get_publisher_count`/`wait_for_publisher` taking `&Node`, mirroring [`src/pubsub.rs`](../../src/pubsub.rs). |
-| Services | Prefer generic `Req`/`Resp` + serde; keep `Service`/`AService` as thin aliases or DDS-only helpers | **Still residual** — DDS keeps `create_client<S: Service>` / `Server<S>`, Zenoh keeps `create_client<Req, Resp>` / `Server<Req, Resp>`. Not required to declare Phase 5 complete. |
+| Services and actions | Use the same free payload generic arity on both backends | **Done (2026-08-06)** — both use `Client<Req, Resp>` / `Server<Req, Resp>` and `ActionClient<G, R, F>` / `ActionServer<G, R, F>`. DDS create APIs take explicit `ServiceTypeName` / `ActionTypeName` plus DDS-only `ServiceMapping` and QoS arguments. Historical bundle traits/descriptors were removed without compatibility aliases. |
 | Dual-backend builds | Entity types namespaced (or equivalent) so both stacks coexist | **Done** — see Phase 5 below. |
+
+Migration from the removed bundle APIs:
+
+```rust
+// Before: create_client::<AService<Request, Response>>(...)
+node.create_client::<Request, Response>(mapping, &name, &service_type, request_qos, response_qos)?;
+
+// Before: create_action_client::<Action<Goal, Result, Feedback>>(...)
+node.create_action_client::<Goal, Result, Feedback>(mapping, &name, &action_type, action_qos)?;
+```
 
 **Phase 5 — Escape hatches and re-exports** — **done on branch `zenoh`
 (2026-08-06)**
@@ -151,7 +164,8 @@ pattern.
 - Crate-root entity re-exports (`ros2_client::Context`, `Node`, …) now apply
   only when *exactly one* backend feature is enabled
   (`#[cfg(all(feature = "dds", not(feature = "zenoh")))]` and the mirror for
-  `zenoh`), preserving the existing single-backend surface unchanged.
+  `zenoh`), preserving convenient single-backend imports while allowing the
+  intentional breaking generic convergence described above.
 - `pub use rustdds` moved from the crate root to `dds::rustdds` (still the
   whole RustDDS crate, same version `ros2-client` uses internally).
 - Escape hatches are documented on their owning module: `Context::
@@ -180,7 +194,8 @@ pattern.
 1. Prefer doing **Phase 1 on the DDS path** (even before treating Zenoh as
    non-experimental) so both backends share QoS shapes.
 2. Ship a short migration guide: `QosPolicyBuilder` → `QosProfile`; `Timestamp` →
-   `ROSTime`; `GUID` → `Gid`; discovery events → owned graph types.
+   `ROSTime`; `GUID` → `Gid`; discovery events → owned graph types; bundled
+   service/action descriptors → direct payload generics.
 3. Bump major (or a clear 0.x minor) with release notes; do not pretend default
    features keep every dependent compiling if signatures change.
 4. Do **not** rely on docs alone (“almost the same API”) while types diverge.

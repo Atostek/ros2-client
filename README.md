@@ -163,11 +163,33 @@ On branch `zenoh`:
   the Zenoh backend, taking `&Node` — mirroring the DDS helpers in
   [`src/pubsub.rs`](src/pubsub.rs).
 
-**Residual divergence:** service/action generics are still not unified — DDS
-keeps `create_client<S: Service>` / `Server<S>` (`Service`/`AService` traits),
-Zenoh keeps plain `create_client<Req, Resp>` / `Server<Req, Resp>`. This was an
-explicit non-goal for Phases 4–5; a shared service vocabulary would need
-DDS-side churn not otherwise justified yet.
+Service and action entity generics are now aligned across DDS and Zenoh:
+`Client<Req, Resp>`, `Server<Req, Resp>`, `ActionClient<G, R, F>`, and
+`ActionServer<G, R, F>`. The historical `Service`, `AService`, `ActionTypes`,
+and `Action` bundle APIs were removed. Type names are supplied explicitly at
+creation:
+
+```rust
+node.create_client::<MyRequest, MyResponse>(
+  ServiceMapping::Enhanced, // DDS-only
+  &service_name,
+  &ServiceTypeName::new("my_package", "MyService"),
+  request_qos,
+  response_qos,
+)?;
+
+node.create_action_client::<MyGoal, MyResult, MyFeedback>(
+  ServiceMapping::Enhanced, // DDS-only
+  &action_name,
+  &ActionTypeName::new("my_package", "MyAction"),
+  action_qos,
+)?;
+```
+
+Migration is direct: replace `AService<Req, Resp>` generic arguments with
+`Req, Resp`, and replace an `Action<G, R, F>` descriptor argument with the
+three payload type arguments `G, R, F`. Zenoh uses the same generic arity,
+without DDS-only `ServiceMapping` or DDS QoS arguments.
 
 See [ADR-0010](docs/decisions/0010-converge-api-surfaces.md).
 

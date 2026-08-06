@@ -1,10 +1,6 @@
 //! Implementation of ROS 2 [Services](https://docs.ros.org/en/rolling/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Services/Understanding-ROS2-Services.html)
-use std::marker::PhantomData;
-
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
-
-use crate::message::Message;
 
 pub mod client;
 pub mod request_id;
@@ -15,68 +11,6 @@ pub use request_id::*;
 use wrappers::*;
 pub use server::*;
 pub use client::*;
-
-// --------------------------------------------
-// --------------------------------------------
-
-/// Service trait pairs the Request and Response types together.
-/// Additionally, it ensures that Response and Request are Messages
-/// (Serializable), and we have a means to name the types.
-pub trait Service {
-  type Request: Message;
-  type Response: Message;
-  fn request_type_name(&self) -> &str;
-  fn response_type_name(&self) -> &str;
-}
-
-// --------------------------------------------
-// --------------------------------------------
-
-/// AService is a means of constructing a descriptor for a Service on the fly.
-/// This allows generic code to construct a Service from the types of
-/// request and response.
-pub struct AService<Q, S>
-where
-  Q: Message,
-  S: Message,
-{
-  q: PhantomData<Q>,
-  s: PhantomData<S>,
-  req_type_name: String,
-  resp_type_name: String,
-}
-
-impl<Q, S> AService<Q, S>
-where
-  Q: Message,
-  S: Message,
-{
-  pub fn new(req_type_name: String, resp_type_name: String) -> Self {
-    Self {
-      req_type_name,
-      resp_type_name,
-      q: PhantomData,
-      s: PhantomData,
-    }
-  }
-}
-
-impl<Q, S> Service for AService<Q, S>
-where
-  Q: Message,
-  S: Message,
-{
-  type Request = Q;
-  type Response = S;
-
-  fn request_type_name(&self) -> &str {
-    &self.req_type_name
-  }
-
-  fn response_type_name(&self) -> &str {
-    &self.resp_type_name
-  }
-}
 
 // --------------------------------------------
 // --------------------------------------------

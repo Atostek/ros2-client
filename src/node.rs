@@ -20,13 +20,14 @@ use rustdds::*;
 
 use crate::{
   action::*,
-  builtin_interfaces,
+  action_msgs, builtin_interfaces,
   context::{Context, DEFAULT_SUBSCRIPTION_QOS},
   entities_info::{NodeEntitiesInfo, ParticipantEntitiesInfo},
   error::{CreateError, CreateResult},
   gid::Gid,
   graph::{EntityKind, GraphEntity, GraphEvent},
   log::Log,
+  message::Message,
   names::*,
   node_options::{NodeOptions, ParameterFunc},
   parameters::*,
@@ -35,7 +36,7 @@ use crate::{
   rcl_interfaces,
   ros_time::ROSTime,
   rosout::{NodeLoggingHandle, RosoutRaw},
-  service::{Client, Server, Service, ServiceMapping},
+  service::{Client, Server, ServiceMapping},
 };
 
 // ----------------------------------------------------------------------------------------------------
@@ -92,12 +93,18 @@ fn ros_topic_dds_name(topic: &str) -> String {
 }
 
 struct ParameterServers {
-  get_parameters_server: Server<rcl_interfaces::GetParametersService>,
-  get_parameter_types_server: Server<rcl_interfaces::GetParameterTypesService>,
-  list_parameters_server: Server<rcl_interfaces::ListParametersService>,
-  set_parameters_server: Server<rcl_interfaces::SetParametersService>,
-  set_parameters_atomically_server: Server<rcl_interfaces::SetParametersAtomicallyService>,
-  describe_parameters_server: Server<rcl_interfaces::DescribeParametersService>,
+  get_parameters_server:
+    Server<rcl_interfaces::GetParametersRequest, rcl_interfaces::GetParametersResponse>,
+  get_parameter_types_server:
+    Server<rcl_interfaces::GetParameterTypesRequest, rcl_interfaces::GetParameterTypesResponse>,
+  list_parameters_server:
+    Server<rcl_interfaces::ListParametersRequest, rcl_interfaces::ListParametersResponse>,
+  set_parameters_server:
+    Server<rcl_interfaces::SetParametersRequest, rcl_interfaces::SetParametersResponse>,
+  set_parameters_atomically_server:
+    Server<rcl_interfaces::SetParametersRequest, rcl_interfaces::SetParametersResponse>,
+  describe_parameters_server:
+    Server<rcl_interfaces::DescribeParametersRequest, rcl_interfaces::DescribeParametersResponse>,
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -1383,17 +1390,17 @@ impl Node {
   /// * `service_mapping` - ServiceMapping to be used
   /// * `service_name` -
   /// * `qos`-
-  pub fn create_client<S>(
+  pub fn create_client<Req, Resp>(
     &mut self,
     service_mapping: ServiceMapping,
     service_name: &Name,
     service_type_name: &ServiceTypeName,
     request_qos: QosProfile,
     response_qos: QosProfile,
-  ) -> CreateResult<Client<S>>
+  ) -> CreateResult<Client<Req, Resp>>
   where
-    S: Service + 'static,
-    S::Request: Clone,
+    Req: Message + Clone + 'static,
+    Resp: Message + 'static,
   {
     // Add rq/ and rr/ prefixes as documented in
     // https://design.ros2.org/articles/topic_and_service_names.html
@@ -1418,7 +1425,7 @@ impl Node {
       TopicKind::NoKey,
     )?;
 
-    let c = Client::<S>::new(
+    let c = Client::<Req, Resp>::new(
       service_mapping,
       self,
       &rq_topic,
@@ -1438,17 +1445,17 @@ impl Node {
   ///   [`Self::create_client`].
   /// * `service_name` -
   /// * `qos`-
-  pub fn create_server<S>(
+  pub fn create_server<Req, Resp>(
     &mut self,
     service_mapping: ServiceMapping,
     service_name: &Name,
     service_type_name: &ServiceTypeName,
     request_qos: QosProfile,
     response_qos: QosProfile,
-  ) -> CreateResult<Server<S>>
+  ) -> CreateResult<Server<Req, Resp>>
   where
-    S: Service + 'static,
-    S::Request: Clone,
+    Req: Message + Clone + 'static,
+    Resp: Message + 'static,
   {
     // let rq_name = Self::check_name_and_add_prefix("rq/",
     // &(service_name.to_owned() + "Request"))?; let rs_name =
@@ -1472,7 +1479,7 @@ impl Node {
       TopicKind::NoKey,
     )?;
 
-    let s = Server::<S>::new(
+    let s = Server::<Req, Resp>::new(
       service_mapping,
       self,
       &rq_topic,
@@ -1484,15 +1491,17 @@ impl Node {
     Ok(s)
   }
 
-  pub fn create_action_client<A>(
+  pub fn create_action_client<G, R, F>(
     &mut self,
     service_mapping: ServiceMapping,
     action_name: &Name,
     action_type_name: &ActionTypeName,
     action_qos: ActionClientQosPolicies,
-  ) -> CreateResult<ActionClient<A>>
+  ) -> CreateResult<ActionClient<G, R, F>>
   where
-    A: ActionTypes + 'static,
+    G: Message + Clone + 'static,
+    R: Message + Clone + 'static,
+    F: Message + 'static,
   {
     // action name is e.g. "/turtle1/rotate_absolute"
     // action type name is e.g. "turtlesim/action/RotateAbsolute"
@@ -1500,7 +1509,7 @@ impl Node {
 
     //let goal_service_name = action_name.to_owned() + "/_action/send_goal";
     let goal_service_type = action_type_name.dds_action_service("_SendGoal");
-    let my_goal_client = self.create_client(
+    let my_goal_client = self.create_client::<SendGoalRequest<G>, SendGoalResponse>(
       service_mapping,
       //&goal_service_name,
       &services_base_name.push("send_goal"),
@@ -1511,18 +1520,19 @@ impl Node {
 
     //let cancel_service_name = action_name.to_owned() + "/_action/cancel_goal";
     let cancel_goal_type = ServiceTypeName::new("action_msgs", "CancelGoal");
-    let my_cancel_client = self.create_client(
-      service_mapping,
-      //&cancel_service_name,
-      &services_base_name.push("cancel_goal"),
-      &cancel_goal_type,
-      action_qos.cancel_service.clone(),
-      action_qos.cancel_service,
-    )?;
+    let my_cancel_client = self
+      .create_client::<action_msgs::CancelGoalRequest, action_msgs::CancelGoalResponse>(
+        service_mapping,
+        //&cancel_service_name,
+        &services_base_name.push("cancel_goal"),
+        &cancel_goal_type,
+        action_qos.cancel_service.clone(),
+        action_qos.cancel_service,
+      )?;
 
     //let result_service_name = action_name.to_owned() + "/_action/get_result";
     let result_service_type = action_type_name.dds_action_service("_GetResult");
-    let my_result_client = self.create_client(
+    let my_result_client = self.create_client::<GetResultRequest, GetResultResponse<R>>(
       service_mapping,
       //&result_service_name,
       &services_base_name.push("get_result"),
@@ -1561,21 +1571,23 @@ impl Node {
     })
   }
 
-  pub fn create_action_server<A>(
+  pub fn create_action_server<G, R, F>(
     &mut self,
     service_mapping: ServiceMapping,
     action_name: &Name,
     action_type_name: &ActionTypeName,
     action_qos: ActionServerQosPolicies,
-  ) -> CreateResult<ActionServer<A>>
+  ) -> CreateResult<ActionServer<G, R, F>>
   where
-    A: ActionTypes + 'static,
+    G: Message + Clone + 'static,
+    R: Message + Clone + 'static,
+    F: Message + 'static,
   {
     let services_base_name = action_name.push("_action");
 
     //let goal_service_name = action_name.to_owned() + "/_action/send_goal";
     let goal_service_type = action_type_name.dds_action_service("_SendGoal");
-    let my_goal_server = self.create_server(
+    let my_goal_server = self.create_server::<SendGoalRequest<G>, SendGoalResponse>(
       service_mapping,
       //&goal_service_name,
       &services_base_name.push("send_goal"),
@@ -1586,18 +1598,19 @@ impl Node {
 
     //let cancel_service_name = action_name.to_owned() + "/_action/cancel_goal";
     let cancel_service_type = ServiceTypeName::new("action_msgs", "CancelGoal");
-    let my_cancel_server = self.create_server(
-      service_mapping,
-      //&cancel_service_name,
-      &services_base_name.push("cancel_goal"),
-      &cancel_service_type,
-      action_qos.cancel_service.clone(),
-      action_qos.cancel_service,
-    )?;
+    let my_cancel_server = self
+      .create_server::<action_msgs::CancelGoalRequest, action_msgs::CancelGoalResponse>(
+        service_mapping,
+        //&cancel_service_name,
+        &services_base_name.push("cancel_goal"),
+        &cancel_service_type,
+        action_qos.cancel_service.clone(),
+        action_qos.cancel_service,
+      )?;
 
     //let result_service_name = action_name.to_owned() + "/_action/get_result";
     let result_service_type = action_type_name.dds_action_service("_GetResult");
-    let my_result_server = self.create_server(
+    let my_result_server = self.create_server::<GetResultRequest, GetResultResponse<R>>(
       service_mapping,
       //&result_service_name,
       &services_base_name.push("get_result"),

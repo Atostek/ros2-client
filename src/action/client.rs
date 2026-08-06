@@ -14,61 +14,56 @@ use crate::{
   message::Message,
   names::Name,
   pubsub::Subscription,
-  service::{request_id::RmwRequestId, AService, CallServiceError, Client},
+  service::{request_id::RmwRequestId, CallServiceError, Client},
   unique_identifier_msgs,
 };
 use super::{
-  ActionTypes, FeedbackMessage, GetResultRequest, GetResultResponse, SendGoalRequest,
-  SendGoalResponse,
+  FeedbackMessage, GetResultRequest, GetResultResponse, SendGoalRequest, SendGoalResponse,
 };
 
 /// A client for ROS 2 Actions. Supports both sync and async operation.
-pub struct ActionClient<A>
+pub struct ActionClient<G, R, F>
 where
-  A: ActionTypes,
-  A::GoalType: Message + Clone,
-  A::ResultType: Message + Clone,
-  A::FeedbackType: Message,
+  G: Message + Clone,
+  R: Message + Clone,
+  F: Message,
 {
-  pub(crate) my_goal_client: Client<AService<SendGoalRequest<A::GoalType>, SendGoalResponse>>,
+  pub(crate) my_goal_client: Client<SendGoalRequest<G>, SendGoalResponse>,
 
   pub(crate) my_cancel_client:
-    Client<AService<action_msgs::CancelGoalRequest, action_msgs::CancelGoalResponse>>,
+    Client<action_msgs::CancelGoalRequest, action_msgs::CancelGoalResponse>,
 
-  pub(crate) my_result_client: Client<AService<GetResultRequest, GetResultResponse<A::ResultType>>>,
+  pub(crate) my_result_client: Client<GetResultRequest, GetResultResponse<R>>,
 
-  pub(crate) my_feedback_subscription: Subscription<FeedbackMessage<A::FeedbackType>>,
+  pub(crate) my_feedback_subscription: Subscription<FeedbackMessage<F>>,
 
   pub(crate) my_status_subscription: Subscription<action_msgs::GoalStatusArray>,
 
   pub(crate) my_action_name: Name,
 }
 
-impl<A> ActionClient<A>
+impl<G, R, F> ActionClient<G, R, F>
 where
-  A: ActionTypes,
-  A::GoalType: Message + Clone,
-  A::ResultType: Message + Clone,
-  A::FeedbackType: Message,
+  G: Message + Clone,
+  R: Message + Clone,
+  F: Message,
 {
   pub fn name(&self) -> &Name {
     &self.my_action_name
   }
 
-  pub fn goal_client(&self) -> &Client<AService<SendGoalRequest<A::GoalType>, SendGoalResponse>> {
+  pub fn goal_client(&self) -> &Client<SendGoalRequest<G>, SendGoalResponse> {
     &self.my_goal_client
   }
   pub fn cancel_client(
     &self,
-  ) -> &Client<AService<action_msgs::CancelGoalRequest, action_msgs::CancelGoalResponse>> {
+  ) -> &Client<action_msgs::CancelGoalRequest, action_msgs::CancelGoalResponse> {
     &self.my_cancel_client
   }
-  pub fn result_client(
-    &self,
-  ) -> &Client<AService<GetResultRequest, GetResultResponse<A::ResultType>>> {
+  pub fn result_client(&self) -> &Client<GetResultRequest, GetResultResponse<R>> {
     &self.my_result_client
   }
-  pub fn feedback_subscription(&self) -> &Subscription<FeedbackMessage<A::FeedbackType>> {
+  pub fn feedback_subscription(&self) -> &Subscription<FeedbackMessage<F>> {
     &self.my_feedback_subscription
   }
   pub fn status_subscription(&self) -> &Subscription<action_msgs::GoalStatusArray> {
@@ -78,9 +73,9 @@ where
   /// Returns and id of the Request and id for the Goal.
   /// Request id can be used to recognize correct response from Action Server.
   /// Goal id is later used to communicate Goal status and result.
-  pub fn send_goal(&self, goal: A::GoalType) -> WriteResult<(RmwRequestId, GoalId), ()>
+  pub fn send_goal(&self, goal: G) -> WriteResult<(RmwRequestId, GoalId), ()>
   where
-    <A as ActionTypes>::GoalType: 'static,
+    G: 'static,
   {
     let goal_id = unique_identifier_msgs::UUID::new_random();
     self
@@ -93,7 +88,7 @@ where
   /// not yet available
   pub fn receive_goal_response(&self, req_id: RmwRequestId) -> ReadResult<Option<SendGoalResponse>>
   where
-    <A as ActionTypes>::GoalType: 'static,
+    G: 'static,
   {
     loop {
       match self.my_goal_client.receive_response() {
@@ -118,10 +113,10 @@ where
 
   pub async fn async_send_goal(
     &self,
-    goal: A::GoalType,
+    goal: G,
   ) -> Result<(GoalId, SendGoalResponse), CallServiceError<()>>
   where
-    <A as ActionTypes>::GoalType: 'static,
+    G: 'static,
   {
     let goal_id = unique_identifier_msgs::UUID::new_random();
     let send_goal_response = self
@@ -197,7 +192,7 @@ where
 
   pub fn request_result(&self, goal_id: GoalId) -> WriteResult<RmwRequestId, ()>
   where
-    <A as ActionTypes>::ResultType: 'static,
+    R: 'static,
   {
     self
       .my_result_client
@@ -207,9 +202,9 @@ where
   pub fn receive_result(
     &self,
     result_request_id: RmwRequestId,
-  ) -> ReadResult<Option<(GoalStatusEnum, A::ResultType)>>
+  ) -> ReadResult<Option<(GoalStatusEnum, R)>>
   where
-    <A as ActionTypes>::ResultType: 'static,
+    R: 'static,
   {
     loop {
       match self.my_result_client.receive_response() {
@@ -232,9 +227,9 @@ where
   pub async fn async_request_result(
     &self,
     goal_id: GoalId,
-  ) -> Result<(GoalStatusEnum, A::ResultType), CallServiceError<()>>
+  ) -> Result<(GoalStatusEnum, R), CallServiceError<()>>
   where
-    <A as ActionTypes>::ResultType: 'static,
+    R: 'static,
   {
     let GetResultResponse { status, result } = self
       .my_result_client
@@ -243,9 +238,9 @@ where
     Ok((status, result))
   }
 
-  pub fn receive_feedback(&self, goal_id: GoalId) -> ReadResult<Option<A::FeedbackType>>
+  pub fn receive_feedback(&self, goal_id: GoalId) -> ReadResult<Option<F>>
   where
-    <A as ActionTypes>::FeedbackType: 'static,
+    F: 'static,
   {
     loop {
       match self.my_feedback_subscription.take() {
@@ -266,12 +261,9 @@ where
   }
 
   /// Receive asynchronous feedback stream of goal progress.
-  pub fn feedback_stream(
-    &self,
-    goal_id: GoalId,
-  ) -> impl FusedStream<Item = ReadResult<A::FeedbackType>> + '_
+  pub fn feedback_stream(&self, goal_id: GoalId) -> impl FusedStream<Item = ReadResult<F>> + '_
   where
-    <A as ActionTypes>::FeedbackType: 'static,
+    F: 'static,
   {
     let expected_goal_id = goal_id; // rename
     self

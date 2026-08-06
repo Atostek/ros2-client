@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{service::Service, Message};
+use crate::Message;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarkerRequest {

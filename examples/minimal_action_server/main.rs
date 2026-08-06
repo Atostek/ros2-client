@@ -5,7 +5,9 @@ use log::{debug, error, info, warn};
 use futures::{stream::StreamExt, FutureExt as StdFutureExt};
 use smol::{future::FutureExt, pin};
 use ros2_client::{
-  action, action::GoalEndStatus, qos::{Durability, History},
+  action,
+  action::GoalEndStatus,
+  qos::{Durability, History},
   ActionTypeName, Context, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping,
 };
 
@@ -29,8 +31,6 @@ use ros2_client::{
 // just as well use e.g.
 // struct FibonacciActionGoal{ goal: i32 }
 // or any other tuple/struct that contains only an i32.
-type FibonacciAction = action::Action<i32, Vec<i32>, Vec<i32>>;
-
 fn main() {
   pretty_env_logger::init();
   // Use e.g.
@@ -76,7 +76,7 @@ fn main() {
 
   let fibonacci_action_server = action::AsyncActionServer::new(
     node
-      .create_action_server::<FibonacciAction>(
+      .create_action_server::<i32, Vec<i32>, Vec<i32>>(
         ServiceMapping::Enhanced,
         &Name::new("/", "fibonacci").unwrap(),
         &ActionTypeName::new("example_interfaces", "Fibonacci"),

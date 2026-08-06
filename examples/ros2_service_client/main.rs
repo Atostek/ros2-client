@@ -3,8 +3,7 @@ use std::time::{Duration, Instant};
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use serde::{Deserialize, Serialize};
 use ros2_client::{
-  qos::History,
-  AService, Context, Message, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping,
+  qos::History, Context, Message, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping,
   ServiceTypeName,
 };
 
@@ -42,7 +41,7 @@ fn main() {
   println!(">>> ros2_service node started");
 
   let client = node
-    .create_client::<AService<AddTwoIntsRequest, AddTwoIntsResponse>>(
+    .create_client::<AddTwoIntsRequest, AddTwoIntsResponse>(
       ServiceMapping::Enhanced,
       &Name::new("/", "add_two_ints").unwrap(),
       &ServiceTypeName::new("example_interfaces", "AddTwoInts"),

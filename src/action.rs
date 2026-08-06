@@ -1,7 +1,4 @@
-use std::marker::PhantomData;
-
 use serde::{Deserialize, Serialize};
-
 pub use action_msgs::{CancelGoalRequest, CancelGoalResponse, GoalId, GoalInfo, GoalStatusEnum};
 
 use crate::{action_msgs, builtin_interfaces, message::Message};
@@ -16,69 +13,6 @@ pub use server::{
   AcceptedGoalHandle, ActionServer, AsyncActionServer, CancelHandle, ExecutingGoalHandle,
   GoalEndStatus, GoalError, NewGoalHandle,
 };
-
-/// A trait to define an Action type
-pub trait ActionTypes {
-  type GoalType: Message + Clone; // Used by client to set a goal for the server
-  type ResultType: Message + Clone; // Used by server to report result when action ends
-  type FeedbackType: Message; // Used by server to report progress during action execution
-
-  fn goal_type_name(&self) -> &str;
-  fn result_type_name(&self) -> &str;
-  fn feedback_type_name(&self) -> &str;
-}
-
-/// This is used to construct an ActionType implementation from pre-existing
-/// component types.
-pub struct Action<G, R, F> {
-  g: PhantomData<G>,
-  r: PhantomData<R>,
-  f: PhantomData<F>,
-  goal_typename: String,
-  result_typename: String,
-  feedback_typename: String,
-}
-
-impl<G, R, F> Action<G, R, F>
-where
-  G: Message + Clone,
-  R: Message + Clone,
-  F: Message,
-{
-  pub fn new(goal_typename: String, result_typename: String, feedback_typename: String) -> Self {
-    Self {
-      goal_typename,
-      result_typename,
-      feedback_typename,
-      g: PhantomData,
-      r: PhantomData,
-      f: PhantomData,
-    }
-  }
-}
-
-impl<G, R, F> ActionTypes for Action<G, R, F>
-where
-  G: Message + Clone,
-  R: Message + Clone,
-  F: Message,
-{
-  type GoalType = G;
-  type ResultType = R;
-  type FeedbackType = F;
-
-  fn goal_type_name(&self) -> &str {
-    &self.goal_typename
-  }
-
-  fn result_type_name(&self) -> &str {
-    &self.result_typename
-  }
-
-  fn feedback_type_name(&self) -> &str {
-    &self.feedback_typename
-  }
-}
 
 //TODO: Make fields private, add constructor and accessors.
 

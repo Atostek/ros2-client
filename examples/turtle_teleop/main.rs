@@ -8,8 +8,8 @@ use ros2_client::{
   qos::{Durability, History, Liveliness, Reliability},
   ros2, rosout,
   service::CallServiceError,
-  AService, Action, ActionTypeName, Client, Context, Message, MessageTypeName, Name, Node,
-  NodeName, NodeOptions, Publisher, QosProfile, ServiceMapping, ServiceTypeName, Subscription,
+  ActionTypeName, Client, Context, Message, MessageTypeName, Name, Node, NodeName, NodeOptions,
+  Publisher, QosProfile, ServiceMapping, ServiceTypeName, Subscription,
 };
 use serde::{Deserialize, Serialize};
 use smol::{channel, pin, LocalExecutor};
@@ -176,11 +176,12 @@ struct Requester {
   messages_sender: channel::Sender<String>,
   turtle_cmd_vel_writer: Publisher<Twist>,
   turtle_cmd_vel_writer2: Publisher<Twist>,
-  reset_client: Client<AService<EmptyMessage, EmptyMessage>>,
-  set_pen_client: Client<AService<PenRequest, ()>>,
-  spawn_client: Client<SpawnService>,
-  kill_client: Client<KillService>,
-  rotate_action_client: ActionClient<RotateAbsoluteAction>,
+  reset_client: Client<EmptyMessage, EmptyMessage>,
+  set_pen_client: Client<PenRequest, ()>,
+  spawn_client: Client<SpawnRequest, SpawnResponse>,
+  kill_client: Client<KillRequest, EmptyMessage>,
+  rotate_action_client:
+    ActionClient<RotateAbsoluteGoal, RotateAbsoluteResult, RotateAbsoluteFeedback>,
   cancel_rotate: Cell<Option<oneshot::Sender<()>>>,
   turtle_id: Cell<i32>,
 }
@@ -225,7 +226,7 @@ impl Requester {
     // * create_client basic version is untested.
 
     let reset_client = node
-      .create_client::<AService<EmptyMessage, EmptyMessage>>(
+      .create_client::<EmptyMessage, EmptyMessage>(
         ServiceMapping::Enhanced,
         &Name::new("/", "reset").unwrap(),
         &ServiceTypeName::new("std_srvs", "Empty"),
@@ -238,7 +239,7 @@ impl Requester {
 
     // from https://docs.ros2.org/foxy/api/turtlesim/srv/SetPen.html
     let set_pen_client = node
-      .create_client::<AService<PenRequest, ()>>(
+      .create_client::<PenRequest, ()>(
         ServiceMapping::Enhanced,
         &Name::new("/turtle1", "set_pen").unwrap(),
         &ServiceTypeName::new("turtlesim", "SetPen"),
@@ -250,7 +251,7 @@ impl Requester {
     // third client
     let spawn_srv_type = ServiceTypeName::new("turtlesim", "Spawn");
     let spawn_client = node
-      .create_client::<SpawnService>(
+      .create_client::<SpawnRequest, SpawnResponse>(
         ServiceMapping::Enhanced,
         &Name::new("/", "spawn").unwrap(),
         &spawn_srv_type,
@@ -262,7 +263,7 @@ impl Requester {
     // kill service client
     let kill_srv_type = ServiceTypeName::new("turtlesim", "Kill");
     let kill_client = node
-      .create_client::<KillService>(
+      .create_client::<KillRequest, EmptyMessage>(
         ServiceMapping::Enhanced,
         &Name::new("/", "kill").unwrap(),
         &kill_srv_type,
@@ -282,7 +283,7 @@ impl Requester {
     };
 
     let rotate_action_client = node
-      .create_action_client::<RotateAbsoluteAction>(
+      .create_action_client::<RotateAbsoluteGoal, RotateAbsoluteResult, RotateAbsoluteFeedback>(
         ServiceMapping::Enhanced,
         &Name::new("/turtle1", "rotate_absolute").unwrap(),
         &ActionTypeName::new("turtlesim", "RotateAbsolute"),
@@ -546,16 +547,12 @@ pub struct SpawnResponse {
 }
 impl Message for SpawnResponse {}
 
-type SpawnService = AService<SpawnRequest, SpawnResponse>;
-
 // from https://docs.ros2.org/foxy/api/turtlesim/srv/Spawn.html
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KillRequest {
   pub name: String,
 }
 impl Message for KillRequest {}
-
-type KillService = AService<KillRequest, EmptyMessage>;
 
 // https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Actions/Understanding-ROS2-Actions.html
 //
@@ -582,9 +579,6 @@ struct RotateAbsoluteFeedback {
   remaining: f32,
 }
 impl Message for RotateAbsoluteFeedback {}
-
-type RotateAbsoluteAction =
-  Action<RotateAbsoluteGoal, RotateAbsoluteResult, RotateAbsoluteFeedback>;
 
 #[derive(Debug)]
 struct DisplayCallServiceError<T>(CallServiceError<T>);

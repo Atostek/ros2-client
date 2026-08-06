@@ -224,9 +224,11 @@ Enum with three variants selecting the RPC-over-DDS wire mapping:
 - `Cyclone` — CycloneDDS-specific, reverse-engineered. Payload header `CycloneHeader{ guid_second_half: [u8;8], sequence_number_high: i32, sequence_number_low: u32 }` (`src/service/wrappers.rs:293-313`) — only the **last 8 bytes** of the client GUID travel in the header; the other 8 bytes are reconstructed from the DDS `writer_guid` of the received sample.
 
 ### Types & public API
-- `Service` trait pairs `Request`/`Response` (`: Message`) with type-name accessors (`src/service/mod.rs:25`). `AService<Q,S>` is a runtime constructor (`:38`).
-- `Client<S>` (`src/service/client.rs:16`): `send_request`/`async_send_request` -> `RmwRequestId`; `receive_response`/`async_receive_response(req_id)`; `async_call_service`; `wait_for_service`.
-- `Server<S>` (`src/service/server.rs:18`): `receive_request`/`async_receive_request`/`receive_request_stream` -> `(RmwRequestId, Request)`; `send_response`/`async_send_response(rmw_req_id, Response)`.
+- `Client<Req, Resp>` (`src/service/client.rs`): `send_request`/`async_send_request` -> `RmwRequestId`; `receive_response`/`async_receive_response(req_id)`; `async_call_service`; `wait_for_service`.
+- `Server<Req, Resp>` (`src/service/server.rs`): `receive_request`/`async_receive_request`/`receive_request_stream` -> `(RmwRequestId, Req)`; `send_response`/`async_send_response(rmw_req_id, Resp)`.
+- Request and response DDS type names are supplied explicitly with
+  `ServiceTypeName` to `Node::create_client` / `create_server`; the former
+  `Service` and `AService` bundle APIs no longer exist.
 
 ### Topic naming for services
 `create_client`/`create_server` (`src/node.rs:1315,1367`) each create two DDS
@@ -306,15 +308,15 @@ Concrete expected DDS strings are enumerated in comments at
 - `GoalId` is a `unique_identifier_msgs::UUID`, generated with `UUID::new_random()` (`src/action/client.rs:84,125`) — **application-level correlation**, independent of DDS GUIDs.
 
 ### Client (`src/action/client.rs`)
-Wraps three `Client<AService<...>>` and two `Subscription<...>`
-(`src/action/client.rs:32-44`). `send_goal` sends a random `GoalId`; correlation
+`ActionClient<G, R, F>` wraps three direct `Client<Req, Resp>` entities and two
+`Subscription<...>` entities. `send_goal` sends a random `GoalId`; correlation
 of goal responses uses the **service** `RmwRequestId`, while feedback/status/result
 are correlated by the application-level `GoalId` (filtering streams by
 `goal_id`, `src/action/client.rs:245-335`).
 
 ### Server (`src/action/server.rs`)
-`ActionServer` (sync) wraps three `Server<...>` + two `Publisher<...>`.
-`AsyncActionServer` (`src/action/server.rs:268`) adds a goal state machine
+`ActionServer<G, R, F>` (sync) wraps three `Server<Req, Resp>` entities plus two
+`Publisher<...>` entities. `AsyncActionServer<G, R, F>` adds a goal state machine
 (`GoalStatusEnum` transitions Unknown->Accepted->Executing->Succeeded/Aborted/Canceled)
 in synchronous `Mutex<BTreeMap<GoalId, AsyncGoal>>`, buffering result requests by
 `GoalId` until the goal finishes (`src/action/server.rs:552-597`). Handle types

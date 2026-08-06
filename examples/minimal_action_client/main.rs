@@ -5,10 +5,10 @@ use log::{debug, error, info, warn};
 use futures::{pin_mut, FutureExt as StdFutureExt, StreamExt};
 use smol::{future::FutureExt, pin};
 use ros2_client::{
-  action, action_msgs, qos::{Durability, History},
-  ActionTypeName, Context, Name, NodeName, NodeOptions, QosProfile, ServiceMapping,
+  action, action_msgs,
+  qos::{Durability, History},
+  ActionTypeName, Context, Name, NodeName, NodeOptions, QosProfile, ServiceMapping, WriteError,
 };
-use ros2_client::WriteError;
 
 // Test / demo program of ROS2 Action, client side.
 //
@@ -42,8 +42,6 @@ use ros2_client::WriteError;
 // just as well use e.g.
 // struct FibonacciActionGoal{ goal: i32 }
 // or any other tuple/struct that contains only an i32.
-type FibonacciAction = action::Action<i32, Vec<i32>, Vec<i32>>;
-
 fn main() {
   pretty_env_logger::init();
 
@@ -80,7 +78,7 @@ fn main() {
   };
 
   let fibonacci_action_client = node
-    .create_action_client::<FibonacciAction>(
+    .create_action_client::<i32, Vec<i32>, Vec<i32>>(
       ServiceMapping::Enhanced,
       &Name::new("/", "fibonacci").unwrap(),
       &ActionTypeName::new("example_interfaces", "Fibonacci"),

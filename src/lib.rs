@@ -197,9 +197,9 @@ pub mod dds {
   #[doc(inline)]
   pub use crate::pubsub::{Publisher, Subscription};
   #[doc(inline)]
-  pub use crate::service::{AService, Client, Server, Service, ServiceMapping};
+  pub use crate::service::{Client, Server, ServiceMapping};
   #[doc(inline)]
-  pub use crate::action::{Action, ActionTypes};
+  pub use crate::action::{ActionClient, ActionServer, AsyncActionServer};
   #[doc(inline)]
   pub use crate::rosout::{NodeLoggingHandle, RosoutRaw};
 }
@@ -272,9 +272,9 @@ pub use log::Log;
 #[cfg(all(feature = "dds", not(feature = "zenoh")))]
 #[doc(inline)]
 pub use dds::{
-  AService, Action, ActionTypes, Client, Context, ContextOptions, Node, NodeCreateError, NodeEvent,
-  NodeLoggingHandle, ParameterError, Publisher, ReaderWait, RosoutRaw, Server, Service,
-  ServiceMapping, Spinner, Subscription, WriterWait, DEFAULT_PUBLISHER_QOS,
+  ActionClient, ActionServer, AsyncActionServer, Client, Context, ContextOptions, Node,
+  NodeCreateError, NodeEvent, NodeLoggingHandle, ParameterError, Publisher, ReaderWait, RosoutRaw,
+  Server, ServiceMapping, Spinner, Subscription, WriterWait, DEFAULT_PUBLISHER_QOS,
   DEFAULT_SUBSCRIPTION_QOS,
 };
 #[cfg(all(feature = "zenoh", not(feature = "dds")))]
