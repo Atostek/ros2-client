@@ -1,15 +1,15 @@
 use std::{io, marker::PhantomData};
 
-use mio::{Evented, Poll, PollOpt, Ready, Token};
+use rustdds::{
+  dds::{ReadError, ReadResult, WriteResult},
+  mio::{Evented, Poll, PollOpt, Ready, Token},
+  serialization::CdrDeserializeSeedDecoder,
+  *,
+};
 use futures::{
   pin_mut,
   stream::{FusedStream, StreamExt},
   Future,
-};
-use rustdds::{
-  dds::{ReadError, ReadResult, WriteResult},
-  serialization::CdrDeserializeSeedDecoder,
-  *,
 };
 use serde::{de::DeserializeOwned, Serialize};
 

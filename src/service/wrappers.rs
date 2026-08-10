@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
-use bytes::{BufMut, Bytes, BytesMut};
 use rustdds::{
+  bytes::{BufMut, Bytes, BytesMut},
   dds::{ReadError, ReadResult, WriteError, WriteResult},
   rpc::*,
   serialization::deserialize_from_cdr_with_rep_id,

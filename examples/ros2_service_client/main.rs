@@ -1,11 +1,13 @@
 use std::time::{Duration, Instant};
 
-use mio::{Events, Poll, PollOpt, Ready, Token};
+use rustdds::{
+  mio::{Events, Poll, PollOpt, Ready, Token},
+  policy, QosPolicies, QosPolicyBuilder,
+};
 use serde::{Deserialize, Serialize};
 use ros2_client::{
   AService, Context, Message, Name, Node, NodeName, NodeOptions, ServiceMapping, ServiceTypeName,
 };
-use rustdds::{policy, QosPolicies, QosPolicyBuilder};
 
 const RESPONSE_TOKEN: Token = Token(7); // Just an arbitrary value
 

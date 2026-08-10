@@ -1,12 +1,12 @@
 use log::error;
-use mio::{Events, Poll, PollOpt, Ready, Token};
+use rustdds::{
+  mio::{Events, Poll, PollOpt, Ready, Token},
+  policy::{self, Deadline, Lifespan},
+  Duration, QosPolicies, QosPolicyBuilder,
+};
 use serde::{Deserialize, Serialize};
 use ros2_client::{
   AService, Context, Message, Name, Node, NodeName, NodeOptions, ServiceMapping, ServiceTypeName,
-};
-use rustdds::{
-  policy::{self, Deadline, Lifespan},
-  Duration, QosPolicies, QosPolicyBuilder,
 };
 
 // This is an example / test program.

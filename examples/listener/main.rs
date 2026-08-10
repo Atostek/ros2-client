@@ -1,12 +1,12 @@
 //use log::error;
 use core::cmp::min;
 
-use mio::{Events, Poll, PollOpt, Ready, Token};
-use ros2_client::{Context, MessageTypeName, Name, Node, NodeName, NodeOptions};
 use rustdds::{
+  mio::{Events, Poll, PollOpt, Ready, Token},
   policy::{self, Deadline, Lifespan},
   Duration, QosPolicies, QosPolicyBuilder,
 };
+use ros2_client::{Context, MessageTypeName, Name, Node, NodeName, NodeOptions};
 
 // Simple demo program.
 // Test this against ROS2 "talker" demo node.

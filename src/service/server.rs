@@ -1,14 +1,14 @@
 use std::io;
 
-use mio::{Evented, Poll, PollOpt, Ready, Token};
-#[allow(unused_imports)]
-use log::{debug, error, info, warn};
-use futures::{pin_mut, stream::FusedStream, StreamExt};
 use rustdds::{
   dds::{CreateResult, ReadError, ReadResult, WriteResult},
+  mio::{Evented, Poll, PollOpt, Ready, Token},
   rpc::*,
   *,
 };
+#[allow(unused_imports)]
+use log::{debug, error, info, warn};
+use futures::{pin_mut, stream::FusedStream, StreamExt};
 
 use crate::{message_info::MessageInfo, node::Node, service::*};
 
