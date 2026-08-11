@@ -250,24 +250,169 @@ impl Sub for ROSDuration {
   }
 }
 
-/// Same as ROSTime, except this one cannot be simulated.
+/// Wall-clock time, the same as [`ROSTime`] except that it is never simulated.
 ///
-/// *TODO*: This has no methods implemented, so just a placeholder type for now.
+/// Use this when you need the actual system clock regardless of any ROS 2
+/// `use_sim_time` setting. It shares `ROSTime`'s representation (nanoseconds
+/// since the Unix epoch) and conversions.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct SystemTime {
   ros_time: ROSTime,
 }
 
-//TODO: SystemTime implementation missing
+impl SystemTime {
+  /// The current wall-clock time from the system clock.
+  ///
+  /// Unlike [`ROSTime::now`](ROSTime), this is always the real system time and
+  /// cannot be simulated.
+  pub fn now() -> Self {
+    SystemTime {
+      ros_time: ROSTime::now(),
+    }
+  }
+
+  pub const ZERO: Self = Self::from_nanos(0);
+  pub const UNIX_EPOCH: Self = Self::from_nanos(0);
+
+  pub const fn from_nanos(nanos_since_unix_epoch: i64) -> Self {
+    SystemTime {
+      ros_time: ROSTime::from_nanos(nanos_since_unix_epoch),
+    }
+  }
+
+  pub fn to_nanos(&self) -> i64 {
+    self.ros_time.to_nanos()
+  }
+}
+
+// SystemTime <-> ROSTime (same representation)
+
+impl From<SystemTime> for ROSTime {
+  fn from(st: SystemTime) -> ROSTime {
+    st.ros_time
+  }
+}
+
+impl From<ROSTime> for SystemTime {
+  fn from(ros_time: ROSTime) -> SystemTime {
+    SystemTime { ros_time }
+  }
+}
+
+// SystemTime <-> chrono
+
+impl TryFrom<chrono::DateTime<Utc>> for SystemTime {
+  type Error = OutOfRangeError;
+  fn try_from(chrono_time: chrono::DateTime<Utc>) -> Result<SystemTime, OutOfRangeError> {
+    ROSTime::try_from(chrono_time).map(SystemTime::from)
+  }
+}
+
+impl From<SystemTime> for chrono::DateTime<Utc> {
+  fn from(st: SystemTime) -> chrono::DateTime<Utc> {
+    st.ros_time.into()
+  }
+}
+
+// SystemTime <-> rustdds::Timestamp
+
+impl From<SystemTime> for Timestamp {
+  fn from(st: SystemTime) -> Timestamp {
+    st.ros_time.into()
+  }
+}
+
+impl TryFrom<Timestamp> for SystemTime {
+  type Error = TimestampConversionError;
+  fn try_from(ts: Timestamp) -> Result<SystemTime, TimestampConversionError> {
+    ROSTime::try_from(ts).map(SystemTime::from)
+  }
+}
+
+// SystemTime <-> std::time::SystemTime
+
+impl TryFrom<std::time::SystemTime> for SystemTime {
+  type Error = OutOfRangeError;
+  fn try_from(st: std::time::SystemTime) -> Result<SystemTime, OutOfRangeError> {
+    let nanos = match st.duration_since(std::time::UNIX_EPOCH) {
+      Ok(d) => i64::try_from(d.as_nanos()).map_err(|_| OutOfRangeError {})?,
+      Err(before_epoch) => {
+        -i64::try_from(before_epoch.duration().as_nanos()).map_err(|_| OutOfRangeError {})?
+      }
+    };
+    Ok(SystemTime::from_nanos(nanos))
+  }
+}
+
+impl TryFrom<SystemTime> for std::time::SystemTime {
+  type Error = OutOfRangeError;
+  fn try_from(st: SystemTime) -> Result<std::time::SystemTime, OutOfRangeError> {
+    let nanos = st.to_nanos();
+    if nanos >= 0 {
+      std::time::UNIX_EPOCH
+        .checked_add(Duration::from_nanos(nanos as u64))
+        .ok_or(OutOfRangeError {})
+    } else {
+      std::time::UNIX_EPOCH
+        .checked_sub(Duration::from_nanos(nanos.unsigned_abs()))
+        .ok_or(OutOfRangeError {})
+    }
+  }
+}
+
+// Arithmetic mirroring ROSTime
+
+impl Sub for SystemTime {
+  type Output = ROSDuration;
+  fn sub(self, other: SystemTime) -> ROSDuration {
+    self.ros_time - other.ros_time
+  }
+}
+
+impl Sub<ROSDuration> for SystemTime {
+  type Output = SystemTime;
+  fn sub(self, other: ROSDuration) -> SystemTime {
+    SystemTime {
+      ros_time: self.ros_time - other,
+    }
+  }
+}
+
+impl Add<ROSDuration> for SystemTime {
+  type Output = SystemTime;
+  fn add(self, other: ROSDuration) -> SystemTime {
+    SystemTime {
+      ros_time: self.ros_time + other,
+    }
+  }
+}
 
 #[cfg(test)]
 mod test {
-  //use rustdds::Timestamp;
-
-  //use super::ROSTime;
+  use super::{ROSTime, SystemTime};
 
   #[test]
-  fn conversion() {
-    //TODO
+  fn rostime_chrono_roundtrip() {
+    for nanos in [0i64, 1, -1, 1_700_000_000_000_000_000] {
+      let t = ROSTime::from_nanos(nanos);
+      let dt: chrono::DateTime<chrono::Utc> = t.into();
+      assert_eq!(ROSTime::try_from(dt).unwrap(), t);
+    }
+  }
+
+  #[test]
+  fn systemtime_now_is_recent() {
+    // now() should be a positive, plausible wall-clock value (after 2020).
+    let now = SystemTime::now();
+    assert!(now.to_nanos() > 1_577_836_800_000_000_000); // 2020-01-01T00:00:00Z
+  }
+
+  #[test]
+  fn systemtime_std_roundtrip() {
+    for nanos in [0i64, 1, 1_500_000_000, 1_700_000_000_000_000_000] {
+      let t = SystemTime::from_nanos(nanos);
+      let std_t: std::time::SystemTime = t.try_into().unwrap();
+      assert_eq!(SystemTime::try_from(std_t).unwrap(), t);
+    }
   }
 }
