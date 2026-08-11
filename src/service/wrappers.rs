@@ -197,21 +197,9 @@ impl<R: Message> ResponseWrapper<R> {
         Ok((RmwRequestId::from(related_sample_identity), response))
       }
       ServiceMapping::Cyclone => {
-        // Cyclone constructs the client GUID from two parts
-        let mut client_guid_bytes = [0; 16];
-        {
-          let (first_half, second_half) = client_guid_bytes.split_at_mut(8);
-
-          // This seems a bit odd, but source is
-          // https://github.com/ros2/rmw_connextdds/blob/master/rmw_connextdds_common/src/common/rmw_impl.cpp
-          // function take_response()
-          first_half.copy_from_slice(&client_guid.to_bytes().as_slice()[0..8]);
-
-          // This is received in the wrapper header
-          second_half.copy_from_slice(&message_info.writer_guid().to_bytes()[8..16]);
-        }
-        let client_guid = GUID::from_bytes(client_guid_bytes);
-
+        // On the client, the upper half of the client GUID comes from local
+        // client state (our own GUID); the lower half is carried in the Cyclone
+        // header and reassembled inside cyclone_unwrap.
         cyclone_unwrap::<R>(self.serialized_message.clone(), client_guid, self.encoding)
       }
     }
@@ -314,9 +302,20 @@ impl Message for CycloneHeader {}
 
 // helper function, because Cyclone Request and Response unwrapping/decoding are
 // the same.
+//
+// The `RmwRequestId.writer_guid` we must reconstruct is the *client's* GUID
+// (the request writer), used to correlate a response with its request. Cyclone
+// splits this 16-byte GUID across two places:
+//   * the lower 8 bytes travel in the CycloneHeader (`guid_second_half`), and
+//   * the upper 8 bytes come from `guid_upper_half_source`, which is:
+//       - on the server (decoding a request): the DDS writer GUID of the
+//         incoming request (the client's request-writer), and
+//       - on the client (decoding a response): the client's own GUID, from
+//         local client state.
+// See https://github.com/ros2/rmw_cyclonedds/blob/master/rmw_cyclonedds_cpp/src/rmw_node.cpp
 fn cyclone_unwrap<R: Message>(
   serialized_message: Bytes,
-  writer_guid: GUID,
+  guid_upper_half_source: GUID,
   encoding: RepresentationIdentifier,
 ) -> ReadResult<(RmwRequestId, R)> {
   // 1. decode "CycloneHeader" and
@@ -328,11 +327,15 @@ fn cyclone_unwrap<R: Message>(
   } else {
     let _header_bytes = bytes.split_off(header_size);
     let (response, _response_bytes) = deserialize_from_cdr_with_rep_id::<R>(&bytes, encoding)?;
+
+    // Reassemble the full client GUID: upper 8 bytes from the supplied source,
+    // lower 8 bytes from the Cyclone header.
+    let mut client_guid_bytes = [0u8; 16];
+    client_guid_bytes[0..8].copy_from_slice(&guid_upper_half_source.to_bytes()[0..8]);
+    client_guid_bytes[8..16].copy_from_slice(&header.guid_second_half);
+
     let req_id = RmwRequestId {
-      writer_guid, // TODO: This seems to be completely wrong!!!
-      // When we are the client, we get half of Client GUID on the CycloneHeader, other half from
-      // Client State when we are the server, we get half of Client GUID on the CycloneHeader,
-      // other half from writer_guid.
+      writer_guid: GUID::from_bytes(client_guid_bytes),
       sequence_number: request_id::SequenceNumber::from_high_low(
         header.sequence_number_high,
         header.sequence_number_low,
