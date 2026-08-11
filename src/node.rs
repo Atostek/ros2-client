@@ -852,10 +852,17 @@ impl Node {
     };
 
     // returns `Err` if some parameter does not validate.
-    node
+    // Snapshot the declared parameters first and release the lock before
+    // validating: `validate_parameter_on_set` re-locks `parameters` (via
+    // `reject_type_change`), so holding the guard here would deadlock.
+    let declared = node
       .parameters
       .lock()
       .unwrap()
+      .iter()
+      .map(|(name, value)| (name.clone(), value.clone()))
+      .collect::<Vec<_>>();
+    declared
       .iter()
       .try_for_each(|(name, value)| {
         node.validate_parameter_on_set(name, value)?;
