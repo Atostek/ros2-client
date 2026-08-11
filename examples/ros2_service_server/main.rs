@@ -39,9 +39,12 @@ fn main() {
 
   println!(">>> ros2_service node started");
 
+  let service_mapping = service_mapping_from_env();
+  println!(">>> using ServiceMapping::{service_mapping:?}");
+
   let server = node
     .create_server::<AService<AddTwoIntsRequest, AddTwoIntsResponse>>(
-      ServiceMapping::Enhanced,
+      service_mapping,
       &Name::new("/", "add_two_ints").unwrap(),
       &ServiceTypeName::new("example_interfaces", "AddTwoInts"),
       service_qos.clone(),
@@ -89,6 +92,21 @@ fn main() {
     } // for
   } // loop
 } // main
+
+/// Select the service wire mapping from the `ROS2_SERVICE_MAPPING` environment
+/// variable (`Basic`, `Enhanced`, or `Cyclone`). Defaults to `Enhanced`.
+fn service_mapping_from_env() -> ServiceMapping {
+  match std::env::var("ROS2_SERVICE_MAPPING").as_deref() {
+    Ok("Basic") | Ok("basic") => ServiceMapping::Basic,
+    Ok("Cyclone") | Ok("cyclone") => ServiceMapping::Cyclone,
+    Ok("Enhanced") | Ok("enhanced") => ServiceMapping::Enhanced,
+    Ok(other) => {
+      eprintln!(">>> Unknown ROS2_SERVICE_MAPPING '{other}', using Enhanced");
+      ServiceMapping::Enhanced
+    }
+    Err(_) => ServiceMapping::Enhanced,
+  }
+}
 
 fn create_qos() -> QosPolicies {
   let service_qos: QosPolicies = {
