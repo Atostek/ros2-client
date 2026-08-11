@@ -726,14 +726,14 @@ impl Node {
 
     node.suppress_node_info_updates(true);
 
-    node.rosout_writer = if enable_rosout {
-      Arc::new(Some(
+    // rosout_writer defaults to Arc::new(None) at struct construction above, so
+    // only overwrite it when rosout publishing is enabled.
+    if enable_rosout {
+      node.rosout_writer = Arc::new(Some(
         // topic already has QoS defined
         node.create_publisher(&rosout_topic, None)?,
-      ))
-    } else {
-      Arc::new(None) // FIXME: we already set that above!
-    };
+      ));
+    }
     node.rosout_reader = if rosout_reader {
       Some(node.create_subscription(&rosout_topic, None)?)
     } else {
