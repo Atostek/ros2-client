@@ -139,6 +139,32 @@ struct ParameterServers {
   describe_parameters_server: Server<rcl_interfaces::DescribeParametersService>,
 }
 
+/// Enforces static typing of parameters: an existing, typed parameter may not
+/// change its `ParameterType` unless undeclared parameters are allowed (which we
+/// treat as dynamic typing). Setting to `NotSet` is a deletion and is always
+/// allowed. Shared by both `Node` and `Spinner` to keep the rule consistent.
+fn reject_type_change(
+  parameters: &Mutex<BTreeMap<String, ParameterValue>>,
+  allow_undeclared: bool,
+  name: &str,
+  value: &ParameterValue,
+) -> SetParametersResult {
+  if allow_undeclared || matches!(value, ParameterValue::NotSet) {
+    return Ok(());
+  }
+  if let Some(existing) = parameters.lock().unwrap().get(name)
+    && !matches!(existing, ParameterValue::NotSet)
+    && std::mem::discriminant(existing) != std::mem::discriminant(value)
+  {
+    return Err(format!(
+      "Cannot change type of parameter '{name}' from {:?} to {:?}.",
+      existing.to_parameter_type(),
+      value.to_parameter_type()
+    ));
+  }
+  Ok(())
+}
+
 // ----------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------
 /// Spinner implements Node's background event loop.
@@ -319,23 +345,16 @@ impl Spinner {
         set_parameters_atomically_request = next_if_some(&mut set_parameters_atomically_stream_opt).fuse() => {
           match set_parameters_atomically_request {
             Ok( (req_id, req) ) => {
-              warn!("Set parameters atomically request {req:?}");
-              let results =
-                req.parameter.iter()
-                  .cloned()
-                  .map( Parameter::from ) // convert from "raw::Parameter"
-                  .map( |Parameter{ .. } |
-                      // TODO: Implement atomic setting.
-                      Err("Setting parameters atomically is not implemented.".to_owned())
-                    )
-                  .map(|r| r.into()) // to "raw" Result for serialization
-                  .collect();
-              warn!("Set parameters atomically response: {results:?}");
+              info!("Set parameters atomically request {req:?}");
+              let params: Vec<Parameter> =
+                req.parameter.iter().cloned().map(Parameter::from).collect();
+              let result: raw::SetParametersResult = self.set_parameters_atomically(params).into();
+              info!("Set parameters atomically response: {result:?}");
               // .unwrap() below should be safe, as we would not be here if the Server did not exist
               self.parameter_servers.as_ref().unwrap().set_parameters_atomically_server
-                .async_send_response(req_id, rcl_interfaces::SetParametersAtomicallyResponse{ results })
+                .async_send_response(req_id, rcl_interfaces::SetParametersAtomicallyResponse{ result })
                 .await
-                .unwrap_or_else(|e| warn!("SetParameters response error {e:?}"));
+                .unwrap_or_else(|e| warn!("SetParametersAtomically response error {e:?}"));
             }
             Err(e) => warn!("SetParametersAtomically request error {e:?}"),
           }
@@ -346,9 +365,7 @@ impl Spinner {
             Ok( (req_id, req) ) => {
               info!("List parameters request");
               let prefixes = req.prefixes;
-              // TODO: We only generate the "names" part of the ListParametersResponse
-              // What should we put into `prefixes` ?
-              let names = {
+              let names: Vec<String> = {
                 let param_db = self.parameters.lock().unwrap();
                 param_db.keys()
                   .filter_map(|name|
@@ -360,7 +377,23 @@ impl Spinner {
                   )
                   .collect()
               };
-              let result = rcl_interfaces::ListParametersResult{ names, prefixes: vec![] };
+              // `prefixes` in the response is the set of namespace prefixes
+              // (parameter name components before a '.') of the matched names.
+              let result_prefixes: Vec<String> = {
+                let mut set = BTreeSet::new();
+                for name in &names {
+                  let mut ancestors: Vec<&str> = name.split('.').collect();
+                  ancestors.pop(); // drop the leaf, keep ancestor namespaces
+                  let mut acc = String::new();
+                  for part in ancestors {
+                    if !acc.is_empty() { acc.push('.'); }
+                    acc.push_str(part);
+                    set.insert(acc.clone());
+                  }
+                }
+                set.into_iter().collect()
+              };
+              let result = rcl_interfaces::ListParametersResult{ names, prefixes: result_prefixes };
               // .unwrap() below should be safe, as we would not be here if the Server did not exist
               info!("List parameters response: {result:?}");
               self.parameter_servers.as_ref().unwrap().list_parameters_server
@@ -496,6 +529,7 @@ impl Spinner {
       },
       // application-defined parameters
       _ => {
+        reject_type_change(&self.parameters, self.allow_undeclared_parameters, name, value)?;
         match self.parameter_validator {
           Some(ref v) => v.lock().unwrap()(name, value), // ask the validator to judge
           None => Ok(()),                                // no validator defined, always accept
@@ -556,7 +590,9 @@ impl Spinner {
       self
         .parameter_events_writer
         .publish(raw::ParameterEvent {
-          timestamp: rustdds::Timestamp::now(), // differs from version in Node!!!
+          // Use the same (simulation-aware) clock as Node, so parameter event
+          // timestamps are consistent regardless of which side sets them.
+          timestamp: self.time_now().into(),
           node: self.fully_qualified_node_name.clone(),
           new_parameters,
           changed_parameters,
@@ -567,6 +603,77 @@ impl Spinner {
     } else {
       Err("Setting undeclared parameter '".to_owned() + name + "' is not allowed.")
     }
+  }
+
+  /// Simulation-aware current time, mirroring [`Node::time_now`].
+  fn time_now(&self) -> ROSTime {
+    if self.use_sim_time.load(Ordering::SeqCst) {
+      *self.sim_time.lock().unwrap()
+    } else {
+      ROSTime::now()
+    }
+  }
+
+  /// Set several parameters as a single all-or-nothing transaction.
+  ///
+  /// All parameters are validated (undeclared check, type-change rule, and any
+  /// user validator) before anything is mutated; if any check fails, none are
+  /// applied and the error is returned. On success a single `ParameterEvent` is
+  /// published. Note that a failing user *set action* during application cannot
+  /// be rolled back, so set actions should not fail for values that already
+  /// passed validation.
+  fn set_parameters_atomically(&self, params: Vec<Parameter>) -> SetParametersResult {
+    // Phase 1: validate everything before mutating anything.
+    for Parameter { name, value } in &params {
+      let already_set = self.parameters.lock().unwrap().contains_key(name);
+      if !(self.allow_undeclared_parameters || already_set) {
+        return Err(format!("Setting undeclared parameter '{name}' is not allowed."));
+      }
+      self.validate_parameter_on_set(name, value)?;
+    }
+
+    // Phase 2: apply. Collect the change lists for a single notification.
+    let mut new_parameters = vec![];
+    let mut changed_parameters = vec![];
+    let mut deleted_parameters = vec![];
+    for Parameter { name, value } in params {
+      self.execute_parameter_set_actions(&name, &value)?;
+      let raw_p = raw::Parameter {
+        name: name.clone(),
+        value: value.clone().into(),
+      };
+      let mut db = self.parameters.lock().unwrap();
+      let already_set = db.contains_key(&name);
+      match value {
+        // Setting to NotSet deletes the parameter.
+        ParameterValue::NotSet => {
+          if already_set {
+            db.remove(&name);
+            deleted_parameters.push(raw_p);
+          }
+        }
+        _ => {
+          if already_set {
+            changed_parameters.push(raw_p);
+          } else {
+            new_parameters.push(raw_p);
+          }
+          db.insert(name, value);
+        }
+      }
+    }
+
+    self
+      .parameter_events_writer
+      .publish(raw::ParameterEvent {
+        timestamp: self.time_now().into(),
+        node: self.fully_qualified_node_name.clone(),
+        new_parameters,
+        changed_parameters,
+        deleted_parameters,
+      })
+      .unwrap_or_else(|e| warn!("set_parameters_atomically: {e:?}"));
+    Ok(())
   }
 } // impl Spinner
 
@@ -992,13 +1099,12 @@ impl Node {
   /// Sets a parameter value. Parameter must be
   /// [declared](NodeOptions::declare_parameter) before setting.
   //
-  // TODO: This code is duplicated in Spinner. Not good.
-  // Find a way to de-duplicate.
-  // Same for validate_parameter_on_set and execute_parameter_set_actions.
+  // NOTE: The body mirrors Spinner::set_parameter (both act on the same shared
+  // parameter store); the type-change rule is shared via `reject_type_change`.
   // TODO: This does not account for built-in parameters e.g. "use_sim_time".
   // It thinks they are new on first set.
-  // TODO: Setting Parameter to type NotSet counts as parameter deletion. Maybe
-  // that needs special handling? At least for notifications.
+  // TODO: Unlike set_parameters_atomically, this path stores a NotSet value
+  // rather than treating it as a deletion. At least for notifications.
   pub fn set_parameter(&self, name: &str, value: ParameterValue) -> Result<(), String> {
     let already_set = self.parameters.lock().unwrap().contains_key(name);
     if self.options.allow_undeclared_parameters || already_set {
@@ -1064,11 +1170,10 @@ impl Node {
   }
 
   // Keep this function in sync with the same function in Spinner.
-  // TODO: This should refuse to change parameter type, unless
-  // there is a ParamaterDescription defined and it allows
-  // changing type.
-  // TODO: Setting Parameter to type NotSet counts as parameter deletion. Maybe
-  // that needs special handling?
+  // The type-change rule is enforced via `reject_type_change`: an existing typed
+  // parameter keeps its type unless undeclared parameters are allowed. A
+  // per-parameter ParameterDescriptor with `dynamic_typing` is not yet consulted
+  // (descriptors are not stored), so `allow_undeclared_parameters` is the switch.
   fn validate_parameter_on_set(&self, name: &str, value: &ParameterValue) -> SetParametersResult {
     match name {
       // built-in parameter check
@@ -1078,6 +1183,12 @@ impl Node {
       },
       // application-defined parameters
       _ => {
+        reject_type_change(
+          &self.parameters,
+          self.options.allow_undeclared_parameters,
+          name,
+          value,
+        )?;
         match self.parameter_validator {
           Some(ref v) => v.lock().unwrap()(name, value), // ask the validator to judge
           None => Ok(()),                                // no validator defined, always accept
@@ -1776,8 +1887,33 @@ impl Future for WriterWait<'_> {
 
 #[cfg(test)]
 mod tests {
-  use crate::Context;
-  use super::{Node, NodeName, NodeOptions};
+  use std::{
+    collections::BTreeMap,
+    sync::Mutex,
+  };
+
+  use crate::{parameters::ParameterValue, Context};
+  use super::{reject_type_change, Node, NodeName, NodeOptions};
+
+  #[test]
+  fn type_change_rule() {
+    let store = Mutex::new(BTreeMap::new());
+    store
+      .lock()
+      .unwrap()
+      .insert("p".to_string(), ParameterValue::Integer(1));
+
+    // Same type is allowed.
+    assert!(reject_type_change(&store, false, "p", &ParameterValue::Integer(2)).is_ok());
+    // Different type is rejected when undeclared parameters are not allowed.
+    assert!(reject_type_change(&store, false, "p", &ParameterValue::Double(2.0)).is_err());
+    // ...but allowed when undeclared (dynamic typing) parameters are permitted.
+    assert!(reject_type_change(&store, true, "p", &ParameterValue::Double(2.0)).is_ok());
+    // Deletion (NotSet) is always allowed.
+    assert!(reject_type_change(&store, false, "p", &ParameterValue::NotSet).is_ok());
+    // Unknown parameter: nothing to conflict with.
+    assert!(reject_type_change(&store, false, "q", &ParameterValue::String("x".into())).is_ok());
+  }
 
   #[test]
   fn node_is_sync() {

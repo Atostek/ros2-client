@@ -17,9 +17,10 @@ pub type SetParametersService = AService<SetParametersRequest, SetParametersResp
 pub type DescribeParametersService =
   AService<DescribeParametersRequest, DescribeParametersResponse>;
 
-// This is structurally identical to SetParamtersService, but the operation
-// of the service is slightly different.
-pub type SetParametersAtomicallyService = AService<SetParametersRequest, SetParametersResponse>;
+// The request is identical to SetParameters, but the response carries a single
+// SetParametersResult (all parameters are set together, or none are).
+pub type SetParametersAtomicallyService =
+  AService<SetParametersRequest, SetParametersAtomicallyResponse>;
 
 #[allow(non_snake_case)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,7 +79,13 @@ pub struct SetParametersResponse {
 }
 impl Message for SetParametersResponse {}
 
-pub type SetParametersAtomicallyResponse = SetParametersResponse;
+// https://github.com/ros2/rcl_interfaces/blob/humble/rcl_interfaces/srv/SetParametersAtomically.srv
+// Note: a single `result`, unlike SetParameters which returns one per parameter.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetParametersAtomicallyResponse {
+  pub result: parameters::raw::SetParametersResult,
+}
+impl Message for SetParametersAtomicallyResponse {}
 
 // https://github.com/ros2/rcl_interfaces/blob/humble/rcl_interfaces/srv/DescribeParameters.srv
 #[derive(Debug, Clone, Serialize, Deserialize)]
