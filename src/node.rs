@@ -778,12 +778,14 @@ impl Node {
   /// An async task should then be created to run the `.spin()` function of
   /// `Spinner`.
   ///
-  /// E.g. `executor.spawn(node.spinner().spin())`
+  /// E.g. `executor.spawn(node.spinner()?.spin())`
   ///
   /// The `.spin()` task runs until `Node` is dropped.
   pub fn spinner(&mut self) -> CreateResult<Spinner> {
     if self.stop_spin_sender.is_some() {
-      panic!("Attempted to crate a second spinner.");
+      return Err(CreateError::BadParameter {
+        reason: "A Spinner already exists for this Node.".to_string(),
+      });
     }
     let (stop_spin_sender, stop_spin_receiver) = async_channel::bounded(1);
     self.stop_spin_sender = Some(stop_spin_sender);
