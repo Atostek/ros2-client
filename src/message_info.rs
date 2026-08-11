@@ -36,22 +36,12 @@ impl MessageInfo {
   }
 }
 
-impl From<&SampleInfo> for MessageInfo {
-  fn from(sample_info: &SampleInfo) -> MessageInfo {
-    MessageInfo {
-      received_timestamp: Timestamp::ZERO, // TODO!
-      source_timestamp: sample_info.source_timestamp(),
-      sequence_number: sample_info.sample_identity().sequence_number,
-      publisher: sample_info.publication_handle(), // DDS has an odd name for this
-      related_sample_identity: sample_info.related_sample_identity(),
-    }
-  }
-}
-
 impl<M> From<&rustdds::no_key::DeserializedCacheChange<M>> for MessageInfo {
   fn from(dcc: &rustdds::no_key::DeserializedCacheChange<M>) -> MessageInfo {
     MessageInfo {
-      received_timestamp: Timestamp::ZERO, // TODO!
+      // `receive_instant` is the local reception time RustDDS stamps on each
+      // incoming sample.
+      received_timestamp: dcc.receive_instant,
       source_timestamp: dcc.source_timestamp(),
       sequence_number: dcc.sequence_number,
       publisher: dcc.writer_guid(),
