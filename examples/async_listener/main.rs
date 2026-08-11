@@ -35,16 +35,18 @@ pub fn main() {
   executor.spawn(node.spinner().unwrap().spin()).detach();
 
   let status_event_stream = node.status_receiver().unwrap().for_each(|event| async move {
-    match event {
-      NodeEvent::DDS(DomainParticipantStatusEvent::RemoteWriterMatched {
-        remote_writer, ..
-      }) if remote_writer.entity_id.kind().is_user_defined() => {
-        println!("Matched remote writer {remote_writer:?}");
+    if let NodeEvent::DDS(dds_event) = event {
+      match *dds_event {
+        DomainParticipantStatusEvent::RemoteWriterMatched { remote_writer, .. }
+          if remote_writer.entity_id.kind().is_user_defined() =>
+        {
+          println!("Matched remote writer {remote_writer:?}");
+        }
+        DomainParticipantStatusEvent::WriterLost { guid, reason } => {
+          println!("Lost remote writer {guid:?}: {reason:?}");
+        }
+        _ => {}
       }
-      NodeEvent::DDS(DomainParticipantStatusEvent::WriterLost { guid, reason }) => {
-        println!("Lost remote writer {guid:?}: {reason:?}");
-      }
-      _ => {}
     }
   });
   executor.spawn(status_event_stream).detach();

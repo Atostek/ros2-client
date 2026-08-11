@@ -1,14 +1,12 @@
 use std::str::FromStr;
 
-#[allow(unused_imports)]
 use nom::{
   branch::alt,
-  bytes::complete::{is_not, tag, take_till, take_until, take_while1},
+  bytes::complete::tag,
   character::complete::{
     alphanumeric1, char, digit1, line_ending, not_line_ending, one_of, space0,
   },
-  combinator::{eof, map, map_res, opt, recognize, value},
-  error::{dbg_dmp, ParseError},
+  combinator::{map, opt, recognize, value},
   multi::{many0, many1},
   sequence::{delimited, pair, preceded, terminated},
   IResult, Parser,

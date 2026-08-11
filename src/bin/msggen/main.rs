@@ -106,7 +106,7 @@ fn main() -> io::Result<()> {
     );
     for ros2_type in ros2_types_requested {
       use itertools::Itertools; // to get .unique()
-      let new_pkgs = list_packges_with_msgs(workspace_dir, ros2_type, &colcon_log_directory)?;
+      let new_pkgs = list_packages_with_msgs(workspace_dir, ros2_type, &colcon_log_directory)?;
       let prev_pkgs = pkgs;
       pkgs = prev_pkgs
         .iter()
@@ -159,7 +159,7 @@ struct RosPkg {
 
 //use std::{ffi::OsStr, path::PathBuf};
 
-fn list_packges_with_msgs(
+fn list_packages_with_msgs(
   workspace_dir: &str,
   ros2_abs_type: &str,
   colcon_log_directory: &Path,

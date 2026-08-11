@@ -78,7 +78,7 @@ tracing = "0.1.41"
 log = "0.4"
 mio-extras = "2.0.6" # examples/talker
 pretty_env_logger = "0.5.0"
-# turle_teleop
+# turtle_teleop
 log4rs = "1.2"
 ctrlc = "3.1.6"
 ratatui = "0.30.2"

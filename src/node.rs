@@ -119,10 +119,14 @@ impl Default for NodeOptions {
 // ----------------------------------------------------------------------------------------------------
 
 /// DDS or ROS 2 Discovery events.
-#[allow(clippy::large_enum_variant)] // TODO: fix this
+///
+/// The `DDS` payload is boxed because `DomainParticipantStatusEvent` is much
+/// larger than `ParticipantEntitiesInfo`; boxing keeps this enum small. When
+/// matching, bind the box and match its contents, e.g.
+/// `NodeEvent::DDS(e) => match *e { .. }`.
 #[derive(Clone, Debug)]
 pub enum NodeEvent {
-  DDS(DomainParticipantStatusEvent),
+  DDS(Box<DomainParticipantStatusEvent>),
   ROS(ParticipantEntitiesInfo),
 }
 
@@ -447,7 +451,7 @@ impl Spinner {
           }
 
           // also notify any status listeneners
-          self.send_status_event( &NodeEvent::DDS(dp_status_event) );
+          self.send_status_event( &NodeEvent::DDS(Box::new(dp_status_event)) );
         }
       }
     }
@@ -790,7 +794,7 @@ impl Node {
     let (stop_spin_sender, stop_spin_receiver) = async_channel::bounded(1);
     self.stop_spin_sender = Some(stop_spin_sender);
 
-    //TODO: Check QoS policies against ROS 2 specs or some refernce.
+    //TODO: Check QoS policies against ROS 2 specs or some reference.
     let service_qos = QosPolicyBuilder::new()
       .reliability(policy::Reliability::Reliable {
         max_blocking_time: Duration::from_millis(100),
@@ -1685,15 +1689,14 @@ impl Future for ReaderWait<'_> {
         loop {
           match status_event_stream.poll_next_unpin(cx) {
             // Check if we have RemoteReaderMatched event and it is for this_writer
-            Poll::Ready(Some(NodeEvent::DDS(
-              DomainParticipantStatusEvent::RemoteReaderMatched {
-                local_writer,
-                remote_reader,
-              },
-            )))
-              if local_writer == this_writer =>
+            Poll::Ready(Some(NodeEvent::DDS(dds_event)))
+              if matches!(
+                &*dds_event,
+                DomainParticipantStatusEvent::RemoteReaderMatched { local_writer, .. }
+                  if *local_writer == this_writer
+              ) =>
             {
-              debug!("wait_for_reader: Matched remote reader {remote_reader:?}.");
+              debug!("wait_for_reader: Matched remote reader.");
               return Poll::Ready(());
             }
 
@@ -1746,15 +1749,14 @@ impl Future for WriterWait<'_> {
           // installed and we are stuck.
           match status_event_stream.poll_next_unpin(cx) {
             // Check if we have RemoteWriterMatched event and it is for this_writer
-            Poll::Ready(Some(NodeEvent::DDS(
-              DomainParticipantStatusEvent::RemoteWriterMatched {
-                local_reader,
-                remote_writer,
-              },
-            )))
-              if local_reader == this_reader =>
+            Poll::Ready(Some(NodeEvent::DDS(dds_event)))
+              if matches!(
+                &*dds_event,
+                DomainParticipantStatusEvent::RemoteWriterMatched { local_reader, .. }
+                  if *local_reader == this_reader
+              ) =>
             {
-              debug!("wait_for_writer: Matched remote writer {remote_writer:?}.");
+              debug!("wait_for_writer: Matched remote writer.");
               return Poll::Ready(());
             }
 
