@@ -325,8 +325,12 @@ fn cyclone_unwrap<R: Message>(
   if bytes.len() < header_size {
     read_error_deserialization!("Service message too short")
   } else {
-    let _header_bytes = bytes.split_off(header_size);
-    let (response, _response_bytes) = deserialize_from_cdr_with_rep_id::<R>(&bytes, encoding)?;
+    // `split_off` leaves `bytes` = [0, header_size) (the header) and returns the
+    // payload that follows it. The message is decoded from that payload. The
+    // CycloneHeader is 16 bytes (8-aligned), so CDR alignment of the payload is
+    // preserved when it is decoded from the start of this slice.
+    let payload = bytes.split_off(header_size);
+    let (response, _response_bytes) = deserialize_from_cdr_with_rep_id::<R>(&payload, encoding)?;
 
     // Reassemble the full client GUID: upper 8 bytes from the supplied source,
     // lower 8 bytes from the Cyclone header.
