@@ -124,7 +124,7 @@ fn main() {
     debug!("main loop done");
   };
 
-  // let status_event_stream = node.status_receiver().for_each(|event| async move
+  // let status_event_stream = node.status_receiver().unwrap().for_each(|event| async move
   // {   println!("{:?}", event);
   // });
 

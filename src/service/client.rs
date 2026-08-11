@@ -211,7 +211,8 @@ where
   /// It is enough that someone has subscribed the Requests, and someone is
   /// a publisher for Responses.
   ///
-  /// May panic, if the Node does not havea background Spinner running.
+  /// If the Node has no background Spinner running, this resolves immediately
+  /// (an error is logged), since without a Spinner no match events are delivered.
   pub async fn wait_for_service(&self, my_node: &Node) {
     join!(
       my_node.wait_for_reader(self.request_sender.guid()),

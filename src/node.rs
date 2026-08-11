@@ -1109,9 +1109,10 @@ impl Node {
 
   /// Get an async Receiver for discovery events.
   ///
-  /// There must be an async task executing `spin` to get any data.
-  /// This function may panic if there is no Spinner running.
-  pub fn status_receiver(&self) -> Receiver<NodeEvent> {
+  /// There must be an async task executing `spin` to get any data. Returns
+  /// `None` if this `Node` has no running `Spinner` (see [`Node::spinner`]),
+  /// because without a Spinner no events would ever be delivered.
+  pub fn status_receiver(&self) -> Option<Receiver<NodeEvent>> {
     if self.have_spinner() {
       let (status_event_sender, status_event_receiver) = async_channel::bounded(8);
       self
@@ -1119,15 +1120,16 @@ impl Node {
         .lock()
         .unwrap()
         .push(status_event_sender);
-      status_event_receiver
+      Some(status_event_receiver)
     } else {
-      panic!("status_receiver() cannot set up a receiver, because no Spinner is running.")
+      None
     }
   }
 
   // reader waits for at least one writer to be present
   pub(crate) fn wait_for_writer(&self, reader: GUID) -> impl Future<Output = ()> {
-    // TODO: This may contain some synchrnoization hazard
+    // Register the event receiver *before* reading the current match state, so a
+    // match that occurs between the check and the registration is not missed.
     let status_receiver = self.status_receiver();
 
     let already_present = self
@@ -1138,18 +1140,24 @@ impl Node {
       .map(|writers| !writers.is_empty()) // there is someone matched
       .unwrap_or(false); // we do not even know the reader
 
-    if already_present {
-      WriterWait::Ready
-    } else {
-      WriterWait::Wait {
+    match (already_present, status_receiver) {
+      (true, _) => WriterWait::Ready,
+      (false, Some(status_receiver)) => WriterWait::Wait {
         this_reader: reader,
         status_event_stream: Box::pin(status_receiver),
+      },
+      (false, None) => {
+        error!(
+          "wait_for_writer requires a running Spinner (see Node::spinner); resolving immediately."
+        );
+        WriterWait::Ready
       }
     }
   }
 
   pub(crate) fn wait_for_reader(&self, writer: GUID) -> impl Future<Output = ()> {
-    // TODO: This may contain some synchrnoization hazard.
+    // Register the event receiver *before* reading the current match state, so a
+    // match that occurs between the check and the registration is not missed.
     let status_receiver = self.status_receiver();
 
     let already_present = self
@@ -1160,16 +1168,20 @@ impl Node {
       .map(|readers| !readers.is_empty()) // there is someone matched
       .unwrap_or(false); // we do not even know who is asking
 
-    // TODO: Is is possible to miss reader events if they appear after the check
-    // above, but do not somehow end up in the status_receiver stream?
-
-    if already_present {
-      info!("wait_for_reader: Already have matched a reader.");
-      ReaderWait::Ready
-    } else {
-      ReaderWait::Wait {
+    match (already_present, status_receiver) {
+      (true, _) => {
+        info!("wait_for_reader: Already have matched a reader.");
+        ReaderWait::Ready
+      }
+      (false, Some(status_receiver)) => ReaderWait::Wait {
         this_writer: writer,
         status_event_stream: Box::pin(status_receiver),
+      },
+      (false, None) => {
+        error!(
+          "wait_for_reader requires a running Spinner (see Node::spinner); resolving immediately."
+        );
+        ReaderWait::Ready
       }
     }
   }

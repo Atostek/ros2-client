@@ -195,7 +195,7 @@ fn main() {
 
   // Debugging output:
   //
-  // smol::spawn( node.status_receiver().for_each(|event| async move {
+  // smol::spawn( node.status_receiver().unwrap().for_each(|event| async move {
   //   println!("{:?}", event);
   // })).detach();
 
