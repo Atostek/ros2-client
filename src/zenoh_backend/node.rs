@@ -204,6 +204,29 @@ impl Node {
     Ok(RawPublisher::new(self.create_publisher::<()>(topic, qos)?))
   }
 
+  /// Create a **raw** publisher keyed with an explicit REP-2016 type hash — the
+  /// dynamic counterpart of
+  /// [`create_publisher_with_type_hash`](Self::create_publisher_with_type_hash).
+  ///
+  /// A raw publisher exists for message types known only at runtime, and those
+  /// are exactly the types the [`type_hash`] table cannot cover: with
+  /// [`create_raw_publisher`](Self::create_raw_publisher) they announce the
+  /// placeholder hash, which only other `ros2-client` peers match. A caller
+  /// that holds the type's full description can compute its real hash (see
+  /// [`super::type_description`]) and pass it here, so native `rmw_zenoh`
+  /// subscribers — which listen on the concrete-hash key — receive what it
+  /// publishes.
+  pub fn create_raw_publisher_with_type_hash(
+    &self,
+    topic: &Topic,
+    qos: Option<QosProfile>,
+    hash: &str,
+  ) -> zenoh::Result<RawPublisher> {
+    Ok(RawPublisher::new(
+      self.create_publisher_with_type_hash::<()>(topic, qos, hash)?,
+    ))
+  }
+
   /// Create a **raw** subscription — the inbound counterpart of
   /// [`create_raw_publisher`](Self::create_raw_publisher): it delivers each
   /// message as a full CDR message (`Vec<u8>`), for a runtime-typed codec.

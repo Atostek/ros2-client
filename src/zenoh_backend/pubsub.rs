@@ -363,7 +363,7 @@ impl RawSubscription {
 mod tests {
   use std::time::{Duration, Instant};
 
-  use zenoh::Config;
+  use zenoh::{Config, Wait};
 
   use super::{Publisher, Subscription};
   use crate::{Context, ContextOptions, MessageTypeName, Name, NodeName, NodeOptions, QosProfile};
@@ -415,6 +415,107 @@ mod tests {
       }
       assert!(Instant::now() < deadline, "no raw message within timeout");
     }
+  }
+
+  /// A native `rmw_zenoh` subscriber listens on the concrete key
+  /// `<domain>/<topic>/<type>/<REP-2016 hash>`, not on a wildcard. This stands
+  /// one up with plain Zenoh — no `ros2-client` subscription, whose wildcard
+  /// would hide the difference — and shows that a raw publisher reaches it with
+  /// the explicit hash, and does not with the table's placeholder. The type is
+  /// one the table does not know, which is the case a raw publisher exists for.
+  #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+  async fn a_raw_publisher_with_the_real_hash_reaches_a_concrete_hash_subscriber() {
+    use super::super::{keyexpr, type_hash};
+
+    let sub_port = 17521;
+    let pub_port = 17522;
+    let sub_ctx =
+      Context::with_options(ContextOptions::new().zenoh_config(make_config(sub_port, None)))
+        .expect("open subscriber context");
+    let pub_ctx = Context::with_options(
+      ContextOptions::new().zenoh_config(make_config(pub_port, Some(sub_port))),
+    )
+    .expect("open publisher context");
+    let pub_node = pub_ctx.new_node(NodeName::new("/", "hash_pub").unwrap(), NodeOptions::new());
+    let topic = pub_node.create_topic(
+      &Name::new("/", "face_image").unwrap(),
+      MessageTypeName::new("sensor_msgs", "CompressedImage"),
+      &QosProfile::default(),
+    );
+    // `sensor_msgs/CompressedImage`, as ROS 2 Jazzy's generated type
+    // description hashes it — the value in its installed `CompressedImage.json`.
+    let real = "RIHS01_15640771531571185e2efc8a100baf923961a4d15d5569652e6cb6691e8e371a";
+    assert_eq!(
+      type_hash::known_type_hash(topic.type_name()),
+      None,
+      "the table must not know this type, or the test proves nothing"
+    );
+
+    // The native side: a concrete-hash key, exactly as rmw_zenoh declares it.
+    let native = sub_ctx
+      .session()
+      .declare_subscriber(keyexpr::topic_keyexpr(
+        sub_ctx.domain_id(),
+        topic.name(),
+        topic.type_name(),
+        real,
+      ))
+      .wait()
+      .expect("declare the native-style subscriber");
+
+    let with_hash = pub_node
+      .create_raw_publisher_with_type_hash(&topic, None, real)
+      .expect("raw publisher with the real hash");
+    let with_placeholder = pub_node
+      .create_raw_publisher(&topic, None)
+      .expect("raw publisher with the placeholder hash");
+
+    let hashed: Vec<u8> = vec![0x00, 0x01, 0x00, 0x00, 0xCA, 0xFE];
+    let placeholder: Vec<u8> = vec![0x00, 0x01, 0x00, 0x00, 0xBA, 0xAD];
+
+    // Both publish; only one may arrive. Loop because a peer link takes a
+    // moment to come up.
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let received = loop {
+      with_placeholder
+        .async_publish(&placeholder)
+        .await
+        .expect("publish under the placeholder hash");
+      with_hash
+        .async_publish(&hashed)
+        .await
+        .expect("publish under the real hash");
+      if let Ok(Ok(sample)) =
+        tokio::time::timeout(Duration::from_millis(200), native.recv_async()).await
+      {
+        break sample.payload().to_bytes().to_vec();
+      }
+      assert!(
+        Instant::now() < deadline,
+        "the concrete-hash subscriber received nothing — the explicit hash is not \
+         reaching the key"
+      );
+    };
+    assert_eq!(
+      received, hashed,
+      "the real-hash publisher is what a native subscriber hears"
+    );
+
+    // And keeps hearing only that one: the placeholder publisher stays silent
+    // on the concrete key however many times it publishes.
+    for _ in 0..5 {
+      with_placeholder
+        .async_publish(&placeholder)
+        .await
+        .expect("publish under the placeholder hash");
+    }
+    let stray = tokio::time::timeout(Duration::from_millis(500), native.recv_async()).await;
+    assert!(
+      stray.is_err(),
+      "the placeholder-hash publisher must not reach a concrete-hash subscriber, but it \
+       delivered {:?}",
+      stray.map(|s| s.map(|s| s.payload().to_bytes().to_vec()))
+    );
   }
 
   // Build a peer config on IPv4 loopback with multicast off. `listen`/`connect`

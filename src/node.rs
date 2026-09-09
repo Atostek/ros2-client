@@ -1463,6 +1463,20 @@ impl Node {
     Ok(RawPublisher::new(w))
   }
 
+  /// [`create_raw_publisher`](Self::create_raw_publisher), accepting a REP-2016
+  /// type hash for parity with the Zenoh backend. DDS discovery matches on the
+  /// declared type name and carries no such hash, so `_hash` is unused here;
+  /// the method exists so a caller that computes the hash for `rmw_zenoh`'s
+  /// sake need not branch on the backend.
+  pub fn create_raw_publisher_with_type_hash(
+    &mut self,
+    topic: &Topic,
+    qos: Option<QosPolicies>,
+    _hash: &str,
+  ) -> CreateResult<RawPublisher> {
+    self.create_raw_publisher(topic, qos)
+  }
+
   /// Create a **raw** subscription — the inbound counterpart of
   /// [`create_raw_publisher`](Self::create_raw_publisher). It delivers each
   /// message as a full standalone CDR message (`Vec<u8>`), so a consumer can

@@ -3,7 +3,7 @@
 # `ros2-client` on crates.io). The library is still imported as `ros2_client`
 # (see the [lib] section), so consumers only rename the dependency, not the code.
 name = "ros2-client-multi-rmw"
-version = "0.12.0"
+version = "0.12.1"
 edition = "2018"
 rust-version = "1.82.0"
 authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>"]
