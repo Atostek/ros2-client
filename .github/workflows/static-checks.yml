@@ -14,8 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+      # The nightly the tree is formatted with. `wrap_comments` is unstable and
+      # its wrapping changes between nightlies, so a floating toolchain fails
+      # this check on untouched files and forces a repo-wide sweep each time.
+      # To move it: bump the date, run `cargo +nightly-<date> fmt`, commit both.
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2026-07-22
           components: rustfmt
       - run: cargo fmt -- --check
 

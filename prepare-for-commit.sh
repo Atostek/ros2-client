@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Run formatter
-echo cargo +nightly fmt
-cargo +nightly fmt
+echo cargo +nightly-2026-07-22 fmt
+cargo +nightly-2026-07-22 fmt
 
 # Run linter
 echo cargo +nightly clippy

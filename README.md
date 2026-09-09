@@ -57,7 +57,7 @@ then re-check **both** backends and the nightly formatter before re-publishing:
 ```bash
 cargo test                                              # DDS (default)
 cargo test --no-default-features --features zenoh,jazzy --lib
-cargo +nightly fmt -- --check                           # CI formats with nightly rustfmt
+cargo +nightly-2026-07-22 fmt -- --check                # the nightly CI formats with
 ```
 
 The API is not identical to `rclcpp` or `rclpy`, because some parts would be very awkward in Rust. For example, there are no callbacks. Rust `async` mechanism is used instead. Alternatively, some of the functionality can be polled using the Metal I/O library.
