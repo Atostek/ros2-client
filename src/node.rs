@@ -1477,6 +1477,20 @@ impl Node {
     self.create_raw_publisher(topic, qos)
   }
 
+  /// The DDS counterpart of the Zenoh backend's
+  /// `create_raw_server_with_type_hash`: DDS discovery carries no REP-2016
+  /// hash, so the hash is accepted for a backend-neutral caller and ignored.
+  pub fn create_raw_server_with_type_hash(
+    &mut self,
+    service_name: &Name,
+    service_type_name: &ServiceTypeName,
+    request_qos: QosPolicies,
+    response_qos: QosPolicies,
+    _hash: &str,
+  ) -> CreateResult<RawServer> {
+    self.create_raw_server(service_name, service_type_name, request_qos, response_qos)
+  }
+
   /// Create a **raw** subscription — the inbound counterpart of
   /// [`create_raw_publisher`](Self::create_raw_publisher). It delivers each
   /// message as a full standalone CDR message (`Vec<u8>`), so a consumer can
@@ -1655,6 +1669,19 @@ impl Node {
   /// status keep their fixed `action_msgs` types and stay typed. See
   /// [`RawActionServer`] for the endpoint surface and wire layouts. Enhanced
   /// service mapping only, like every raw endpoint.
+  /// The DDS counterpart of the Zenoh backend's
+  /// `create_raw_action_server_with_type_hashes`: the hashes are accepted for
+  /// a backend-neutral caller and ignored, DDS discovery carrying none.
+  pub fn create_raw_action_server_with_type_hashes(
+    &mut self,
+    action_name: &Name,
+    action_type_name: &ActionTypeName,
+    action_qos: ActionServerQosPolicies,
+    _hashes: &crate::names::ActionTypeHashes,
+  ) -> CreateResult<RawActionServer> {
+    self.create_raw_action_server(action_name, action_type_name, action_qos)
+  }
+
   pub fn create_raw_action_server(
     &mut self,
     action_name: &Name,

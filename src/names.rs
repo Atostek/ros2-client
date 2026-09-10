@@ -482,3 +482,17 @@ fn test_name_parse() {
   assert!(!Name::parse("a/nn").unwrap().is_absolute());
   assert!(Name::parse("/a/nn").unwrap().is_absolute());
 }
+
+/// The REP-2016 type hashes of an action's three endpoints whose types are
+/// known only at runtime: the `_SendGoal` and `_GetResult` services and the
+/// `_FeedbackMessage` topic. `rmw_zenoh` keys every entity on its type hash and
+/// a native client addresses a server by that key, so a raw action server that
+/// wants native clients announces the hashes its `.action` generates — computed
+/// by whoever knows the types — rather than the placeholder the
+/// [`type_hash`](crate::zenoh_backend::type_description) table falls back to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActionTypeHashes {
+  pub send_goal: String,
+  pub get_result: String,
+  pub feedback_message: String,
+}

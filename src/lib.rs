@@ -166,7 +166,9 @@ pub use message::Message;
 #[doc(inline)]
 pub use zenoh_backend::type_description;
 #[doc(inline)]
-pub use names::{ActionTypeName, MessageTypeName, Name, NodeName, ServiceTypeName};
+pub use names::{
+  ActionTypeHashes, ActionTypeName, MessageTypeName, Name, NodeName, ServiceTypeName,
+};
 #[cfg(feature = "dds")]
 #[doc(inline)]
 pub use message_info::MessageInfo;

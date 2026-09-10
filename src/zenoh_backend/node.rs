@@ -29,7 +29,7 @@ use super::{
 };
 use crate::{
   action_msgs::{CancelGoalRequest, CancelGoalResponse, GoalStatusArray},
-  names::{ActionTypeName, MessageTypeName, Name, NodeName, ServiceTypeName},
+  names::{ActionTypeHashes, ActionTypeName, MessageTypeName, Name, NodeName, ServiceTypeName},
   parameters::Parameter,
   qos::QosProfile,
 };
@@ -415,10 +415,29 @@ impl Node {
     service: &Name,
     service_type: &ServiceTypeName,
   ) -> zenoh::Result<RawServer> {
+    let dds_type = service_type.dds_service_type();
+    let hash = type_hash::sender_hash(&dds_type);
+    self.create_raw_server_with_type_hash(service, service_type, hash)
+  }
+
+  /// Create a **raw** service server keyed with an explicit REP-2016 type hash
+  /// (`RIHS01_…`) — the service-plane counterpart of
+  /// [`create_raw_publisher_with_type_hash`](Self::create_raw_publisher_with_type_hash).
+  ///
+  /// A native `rmw_zenoh` client sends its request to the key carrying the
+  /// hash its own generated type computes; a server announcing the
+  /// [`type_hash`] table's placeholder is never asked. The types a raw server
+  /// exists for are exactly the ones the table cannot cover, so the caller,
+  /// who knows the service's request and response, supplies the hash.
+  pub fn create_raw_server_with_type_hash(
+    &self,
+    service: &Name,
+    service_type: &ServiceTypeName,
+    hash: &str,
+  ) -> zenoh::Result<RawServer> {
     let fqn = resolve_fqn(service, &self.node_name);
     let dds_type = service_type.dds_service_type();
     let domain = self.context.domain_id();
-    let hash = type_hash::sender_hash(&dds_type);
     // The server's queryable is concrete (real-or-placeholder hash).
     let key = keyexpr::topic_keyexpr(domain, &fqn, &dds_type, hash);
     let queryable = self
@@ -546,21 +565,58 @@ impl Node {
     action: &Name,
     action_type: &ActionTypeName,
   ) -> zenoh::Result<RawActionServer> {
+    let hashes = ActionTypeHashes {
+      send_goal: type_hash::sender_hash(
+        &action_type
+          .dds_action_service("_SendGoal")
+          .dds_service_type(),
+      )
+      .to_string(),
+      get_result: type_hash::sender_hash(
+        &action_type
+          .dds_action_service("_GetResult")
+          .dds_service_type(),
+      )
+      .to_string(),
+      feedback_message: type_hash::sender_hash(
+        &action_type
+          .dds_action_topic("_FeedbackMessage")
+          .dds_msg_type(),
+      )
+      .to_string(),
+    };
+    self.create_raw_action_server_with_type_hashes(action, action_type, &hashes)
+  }
+
+  /// Create a **raw** action server whose runtime-typed endpoints — the
+  /// `_SendGoal` and `_GetResult` services and the `_FeedbackMessage` topic —
+  /// are keyed with explicit REP-2016 type hashes, so native `rmw_zenoh`
+  /// clients reach them. See [`ActionTypeHashes`] and
+  /// [`create_raw_server_with_type_hash`](Self::create_raw_server_with_type_hash).
+  pub fn create_raw_action_server_with_type_hashes(
+    &self,
+    action: &Name,
+    action_type: &ActionTypeName,
+    hashes: &ActionTypeHashes,
+  ) -> zenoh::Result<RawActionServer> {
     let fqn = resolve_fqn(action, &self.node_name);
-    let send_goal = self.create_raw_server(
+    let send_goal = self.create_raw_server_with_type_hash(
       &action_sub_name(&fqn, "send_goal")?,
       &action_type.dds_action_service("_SendGoal"),
+      &hashes.send_goal,
     )?;
-    let get_result = self.create_raw_server(
+    let get_result = self.create_raw_server_with_type_hash(
       &action_sub_name(&fqn, "get_result")?,
       &action_type.dds_action_service("_GetResult"),
+      &hashes.get_result,
     )?;
     let feedback_topic = self.create_topic(
       &action_sub_name(&fqn, "feedback")?,
       action_type.dds_action_topic("_FeedbackMessage"),
       &QosProfile::default(),
     );
-    let feedback = self.create_raw_publisher(&feedback_topic, None)?;
+    let feedback =
+      self.create_raw_publisher_with_type_hash(&feedback_topic, None, &hashes.feedback_message)?;
     // cancel_goal + status use the shared `action_msgs` types (not
     // action-namespaced), matching rmw_zenoh / the DDS backend.
     let cancel_goal = self.create_server::<CancelGoalRequest, CancelGoalResponse>(
