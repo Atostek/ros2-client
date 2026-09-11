@@ -25,12 +25,13 @@ Upstream owns the `ros2-client` name on crates.io, so this fork is **published a
 line differs:
 
 ```toml
-ros2-client = { package = "ros2-client-multi-rmw", version = "0.10", default-features = false, features = ["zenoh"] }
+ros2-client = { package = "ros2-client-multi-rmw", version = "0.13", default-features = false, features = ["zenoh"] }
 ```
 
-Code stays `use ros2_client::…`. To publish a new version, bump `version` and run
-`cargo publish` (a maintainer crates.io token is enough — a manual publish needs
-no Trusted Publisher).
+Code stays `use ros2_client::…`. A release is cut by merging a version bump to
+`master`: [`release.yml`](.github/workflows/release.yml) publishes through
+crates.io trusted publishing when that version is not on crates.io yet — no tag,
+no token. [`CHANGELOG.md`](CHANGELOG.md) records each version.
 
 ### Re-aligning with upstream
 
