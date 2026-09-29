@@ -21,6 +21,7 @@
 // E2 — backend-neutral wire-format spec (pure; compiled on every build).
 pub(crate) mod gid;
 pub(crate) mod graph_cache;
+pub(crate) mod jazzy_types;
 pub(crate) mod keyexpr;
 pub(crate) mod qos_encoding;
 pub(crate) mod type_description;

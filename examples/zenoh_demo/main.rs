@@ -8,10 +8,10 @@
 //!
 //! It starts a talker and a listener in one process, connected directly over
 //! IPv4 loopback (Zenoh *peer* mode, multicast disabled, explicit endpoints),
-//! so it works without a running Zenoh router. In a real multi-process or
-//! multi-host deployment you would instead run a Zenoh router (`zenohd`) — as
-//! `rmw_zenoh` does — or configure peer `connect`/`listen` endpoints; see
-//! `docs/decisions/0009-zenoh-router-and-config.md`.
+//! so it works without a running Zenoh router. The endpoints are hardcoded;
+//! this demo does not read `ZENOH_CONFIG_OVERRIDE`. To talk to a real ROS 2
+//! Jazzy node over `rmw_zenoh`, use `examples/zenoh_interop` and
+//! `interop/zenoh/run_all.sh` instead.
 //!
 //! The listener also reads `/rosout`, and the talker logs there, to show
 //! logging on the Zenoh backend.

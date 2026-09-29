@@ -240,8 +240,13 @@ name = "turtle_teleop"
 path = "examples/turtle_teleop/main.rs"
 required-features = ["dds"]
 
-# Zenoh-backend example.
+# Zenoh-backend examples.
 [[example]]
 name = "zenoh_demo"
 path = "examples/zenoh_demo/main.rs"
+required-features = ["zenoh"]
+
+[[example]]
+name = "zenoh_interop"
+path = "examples/zenoh_interop/main.rs"
 required-features = ["zenoh"]

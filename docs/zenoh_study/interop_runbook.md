@@ -4,9 +4,26 @@ The in-tree tests cover Tier A (byte-exact wire-format unit tests) and Tier B
 (two `ros2-client` peers in-process over loopback, plus the client→router→client
 path in `pub_sub_through_router`). **Tier C** — validating against a *real* ROS 2
 stack using the official `rmw_zenoh` middleware — needs a ROS 2 installation and
-is therefore run manually rather than in this repo's CI (which has no ROS 2
-environment). This runbook is the concrete procedure; each step maps to a `C#`
-acceptance criterion from the epic (#2) work items.
+is therefore a local harness, not a CI job.
+
+Run the whole set (C1–C9) with:
+
+```bash
+interop/zenoh/run_all.sh
+```
+
+That builds `zenoh_interop`, starts `rmw_zenohd` if port 7447 is free, runs one
+script per case, and writes
+`interop/results/report-zenoh-jazzy-<git-describe>.txt`. Install, on Ubuntu:
+
+```bash
+sudo apt install ros-jazzy-desktop ros-jazzy-rmw-zenoh-cpp \
+  ros-jazzy-demo-nodes-cpp ros-jazzy-examples-rclpy-minimal-service \
+  ros-jazzy-action-tutorials-cpp
+```
+
+`examples/zenoh_demo` is a no-router two-peer demo and is not part of this
+harness. The sections below are what each case checks.
 
 ## 0. Prerequisites
 
@@ -15,12 +32,11 @@ requires a running router (`zenohd`); `ros2-client`'s Zenoh backend does too for
 multi-process discovery (ADR-0009).
 
 ```bash
-# ROS 2 + rmw_zenoh (Jazzy example)
-sudo apt install ros-jazzy-desktop ros-jazzy-rmw-zenoh-cpp
+# ROS 2 + rmw_zenoh (Jazzy). The apt line at the top of this file is the full set.
 source /opt/ros/jazzy/setup.bash
 export RMW_IMPLEMENTATION=rmw_zenoh_cpp
 
-# Terminal R: the router (from rmw_zenoh, or a standalone zenohd)
+# Terminal R: the router (the scripts start this themselves when 7447 is free)
 ros2 run rmw_zenoh_cpp rmw_zenohd
 ```
 
@@ -44,9 +60,8 @@ prefix).
 `ros2-client` publishes, ROS 2 subscribes:
 
 ```bash
-# Run the bundled example against the router (edit it to use ZENOH_CONFIG_OVERRIDE
-# or run your own talker built with `--no-default-features --features zenoh`).
-cargo run --no-default-features --features zenoh --example zenoh_demo
+# ros2-client publishes (Context::new honours ZENOH_CONFIG_OVERRIDE):
+cargo run --no-default-features --features zenoh --example zenoh_interop -- talker --count 5
 # ROS 2 side:
 ros2 topic echo /chatter std_msgs/msg/String
 ```
@@ -142,8 +157,6 @@ backend's interop results layout) with the ROS distro, `rmw_zenoh` version, and
 
 ## Automating this later
 
-A `workflow_dispatch` CI job could run this against a `ros-jazzy` container with
-`rmw_zenoh_cpp` installed and `rmw_zenohd` started as a service step. It is
-intentionally **not** added to the always-on CI here because it needs a ROS 2
-image and a router daemon; wire it up in an environment that has both, using the
-commands above as the script.
+Tier C stays a local harness (`interop/zenoh/`). It is intentionally **not** a
+CI job: the always-on workflows have no ROS 2 image. The scripts above are the
+automation.

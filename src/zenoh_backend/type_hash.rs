@@ -14,14 +14,11 @@
 //!   wildcard/placeholder and send-direction interop with C++ peers may not
 //!   match until full IDL hashing lands.
 //!
-//! The table values are taken from observed `rmw_zenoh` traffic / the design
-//! examples and are covered by a test so drift is caught. They are additionally
-//! cross-checked against the from-scratch REP-2016 computation in
-//! [`super::type_description`] (which reproduces both hashes byte-exactly from
-//! their field descriptions), so the table entries are now *verified* rather
-//! than merely observed. Computing hashes for arbitrary types at code-gen time
-//! (removing the table entirely for the send direction) is the remaining
-//! `msggen` integration follow-up (ADR-0007).
+//! `std_msgs/String` is the published hash. The other Jazzy interop types
+//! (AddTwoInts, actions, parameters, rosout) are computed from their field
+//! descriptions in [`super::jazzy_types`] and match the `type_hashes` in the
+//! installed Jazzy `share/<pkg>/**/*.json` files. Computing hashes for arbitrary types at code-gen time
+//! is the remaining `msggen` integration follow-up (ADR-0007).
 
 /// Wildcard used in the type-hash slot of a *receiver's* key expression so it
 /// matches publishers/clients of any hash. A single-chunk `*` matches exactly
@@ -37,6 +34,16 @@ pub const PLACEHOLDER_HASH: &str =
   "RIHS01_0000000000000000000000000000000000000000000000000000000000000000";
 
 lazy_static::lazy_static! {
+  /// DDS type name → RIHS01 for the Jazzy types a sender or service queryable
+  /// must name exactly (topics, services, actions, parameters, rosout).
+  static ref JAZZY_INTEROP_HASHES: std::collections::HashMap<&'static str, String> = {
+    super::jazzy_types::interop_descriptions()
+      .into_iter()
+      .map(|(dds, td)| (dds, td.rihs01()))
+      .collect()
+  };
+
+
   /// `dds_type_name -> RIHS01_…` for the `std_msgs` scalar message types a
   /// device bridge publishes (`Float64`, `Bool`, `Int32`, …). Each is a single
   /// `data` field, so its REP-2016 hash is computed from that description via
@@ -78,17 +85,17 @@ lazy_static::lazy_static! {
 /// messages ([`STD_MSGS_SCALAR_HASHES`]). Returns `None` for anything else;
 /// callers then fall back to a wildcard/placeholder for the send direction.
 pub fn known_type_hash(dds_type_name: &str) -> Option<&'static str> {
-  match dds_type_name {
-    "std_msgs::msg::dds_::String_" => {
-      Some("RIHS01_df668c740482bbd48fb39d76a70dfd4bd59db1288021743503259e948f6b1a18")
-    }
-    "example_interfaces::srv::dds_::AddTwoInts_" => {
-      Some("RIHS01_e118de6bf5eeb66a2491b5bda11202e7b68f198d6f67922cf30364858239c81a")
-    }
-    _ => STD_MSGS_SCALAR_HASHES
-      .get(dds_type_name)
-      .map(String::as_str),
+  if dds_type_name == "std_msgs::msg::dds_::String_" {
+    return Some("RIHS01_df668c740482bbd48fb39d76a70dfd4bd59db1288021743503259e948f6b1a18");
   }
+  // Jazzy interop types (AddTwoInts, actions, parameters, rosout), computed
+  // from their field descriptions. See `jazzy_types`.
+  if let Some(hash) = JAZZY_INTEROP_HASHES.get(dds_type_name) {
+    return Some(hash.as_str());
+  }
+  STD_MSGS_SCALAR_HASHES
+    .get(dds_type_name)
+    .map(String::as_str)
 }
 
 /// The hash to place in a *sender's* (publisher/client) concrete key: the known
@@ -142,7 +149,11 @@ mod tests {
       "std_msgs::msg::dds_::UInt32_",
       "std_msgs::msg::dds_::UInt64_",
     ] {
-      assert!(known_type_hash(dds).is_some(), "{dds} should be known");
+      assert!(
+        known_type_hash(dds).is_some(),
+        "{dds} should be known",
+        dds = dds
+      );
     }
 
     // The table value equals the hash computed straight from the field

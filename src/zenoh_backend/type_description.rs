@@ -134,6 +134,27 @@ impl FieldType {
       nested_type_name: name.into(),
     }
   }
+
+  /// An unbounded sequence of the given base scalar id (`int32[]`, `string[]`,
+  /// …).
+  pub fn unbounded_sequence(base_type_id: u8) -> Self {
+    Self {
+      type_id: base_type_id + type_id::UNBOUNDED_SEQUENCE_OFFSET,
+      capacity: 0,
+      string_capacity: 0,
+      nested_type_name: String::new(),
+    }
+  }
+
+  /// An unbounded sequence of a nested (named) type (`Parameter[]`, …).
+  pub fn nested_unbounded_sequence(name: impl Into<String>) -> Self {
+    Self {
+      type_id: type_id::NESTED_TYPE + type_id::UNBOUNDED_SEQUENCE_OFFSET,
+      capacity: 0,
+      string_capacity: 0,
+      nested_type_name: name.into(),
+    }
+  }
 }
 
 /// A `type_description_interfaces/msg/Field`.
@@ -412,18 +433,7 @@ mod tests {
         Field::new("nanosec", FieldType::scalar(t::UINT32)),
       ],
     );
-    // NOTE: this hash corresponds to the ROS distro where ServiceEventInfo's
-    // `client_gid` is `uint8[16]` (type_id 51). Newer `char[16]` distros hash
-    // differently.
-    let service_event_info = IndividualTypeDescription::new(
-      "service_msgs/msg/ServiceEventInfo",
-      vec![
-        Field::new("event_type", FieldType::scalar(t::UINT8)),
-        Field::new("stamp", FieldType::nested("builtin_interfaces/msg/Time")),
-        Field::new("client_gid", FieldType::array(t::UINT8, 16)),
-        Field::new("sequence_number", FieldType::scalar(t::INT64)),
-      ],
-    );
+    let service_event_info = service_event_info();
 
     let td = service_type_description(
       svc,
@@ -447,9 +457,44 @@ mod tests {
   #[test]
   fn field_type_offsets() {
     assert_eq!(FieldType::array(t::UINT8, 16).type_id, 51);
+    assert_eq!(FieldType::array(t::CHAR, 16).type_id, 61);
     assert_eq!(
       FieldType::nested_bounded_sequence("x", 1).type_id,
       t::NESTED_TYPE + t::BOUNDED_SEQUENCE_OFFSET
     );
+    assert_eq!(
+      FieldType::unbounded_sequence(t::STRING).type_id,
+      t::STRING + t::UNBOUNDED_SEQUENCE_OFFSET
+    );
+    assert_eq!(
+      FieldType::nested_unbounded_sequence("x").type_id,
+      t::NESTED_TYPE + t::UNBOUNDED_SEQUENCE_OFFSET
+    );
   }
+}
+
+/// Jazzy `builtin_interfaces/msg/Time`.
+pub(crate) fn time_description() -> IndividualTypeDescription {
+  IndividualTypeDescription::new(
+    "builtin_interfaces/msg/Time",
+    vec![
+      Field::new("sec", FieldType::scalar(type_id::INT32)),
+      Field::new("nanosec", FieldType::scalar(type_id::UINT32)),
+    ],
+  )
+}
+
+/// Jazzy `service_msgs/msg/ServiceEventInfo`. The `.msg` says `char[16]
+/// client_gid`, but rosidl maps IDL `char` to `uint8`, so the installed type
+/// description (and therefore the hash) uses `uint8[16]` (type id 51).
+pub(crate) fn service_event_info() -> IndividualTypeDescription {
+  IndividualTypeDescription::new(
+    "service_msgs/msg/ServiceEventInfo",
+    vec![
+      Field::new("event_type", FieldType::scalar(type_id::UINT8)),
+      Field::new("stamp", FieldType::nested("builtin_interfaces/msg/Time")),
+      Field::new("client_gid", FieldType::array(type_id::UINT8, 16)),
+      Field::new("sequence_number", FieldType::scalar(type_id::INT64)),
+    ],
+  )
 }

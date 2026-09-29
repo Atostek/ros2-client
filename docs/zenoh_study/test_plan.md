@@ -96,23 +96,22 @@ Add one workflow `tests-zenoh.yml` (per-PR):
 2. **Job `integration-zenoh`** (fast, always): run **Tier B** in-process tests
    (`cargo test --no-default-features --features zenoh -- --test-threads=1`).
    No router needed (direct peer connection). (~3–5 min)
-3. **Job `interop-ros2`** (`container: ros:jazzy`): install
-   `ros-jazzy-rmw-zenoh-cpp ros-jazzy-demo-nodes-cpp
-   ros-jazzy-example-interfaces ros-jazzy-action-tutorials-cpp` + rustup; start
-   `rmw_zenohd`; run the **Tier C** scripts under `RMW_IMPLEMENTATION=
-   rmw_zenoh_cpp`. Cache cargo + apt. (~12–18 min)
+3. **Tier C is local, not CI.** `interop/zenoh/run_all.sh` runs C1–C9 against
+   an installed Jazzy + `rmw_zenoh` (see
+   [`interop_runbook.md`](interop_runbook.md)). There is no `interop-ros2`
+   workflow: always-on CI has no ROS 2 image.
 
 Keep existing `tests.yml`/`static-checks.yml` for the **`dds`** default so DDS
 never regresses. `static-checks` gains a `--features zenoh` clippy/doc pass.
 
-Budget: A+B jobs ≈ 10 min, C job ≈ 15 min, run in parallel → wall-clock well
-under 30 min. `msrv`/`audit`/`macos` unaffected.
+Budget: A+B jobs ≈ 10 min. Tier C is the local `interop/zenoh` harness, not
+part of that CI budget. `msrv`/`audit`/`macos` unaffected.
 
 ## 4. Harness notes
 
-- Tier C scripts live in `interop/zenoh/` (shell + tiny Rust example binaries),
-  invoked by the workflow; each has a hard timeout and asserts on captured
-  stdout, following the pattern of the workshop ex-1 commands.
+- Tier C scripts live in `interop/zenoh/` (shell + the `zenoh_interop`
+  example). Run them locally with `interop/zenoh/run_all.sh`; they are not
+  invoked by CI. Each case has a hard timeout and asserts on captured stdout.
 - In-process Tier B uses explicit connect/listen endpoints to avoid multicast
   flakiness and the router dependency.
 - Every new feature PR (E4–E9) must land with its Tier A/B tests and wire its

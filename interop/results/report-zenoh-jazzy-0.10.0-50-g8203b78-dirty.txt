@@ -1,0 +1,15 @@
+===== distro: jazzy (rmw_zenoh) =====
+  git: 0.10.0-50-g8203b78-dirty
+  rmw_zenoh: ros-jazzy-rmw-zenoh-cpp 0.2.10-1noble.20260902.013525
+
+  [PASS] jazzy.topic_pub interop: ros2-client talker -> ros2 topic echo /chatter sees hello-zenoh
+  [PASS] jazzy.topic_sub interop: demo_nodes_cpp talker -> ros2-client listener prints message len=
+  [PASS] jazzy.graph discovery: ros2 node list and topic list show zenoh_talker /chatter
+  [PASS] jazzy.service_server interop: ros2 service call -> ros2-client AddTwoInts replies sum=42
+  [PASS] jazzy.service_client interop: ros2-client client -> ROS 2 AddTwoInts service, sum 42
+  [PASS] jazzy.action_server interop: ros2 action send_goal -> ros2-client Fibonacci result [0, 1, 1, 2, 3, 5]
+  [PASS] jazzy.action_client interop: ros2-client Fibonacci client -> action_tutorials_cpp server
+  [PASS] jazzy.params interop: ros2 param get/set /param_holder speed
+  [PASS] jazzy.rosout interop: ros2 topic echo /rosout shows rosout interop line
+== jazzy: 9 pass, 0 note(s), 0 fail(s) ==
+===== TOTAL: 9 pass, 0 note(s), 0 fail(s) across 1 distro(s) =====
