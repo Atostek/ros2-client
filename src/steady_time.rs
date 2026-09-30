@@ -21,6 +21,7 @@ use std::{
   convert::TryFrom,
   fmt,
   ops::{Add, Sub},
+  sync::OnceLock,
   time::{Duration, Instant},
 };
 
@@ -67,10 +68,23 @@ impl Time {
   }
 } // impl Time
 
+/// A fixed per-process reference instant, so that steady [`Time`] values (which
+/// have an arbitrary origin) can be displayed relative to a stable point.
+fn process_origin() -> Instant {
+  static ORIGIN: OnceLock<Instant> = OnceLock::new();
+  *ORIGIN.get_or_init(Instant::now)
+}
+
 impl fmt::Display for Time {
   fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-    // TODO: needs a display customization
-    fmt::Debug::fmt(self, fmt)
+    // Steady time has no absolute epoch, so show it relative to a process-wide
+    // origin captured on first use.
+    let since_origin = (*self - Time {
+      instant: process_origin(),
+    })
+    .as_nanos() as f64
+      / 1e9;
+    write!(fmt, "steady_time({since_origin:+.9}s from process origin)")
   }
 }
 
@@ -219,8 +233,10 @@ impl PartialOrd for TimeDiff {
 
 impl fmt::Display for TimeDiff {
   fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-    // TODO: needs a display customization
-    fmt::Debug::fmt(self, fmt)
+    let nanos = self.as_nanos();
+    let sign = if nanos < 0 { "-" } else { "" };
+    let abs = nanos.unsigned_abs();
+    write!(fmt, "{sign}{}.{:09}s", abs / 1_000_000_000, abs % 1_000_000_000)
   }
 }
 

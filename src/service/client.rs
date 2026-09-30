@@ -1,10 +1,13 @@
 use std::{io, sync::atomic};
 
-use mio::{Evented, Poll, PollOpt, Ready, Token};
+use rustdds::{
+  mio::{Evented, Poll, PollOpt, Ready, Token},
+  rpc::*,
+  *,
+};
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 use futures::{join, pin_mut, StreamExt};
-use rustdds::{rpc::*, *};
 
 use crate::{
   error::{CreateResult, ReadError, ReadResult, WriteError, WriteResult},
@@ -213,7 +216,8 @@ where
   /// It is enough that someone has subscribed the Requests, and someone is
   /// a publisher for Responses.
   ///
-  /// May panic, if the Node does not havea background Spinner running.
+  /// If the Node has no background Spinner running, this resolves immediately
+  /// (an error is logged), since without a Spinner no match events are delivered.
   pub async fn wait_for_service(&self, my_node: &Node) {
     join!(
       my_node.wait_for_reader(self.request_sender.guid()),

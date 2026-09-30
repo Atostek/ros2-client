@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use mio::{Events, Poll, PollOpt, Ready, Token};
+use rustdds::mio::{Events, Poll, PollOpt, Ready, Token};
 use serde::{Deserialize, Serialize};
 use ros2_client::{
   qos::History, Context, Message, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping,
@@ -40,9 +40,12 @@ fn main() {
 
   println!(">>> ros2_service node started");
 
+  let service_mapping = service_mapping_from_env();
+  println!(">>> using ServiceMapping::{service_mapping:?}");
+
   let client = node
     .create_client::<AddTwoIntsRequest, AddTwoIntsResponse>(
-      ServiceMapping::Enhanced,
+      service_mapping,
       &Name::new("/", "add_two_ints").unwrap(),
       &ServiceTypeName::new("example_interfaces", "AddTwoInts"),
       service_qos.clone(),
@@ -94,6 +97,21 @@ fn main() {
         }
       }
     }
+  }
+}
+
+/// Select the service wire mapping from the `ROS2_SERVICE_MAPPING` environment
+/// variable (`Basic`, `Enhanced`, or `Cyclone`). Defaults to `Enhanced`.
+fn service_mapping_from_env() -> ServiceMapping {
+  match std::env::var("ROS2_SERVICE_MAPPING").as_deref() {
+    Ok("Basic") | Ok("basic") => ServiceMapping::Basic,
+    Ok("Cyclone") | Ok("cyclone") => ServiceMapping::Cyclone,
+    Ok("Enhanced") | Ok("enhanced") => ServiceMapping::Enhanced,
+    Ok(other) => {
+      eprintln!(">>> Unknown ROS2_SERVICE_MAPPING '{other}', using Enhanced");
+      ServiceMapping::Enhanced
+    }
+    Err(_) => ServiceMapping::Enhanced,
   }
 }
 

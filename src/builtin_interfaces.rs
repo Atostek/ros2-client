@@ -27,7 +27,10 @@
 use serde::{Deserialize, Serialize};
 use log::{error, warn};
 
-use crate::{message::Message, ros_time::ROSTime};
+use crate::{
+  message::Message,
+  ros_time::{OutOfRangeError, ROSTime},
+};
 
 /// Over-the wire representation of a timestamp.
 ///
@@ -72,6 +75,14 @@ impl Time {
 
   pub fn to_nanos(&self) -> i64 {
     self.nanos_since_epoch
+  }
+
+  /// Construct from the over-the-wire seconds + sub-second nanoseconds fields.
+  ///
+  /// `nanosec` is normally the sub-second part in `[0, 10^9)`, but larger
+  /// values are accepted and folded into the seconds.
+  pub fn new(sec: i32, nanosec: u32) -> Self {
+    Time::from(repr::Time { sec, nanosec })
   }
 }
 
@@ -196,29 +207,58 @@ impl From<Time> for ROSTime {
   }
 }
 
-// TODO: Implement constructors and conversions to/from usual Rust time formats
-// Note that this type does not specify a zero point in time.
+// Conversions between `Time` (a point in time, nanoseconds since the Unix
+// epoch) and the usual Rust/chrono time types.
 
-// Converting a straight 64-bit nanoseconds value to Duration is non-trivial.
-// See function `Duration::operator builtin_interfaces::msg::Duration() const`
-// in https://github.com/ros2/rclcpp/blob/rolling/rclcpp/src/rclcpp/duration.cpp
-//
-// If dividing the raw nanosecond duration by 10^9 would overflow `i32`, then
-// saturate to either to {sec = i32::max , nanosec = u32::max} (positive
-// overflow) or { sec = i32::min , nanosec = 0 }.
-//
-// Converting non-negative nanoseconds to Duration is straightforward. Just use
-// integer division by 10^9 and store quotient and remainder.
-//
-// Negative nanoseconds are converted by similar integer divsion, and the result
-// is { sec = quotient - 1 , nanosec = 10^9 + remainder}
-//
-// E.g. -1.5*10^9 nanosec --> quotient = -1 , remainder = -5*10^8
-// (We are using division with invariant: quotient * divisor + remainder ==
-// dividend ) Now { sec = -2 , nanosec = +5 * 10^8 }
-//
-// -1 nanosec --> quotient = 0, remainder = -1 -->
-// { sec = -1 , nanosec = 999_999_999 }
+impl From<Time> for chrono::DateTime<chrono::Utc> {
+  fn from(t: Time) -> Self {
+    chrono::DateTime::<chrono::Utc>::from_timestamp_nanos(t.to_nanos())
+  }
+}
+
+impl TryFrom<chrono::DateTime<chrono::Utc>> for Time {
+  type Error = OutOfRangeError;
+  /// Fails if the timestamp is outside the ~584-year range that fits in an
+  /// `i64` nanosecond count (roughly years 1678..=2262).
+  fn try_from(dt: chrono::DateTime<chrono::Utc>) -> Result<Self, Self::Error> {
+    dt.timestamp_nanos_opt()
+      .map(Time::from_nanos)
+      .ok_or(OutOfRangeError {})
+  }
+}
+
+impl TryFrom<std::time::SystemTime> for Time {
+  type Error = OutOfRangeError;
+  /// Fails if the instant is more than ~292 years from the Unix epoch, i.e.
+  /// out of `i64` nanosecond range.
+  fn try_from(st: std::time::SystemTime) -> Result<Self, Self::Error> {
+    let nanos = match st.duration_since(std::time::UNIX_EPOCH) {
+      Ok(d) => i64::try_from(d.as_nanos()).map_err(|_| OutOfRangeError {})?,
+      Err(before_epoch) => {
+        -i64::try_from(before_epoch.duration().as_nanos()).map_err(|_| OutOfRangeError {})?
+      }
+    };
+    Ok(Time::from_nanos(nanos))
+  }
+}
+
+impl TryFrom<Time> for std::time::SystemTime {
+  type Error = OutOfRangeError;
+  /// Fails only if adding the offset to `UNIX_EPOCH` overflows the platform
+  /// `SystemTime`.
+  fn try_from(t: Time) -> Result<Self, Self::Error> {
+    let nanos = t.to_nanos();
+    if nanos >= 0 {
+      std::time::UNIX_EPOCH
+        .checked_add(std::time::Duration::from_nanos(nanos as u64))
+        .ok_or(OutOfRangeError {})
+    } else {
+      std::time::UNIX_EPOCH
+        .checked_sub(std::time::Duration::from_nanos(nanos.unsigned_abs()))
+        .ok_or(OutOfRangeError {})
+    }
+  }
+}
 
 /// Over-the wire representation of Duration, i.e. difference between two
 /// timestamps.
@@ -290,12 +330,15 @@ impl Duration {
           nanosec: 0,
         }
       } else {
-        // normal negative result
+        // normal negative result: `quot` truncates toward zero, so the floored
+        // seconds value is `quot - 1` and the remainder is shifted into a
+        // positive sub-second part.
         Duration {
-          sec: (quot + 1) as i32,
+          sec: (quot - 1) as i32,
           nanosec: (1_000_000_000 + rem) as u32,
         }
-        // i32::MIN <= quot < 0 => quot+1 is valid i32
+        // i32::MIN < quot <= 0 => quot-1 is valid i32 (quot == i32::MIN is
+        // handled by the saturating branch above)
         // -999_999_999 <= rem < 0 =>
         // 1 <= 1_000_000_000 + rem < 1_000_000_000 => valid u32
       }
@@ -310,14 +353,108 @@ impl Duration {
   }
 }
 
+// Conversions between the over-the-wire `Duration` and the usual Rust/chrono
+// duration types. `from_nanos` saturates on overflow (see above).
+
+impl From<std::time::Duration> for Duration {
+  /// Saturates to the maximum representable `Duration` if the input exceeds the
+  /// `i64` nanosecond range.
+  fn from(d: std::time::Duration) -> Self {
+    Duration::from_nanos(i64::try_from(d.as_nanos()).unwrap_or(i64::MAX))
+  }
+}
+
+impl TryFrom<Duration> for std::time::Duration {
+  type Error = OutOfRangeError;
+  /// Fails for negative durations, which `std::time::Duration` cannot represent.
+  fn try_from(d: Duration) -> Result<Self, Self::Error> {
+    let nanos = d.to_nanos();
+    if nanos < 0 {
+      Err(OutOfRangeError {})
+    } else {
+      Ok(std::time::Duration::from_nanos(nanos as u64))
+    }
+  }
+}
+
+impl From<chrono::Duration> for Duration {
+  /// Saturates on overflow (chrono durations beyond the `i64` nanosecond range).
+  fn from(d: chrono::Duration) -> Self {
+    let nanos = d.num_nanoseconds().unwrap_or({
+      if d > chrono::Duration::zero() {
+        i64::MAX
+      } else {
+        i64::MIN
+      }
+    });
+    Duration::from_nanos(nanos)
+  }
+}
+
+impl From<Duration> for chrono::Duration {
+  fn from(d: Duration) -> Self {
+    chrono::Duration::nanoseconds(d.to_nanos())
+  }
+}
+
 #[cfg(test)]
 mod test {
-  use super::{repr, Time};
+  use super::{repr, Duration, Time};
 
   fn repr_conv_test(t: Time) {
     let rt: repr::Time = t.into();
     println!("{rt:?}");
     assert_eq!(t, Time::from(rt))
+  }
+
+  #[test]
+  fn time_new() {
+    assert_eq!(Time::new(1, 500_000_000).to_nanos(), 1_500_000_000);
+    assert_eq!(Time::new(0, 0), Time::ZERO);
+  }
+
+  #[test]
+  fn time_chrono_roundtrip() {
+    for nanos in [0i64, 1, -1, 1_500_000_000, -1_500_000_000, 1_700_000_000_000_000_000] {
+      let t = Time::from_nanos(nanos);
+      let dt: chrono::DateTime<chrono::Utc> = t.into();
+      assert_eq!(Time::try_from(dt).unwrap(), t);
+    }
+  }
+
+  #[test]
+  fn time_systemtime_roundtrip() {
+    for nanos in [0i64, 1, 1_500_000_000, 1_700_000_000_000_000_000] {
+      let t = Time::from_nanos(nanos);
+      let st: std::time::SystemTime = t.try_into().unwrap();
+      assert_eq!(Time::try_from(st).unwrap(), t);
+    }
+  }
+
+  #[test]
+  fn duration_from_nanos() {
+    // Regression: negative durations must floor the seconds component.
+    for nanos in [0i64, 1, -1, 1_500_000_000, -1_500_000_000, -999_999_999] {
+      assert_eq!(Duration::from_nanos(nanos).to_nanos(), nanos);
+    }
+  }
+
+  #[test]
+  fn duration_std_roundtrip() {
+    let d = Duration::from_nanos(1_500_000_000);
+    let std_d: std::time::Duration = d.clone().try_into().unwrap();
+    assert_eq!(Duration::from(std_d).to_nanos(), d.to_nanos());
+    // negative durations cannot be represented by std::time::Duration
+    assert!(std::time::Duration::try_from(Duration::from_nanos(-1)).is_err());
+  }
+
+  #[test]
+  fn duration_chrono_roundtrip() {
+    for nanos in [0i64, 1, -1, 1_500_000_000, -1_500_000_000] {
+      let d = Duration::from_nanos(nanos);
+      let cd: chrono::Duration = d.clone().into();
+      assert_eq!(Duration::from(cd).to_nanos(), nanos);
+    }
   }
 
   #[test]

@@ -101,10 +101,38 @@ struct ParameterServers {
     Server<rcl_interfaces::ListParametersRequest, rcl_interfaces::ListParametersResponse>,
   set_parameters_server:
     Server<rcl_interfaces::SetParametersRequest, rcl_interfaces::SetParametersResponse>,
-  set_parameters_atomically_server:
-    Server<rcl_interfaces::SetParametersRequest, rcl_interfaces::SetParametersResponse>,
+  set_parameters_atomically_server: Server<
+    rcl_interfaces::SetParametersRequest,
+    rcl_interfaces::SetParametersAtomicallyResponse,
+  >,
   describe_parameters_server:
     Server<rcl_interfaces::DescribeParametersRequest, rcl_interfaces::DescribeParametersResponse>,
+}
+
+/// Enforces static typing of parameters: an existing, typed parameter may not
+/// change its `ParameterType` unless undeclared parameters are allowed (which we
+/// treat as dynamic typing). Setting to `NotSet` is a deletion and is always
+/// allowed. Shared by both `Node` and `Spinner` to keep the rule consistent.
+fn reject_type_change(
+  parameters: &Mutex<BTreeMap<String, ParameterValue>>,
+  allow_undeclared: bool,
+  name: &str,
+  value: &ParameterValue,
+) -> SetParametersResult {
+  if allow_undeclared || matches!(value, ParameterValue::NotSet) {
+    return Ok(());
+  }
+  if let Some(existing) = parameters.lock().unwrap().get(name)
+    && !matches!(existing, ParameterValue::NotSet)
+    && std::mem::discriminant(existing) != std::mem::discriminant(value)
+  {
+    return Err(format!(
+      "Cannot change type of parameter '{name}' from {:?} to {:?}.",
+      existing.to_parameter_type(),
+      value.to_parameter_type()
+    ));
+  }
+  Ok(())
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -287,23 +315,16 @@ impl Spinner {
         set_parameters_atomically_request = next_if_some(&mut set_parameters_atomically_stream_opt).fuse() => {
           match set_parameters_atomically_request {
             Ok( (req_id, req) ) => {
-              warn!("Set parameters atomically request {req:?}");
-              let results =
-                req.parameter.iter()
-                  .cloned()
-                  .map( Parameter::from ) // convert from "raw::Parameter"
-                  .map( |Parameter{ .. } |
-                      // TODO: Implement atomic setting.
-                      Err("Setting parameters atomically is not implemented.".to_owned())
-                    )
-                  .map(|r| r.into()) // to "raw" Result for serialization
-                  .collect();
-              warn!("Set parameters atomically response: {results:?}");
+              info!("Set parameters atomically request {req:?}");
+              let params: Vec<Parameter> =
+                req.parameter.iter().cloned().map(Parameter::from).collect();
+              let result: raw::SetParametersResult = self.set_parameters_atomically(params).into();
+              info!("Set parameters atomically response: {result:?}");
               // .unwrap() below should be safe, as we would not be here if the Server did not exist
               self.parameter_servers.as_ref().unwrap().set_parameters_atomically_server
-                .async_send_response(req_id, rcl_interfaces::SetParametersAtomicallyResponse{ results })
+                .async_send_response(req_id, rcl_interfaces::SetParametersAtomicallyResponse{ result })
                 .await
-                .unwrap_or_else(|e| warn!("SetParameters response error {e:?}"));
+                .unwrap_or_else(|e| warn!("SetParametersAtomically response error {e:?}"));
             }
             Err(e) => warn!("SetParametersAtomically request error {e:?}"),
           }
@@ -314,9 +335,7 @@ impl Spinner {
             Ok( (req_id, req) ) => {
               info!("List parameters request");
               let prefixes = req.prefixes;
-              // TODO: We only generate the "names" part of the ListParametersResponse
-              // What should we put into `prefixes` ?
-              let names = {
+              let names: Vec<String> = {
                 let param_db = self.parameters.lock().unwrap();
                 param_db.keys()
                   .filter_map(|name|
@@ -328,7 +347,23 @@ impl Spinner {
                   )
                   .collect()
               };
-              let result = rcl_interfaces::ListParametersResult{ names, prefixes: vec![] };
+              // `prefixes` in the response is the set of namespace prefixes
+              // (parameter name components before a '.') of the matched names.
+              let result_prefixes: Vec<String> = {
+                let mut set = BTreeSet::new();
+                for name in &names {
+                  let mut ancestors: Vec<&str> = name.split('.').collect();
+                  ancestors.pop(); // drop the leaf, keep ancestor namespaces
+                  let mut acc = String::new();
+                  for part in ancestors {
+                    if !acc.is_empty() { acc.push('.'); }
+                    acc.push_str(part);
+                    set.insert(acc.clone());
+                  }
+                }
+                set.into_iter().collect()
+              };
+              let result = rcl_interfaces::ListParametersResult{ names, prefixes: result_prefixes };
               // .unwrap() below should be safe, as we would not be here if the Server did not exist
               info!("List parameters response: {result:?}");
               self.parameter_servers.as_ref().unwrap().list_parameters_server
@@ -474,6 +509,7 @@ impl Spinner {
       },
       // application-defined parameters
       _ => {
+        reject_type_change(&self.parameters, self.allow_undeclared_parameters, name, value)?;
         match self.parameter_validator {
           Some(ref v) => v.lock().unwrap()(name, value), // ask the validator to judge
           None => Ok(()),                                // no validator defined, always accept
@@ -534,7 +570,9 @@ impl Spinner {
       self
         .parameter_events_writer
         .publish(raw::ParameterEvent {
-          stamp: crate::builtin_interfaces::Time::now(),
+          // Use the same (simulation-aware) clock as Node, so parameter event
+          // timestamps are consistent regardless of which side sets them.
+          stamp: self.time_now().into(),
           node: self.fully_qualified_node_name.clone(),
           new_parameters,
           changed_parameters,
@@ -545,6 +583,77 @@ impl Spinner {
     } else {
       Err("Setting undeclared parameter '".to_owned() + name + "' is not allowed.")
     }
+  }
+
+  /// Simulation-aware current time, mirroring [`Node::time_now`].
+  fn time_now(&self) -> ROSTime {
+    if self.use_sim_time.load(Ordering::SeqCst) {
+      *self.sim_time.lock().unwrap()
+    } else {
+      ROSTime::now()
+    }
+  }
+
+  /// Set several parameters as a single all-or-nothing transaction.
+  ///
+  /// All parameters are validated (undeclared check, type-change rule, and any
+  /// user validator) before anything is mutated; if any check fails, none are
+  /// applied and the error is returned. On success a single `ParameterEvent` is
+  /// published. Note that a failing user *set action* during application cannot
+  /// be rolled back, so set actions should not fail for values that already
+  /// passed validation.
+  fn set_parameters_atomically(&self, params: Vec<Parameter>) -> SetParametersResult {
+    // Phase 1: validate everything before mutating anything.
+    for Parameter { name, value } in &params {
+      let already_set = self.parameters.lock().unwrap().contains_key(name);
+      if !(self.allow_undeclared_parameters || already_set) {
+        return Err(format!("Setting undeclared parameter '{name}' is not allowed."));
+      }
+      self.validate_parameter_on_set(name, value)?;
+    }
+
+    // Phase 2: apply. Collect the change lists for a single notification.
+    let mut new_parameters = vec![];
+    let mut changed_parameters = vec![];
+    let mut deleted_parameters = vec![];
+    for Parameter { name, value } in params {
+      self.execute_parameter_set_actions(&name, &value)?;
+      let raw_p = raw::Parameter {
+        name: name.clone(),
+        value: value.clone().into(),
+      };
+      let mut db = self.parameters.lock().unwrap();
+      let already_set = db.contains_key(&name);
+      match value {
+        // Setting to NotSet deletes the parameter.
+        ParameterValue::NotSet => {
+          if already_set {
+            db.remove(&name);
+            deleted_parameters.push(raw_p);
+          }
+        }
+        _ => {
+          if already_set {
+            changed_parameters.push(raw_p);
+          } else {
+            new_parameters.push(raw_p);
+          }
+          db.insert(name, value);
+        }
+      }
+    }
+
+    self
+      .parameter_events_writer
+      .publish(raw::ParameterEvent {
+        stamp: self.time_now().into(),
+        node: self.fully_qualified_node_name.clone(),
+        new_parameters,
+        changed_parameters,
+        deleted_parameters,
+      })
+      .unwrap_or_else(|e| warn!("set_parameters_atomically: {e:?}"));
+    Ok(())
   }
 } // impl Spinner
 
@@ -708,14 +817,14 @@ impl Node {
 
     node.suppress_node_info_updates(true);
 
-    node.rosout_writer = if enable_rosout {
-      Arc::new(Some(
+    // rosout_writer defaults to Arc::new(None) at struct construction above, so
+    // only overwrite it when rosout publishing is enabled.
+    if enable_rosout {
+      node.rosout_writer = Arc::new(Some(
         // topic already has QoS defined
         node.create_publisher(&rosout_topic, None)?,
-      ))
-    } else {
-      Arc::new(None) // FIXME: we already set that above!
-    };
+      ));
+    }
     node.rosout_reader = if rosout_reader {
       Some(node.create_subscription(&rosout_topic, None)?)
     } else {
@@ -723,10 +832,17 @@ impl Node {
     };
 
     // returns `Err` if some parameter does not validate.
-    node
+    // Snapshot the declared parameters first and release the lock before
+    // validating: `validate_parameter_on_set` re-locks `parameters` (via
+    // `reject_type_change`), so holding the guard here would deadlock.
+    let declared = node
       .parameters
       .lock()
       .unwrap()
+      .iter()
+      .map(|(name, value)| (name.clone(), value.clone()))
+      .collect::<Vec<_>>();
+    declared
       .iter()
       .try_for_each(|(name, value)| {
         node.validate_parameter_on_set(name, value)?;
@@ -760,17 +876,19 @@ impl Node {
   /// An async task should then be created to run the `.spin()` function of
   /// `Spinner`.
   ///
-  /// E.g. `executor.spawn(node.spinner().spin())`
+  /// E.g. `executor.spawn(node.spinner()?.spin())`
   ///
   /// The `.spin()` task runs until `Node` is dropped.
   pub fn spinner(&mut self) -> CreateResult<Spinner> {
     if self.stop_spin_sender.is_some() {
-      panic!("Attempted to crate a second spinner.");
+      return Err(CreateError::BadParameter {
+        reason: "A Spinner already exists for this Node.".to_string(),
+      });
     }
     let (stop_spin_sender, stop_spin_receiver) = async_channel::bounded(1);
     self.stop_spin_sender = Some(stop_spin_sender);
 
-    //TODO: Check QoS policies against ROS 2 specs or some refernce.
+    //TODO: Check QoS policies against ROS 2 specs or some reference.
     let service_qos = QosProfile::publisher_default().history(History::KeepLast { depth: 1 });
 
     let node_name = self.node_name.fully_qualified_name();
@@ -963,13 +1081,12 @@ impl Node {
   /// Sets a parameter value. Parameter must be
   /// [declared](NodeOptions::declare_parameter) before setting.
   //
-  // TODO: This code is duplicated in Spinner. Not good.
-  // Find a way to de-duplicate.
-  // Same for validate_parameter_on_set and execute_parameter_set_actions.
+  // NOTE: The body mirrors Spinner::set_parameter (both act on the same shared
+  // parameter store); the type-change rule is shared via `reject_type_change`.
   // TODO: This does not account for built-in parameters e.g. "use_sim_time".
   // It thinks they are new on first set.
-  // TODO: Setting Parameter to type NotSet counts as parameter deletion. Maybe
-  // that needs special handling? At least for notifications.
+  // TODO: Unlike set_parameters_atomically, this path stores a NotSet value
+  // rather than treating it as a deletion. At least for notifications.
   pub fn set_parameter(&self, name: &str, value: ParameterValue) -> Result<(), String> {
     let already_set = self.parameters.lock().unwrap().contains_key(name);
     if self.options.allow_undeclared_parameters || already_set {
@@ -1035,11 +1152,10 @@ impl Node {
   }
 
   // Keep this function in sync with the same function in Spinner.
-  // TODO: This should refuse to change parameter type, unless
-  // there is a ParamaterDescription defined and it allows
-  // changing type.
-  // TODO: Setting Parameter to type NotSet counts as parameter deletion. Maybe
-  // that needs special handling?
+  // The type-change rule is enforced via `reject_type_change`: an existing typed
+  // parameter keeps its type unless undeclared parameters are allowed. A
+  // per-parameter ParameterDescriptor with `dynamic_typing` is not yet consulted
+  // (descriptors are not stored), so `allow_undeclared_parameters` is the switch.
   fn validate_parameter_on_set(&self, name: &str, value: &ParameterValue) -> SetParametersResult {
     match name {
       // built-in parameter check
@@ -1049,6 +1165,12 @@ impl Node {
       },
       // application-defined parameters
       _ => {
+        reject_type_change(
+          &self.parameters,
+          self.options.allow_undeclared_parameters,
+          name,
+          value,
+        )?;
         match self.parameter_validator {
           Some(ref v) => v.lock().unwrap()(name, value), // ask the validator to judge
           None => Ok(()),                                // no validator defined, always accept
@@ -1084,9 +1206,10 @@ impl Node {
 
   /// Get an async Receiver for discovery events.
   ///
-  /// There must be an async task executing `spin` to get any data.
-  /// This function may panic if there is no Spinner running.
-  pub fn status_receiver(&self) -> Receiver<NodeEvent> {
+  /// There must be an async task executing `spin` to get any data. Returns
+  /// `None` if this `Node` has no running `Spinner` (see [`Node::spinner`]),
+  /// because without a Spinner no events would ever be delivered.
+  pub fn status_receiver(&self) -> Option<Receiver<NodeEvent>> {
     if self.have_spinner() {
       let (status_event_sender, status_event_receiver) = async_channel::bounded(8);
       self
@@ -1094,15 +1217,16 @@ impl Node {
         .lock()
         .unwrap()
         .push(status_event_sender);
-      status_event_receiver
+      Some(status_event_receiver)
     } else {
-      panic!("status_receiver() cannot set up a receiver, because no Spinner is running.")
+      None
     }
   }
 
   // reader waits for at least one writer to be present
   pub(crate) fn wait_for_writer(&self, reader: GUID) -> impl Future<Output = ()> {
-    // TODO: This may contain some synchrnoization hazard
+    // Register the event receiver *before* reading the current match state, so a
+    // match that occurs between the check and the registration is not missed.
     let status_receiver = self.status_receiver();
 
     let already_present = self
@@ -1113,19 +1237,25 @@ impl Node {
       .map(|writers| !writers.is_empty()) // there is someone matched
       .unwrap_or(false); // we do not even know the reader
 
-    if already_present {
-      WriterWait::Ready
-    } else {
-      WriterWait::Wait {
+    match (already_present, status_receiver) {
+      (true, _) => WriterWait::Ready,
+      (false, Some(status_receiver)) => WriterWait::Wait {
         this_reader: reader,
         readers_to_remote_writers: Arc::clone(&self.readers_to_remote_writers),
         status_event_stream: Box::pin(status_receiver),
+      },
+      (false, None) => {
+        error!(
+          "wait_for_writer requires a running Spinner (see Node::spinner); resolving immediately."
+        );
+        WriterWait::Ready
       }
     }
   }
 
   pub(crate) fn wait_for_reader(&self, writer: GUID) -> impl Future<Output = ()> {
-    // TODO: This may contain some synchrnoization hazard.
+    // Register the event receiver *before* reading the current match state, so a
+    // match that occurs between the check and the registration is not missed.
     let status_receiver = self.status_receiver();
 
     let already_present = self
@@ -1136,17 +1266,21 @@ impl Node {
       .map(|readers| !readers.is_empty()) // there is someone matched
       .unwrap_or(false); // we do not even know who is asking
 
-    // TODO: Is is possible to miss reader events if they appear after the check
-    // above, but do not somehow end up in the status_receiver stream?
-
-    if already_present {
-      info!("wait_for_reader: Already have matched a reader.");
-      ReaderWait::Ready
-    } else {
-      ReaderWait::Wait {
+    match (already_present, status_receiver) {
+      (true, _) => {
+        info!("wait_for_reader: Already have matched a reader.");
+        ReaderWait::Ready
+      }
+      (false, Some(status_receiver)) => ReaderWait::Wait {
         this_writer: writer,
         writers_to_remote_readers: Arc::clone(&self.writers_to_remote_readers),
         status_event_stream: Box::pin(status_receiver),
+      },
+      (false, None) => {
+        error!(
+          "wait_for_reader requires a running Spinner (see Node::spinner); resolving immediately."
+        );
+        ReaderWait::Ready
       }
     }
   }
@@ -1242,7 +1376,9 @@ impl Node {
     if count_fn(self, topic) > 0 {
       return;
     }
-    let status_receiver = self.status_receiver();
+    let status_receiver = self
+      .status_receiver()
+      .expect("wait_for_publisher/wait_for_subscription requires a running Spinner");
     // Any graph change is a cue to re-check the (topic-name-based) count;
     // we do not attempt to filter by topic here, since a `GraphEvent`'s
     // `GraphEntity::name` is usually `None` for DDS-sourced events (see
@@ -1269,12 +1405,14 @@ impl Node {
   /// [`GraphEvent`] mapping in general (see the [`crate::graph`] module
   /// docs: `node_name` is a GUID placeholder, `name`/`type_name` are `None`).
   pub fn graph_event_stream(&self) -> impl Stream<Item = GraphEvent> + Send + '_ {
-    self.status_receiver().filter_map(|event| async move {
-      match event {
-        NodeEvent::Graph(g) => Some(g),
-        NodeEvent::ParticipantEntities(_) => None,
-      }
-    })
+    stream::iter(self.status_receiver())
+      .flatten()
+      .filter_map(|event| async move {
+        match event {
+          NodeEvent::Graph(g) => Some(g),
+          NodeEvent::ParticipantEntities(_) => None,
+        }
+      })
   }
 
   /// Borrow the Subscription to our ROSOut Reader.
@@ -1895,8 +2033,30 @@ impl Future for WriterWait<'_> {
 
 #[cfg(test)]
 mod tests {
-  use crate::{context::Context, NodeOptions};
-  use super::{Node, NodeName};
+  use std::{collections::BTreeMap, sync::Mutex};
+
+  use super::{reject_type_change, Node, NodeName};
+  use crate::{context::Context, parameters::ParameterValue, NodeOptions};
+
+  #[test]
+  fn type_change_rule() {
+    let store = Mutex::new(BTreeMap::new());
+    store
+      .lock()
+      .unwrap()
+      .insert("p".to_string(), ParameterValue::Integer(1));
+
+    // Same type is allowed.
+    assert!(reject_type_change(&store, false, "p", &ParameterValue::Integer(2)).is_ok());
+    // Different type is rejected when undeclared parameters are not allowed.
+    assert!(reject_type_change(&store, false, "p", &ParameterValue::Double(2.0)).is_err());
+    // ...but allowed when undeclared (dynamic typing) parameters are permitted.
+    assert!(reject_type_change(&store, true, "p", &ParameterValue::Double(2.0)).is_ok());
+    // Deletion (NotSet) is always allowed.
+    assert!(reject_type_change(&store, false, "p", &ParameterValue::NotSet).is_ok());
+    // Unknown parameter: nothing to conflict with.
+    assert!(reject_type_change(&store, false, "q", &ParameterValue::String("x".into())).is_ok());
+  }
 
   #[test]
   fn node_is_sync() {

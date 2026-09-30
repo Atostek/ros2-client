@@ -1,7 +1,7 @@
 [package]
 name = "ros2-client"
-version = "0.10.0" 
-edition = "2018"
+version = "0.11.0" 
+edition = "2024"
 rust-version = "1.88.0"
 authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>"]
 description = "ROS2 client library based on RustDDS"
@@ -33,7 +33,7 @@ autoexamples = false
 # Build the Zenoh backend with:
 #   cargo build --no-default-features --features zenoh
 # ---------------------------------------------------------------------------
-dds   = ["dep:rustdds"]
+dds   = ["dep:rustdds", "dep:cdr-encoding-size"]
 zenoh = ["dep:zenoh", "dep:zenoh-ext", "dep:cdr-encoding", "dep:byteorder"]
 
 # declare the existence of "security" feature (Secure ROS 2 support).
@@ -81,7 +81,10 @@ default = ["dds", "jazzy"]
 # without pulling RustDDS in.
 # rustdds = {  path = "../RustDDS"  } # dev setting
 # rustdds = {   git = "https://github.com/Atostek/RustDDS.git" }
-rustdds = { version = "0.14", optional = true } # release setting
+# 0.14.1 adds the `rustdds::mio` and `rustdds::bytes` re-exports.
+rustdds = { version = "0.14.1", optional = true } # release setting
+# Direct dependency so `derive(CdrEncodingSize)` on `Gid` can see the crate.
+cdr-encoding-size = { version = "^0.5", optional = true }
 
 # Zenoh backend (feature `zenoh`). Optional; only compiled when `zenoh` is
 # enabled. `unstable` is required for liveliness, advanced pub/sub and matching
@@ -93,27 +96,21 @@ zenoh-ext = { version = "1", optional = true, features = ["unstable"] }
 cdr-encoding = { version = "0.10", optional = true }
 byteorder = { version = "1", optional = true } # CDR byte-order selector
 
-mio = "^0.6.23"
-mio-extras = "2.0.6"
+# mio and bytes are consumed via the rustdds::mio and rustdds::bytes re-exports.
 log = "0.4.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_repr = "0.1"
-cdr-encoding-size = { version="^0.5" }
 lazy_static = "1.4.0"
-uuid = { version = "1.3.1", features = ["v4", "fast-rng", "macro-diagnostics", "serde"] }
-futures = "^0.3.28"
-pin-utils = "0.1.0"
+uuid = { version = "1.3.1", features = ["v4", "serde"] }
+futures = "0.3.28"
 async-channel = "2.3"
-bytes = { version = "1.5.0", features = ["serde", "std"]}
-chrono = { version = ">=0.4.35" } # actions need timestamps
+chrono = { version = ">=0.4.35" } # actions need timestamps (0.4.31+ APIs)
 
 
 nom = {version = "8.0.0", features = ["alloc"] } # for msggen
 clap = "4.4.3" # for msggen
 itertools = "0.15.0" # for msggen
-bstr = "1.6.2"
 widestring = "1.0" # msggen
-libc = "0.2.153"
 tracing = "0.1.41"
 
 # Entity GID for the Zenoh backend is XXH3-128 of the liveliness key
@@ -129,10 +126,10 @@ sha2 = "0.10"
 
 [dev-dependencies]
 log = "0.4"
+mio-extras = "2.0.6" # examples/talker
 pretty_env_logger = "0.5.0"
-# turle_teleop
+# turtle_teleop
 log4rs = "1.2"
-test-case = "3.3.1"
 ctrlc = "3.1.6"
 ratatui = "0.30.2"
 crossterm = { version = "0.29.0", features = ["event-stream"] }

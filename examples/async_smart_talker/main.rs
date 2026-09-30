@@ -52,7 +52,7 @@ fn main() {
   // Dump all status events to console
   //
   // use futures::StreamExt;
-  // smol::spawn(node.status_receiver().for_each(|event| async move {
+  // smol::spawn(node.status_receiver().unwrap().for_each(|event| async move {
   //   println!("{:?}", event);
   // })).detach();
 

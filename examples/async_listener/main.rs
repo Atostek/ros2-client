@@ -34,7 +34,7 @@ pub fn main() {
   let executor = smol::Executor::new();
   executor.spawn(node.spinner().unwrap().spin()).detach();
 
-  let status_event_stream = node.status_receiver().for_each(|event| async move {
+  let status_event_stream = node.status_receiver().unwrap().for_each(|event| async move {
     match event {
       NodeEvent::Graph(GraphEvent::EntityDeclared(entity))
         if entity.kind == EntityKind::Publisher =>

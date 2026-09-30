@@ -63,7 +63,13 @@ pub struct SetParametersResponse {
 }
 impl Message for SetParametersResponse {}
 
-pub type SetParametersAtomicallyResponse = SetParametersResponse;
+// https://github.com/ros2/rcl_interfaces/blob/humble/rcl_interfaces/srv/SetParametersAtomically.srv
+// Note: a single `result`, unlike SetParameters which returns one per parameter.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetParametersAtomicallyResponse {
+  pub result: parameters::raw::SetParametersResult,
+}
+impl Message for SetParametersAtomicallyResponse {}
 
 // https://github.com/ros2/rcl_interfaces/blob/humble/rcl_interfaces/srv/DescribeParameters.srv
 #[derive(Debug, Clone, Serialize, Deserialize)]

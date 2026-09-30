@@ -106,7 +106,7 @@ fn main() -> io::Result<()> {
     );
     for ros2_type in ros2_types_requested {
       use itertools::Itertools; // to get .unique()
-      let new_pkgs = list_packges_with_msgs(workspace_dir, ros2_type, &colcon_log_directory)?;
+      let new_pkgs = list_packages_with_msgs(workspace_dir, ros2_type, &colcon_log_directory)?;
       let prev_pkgs = pkgs;
       pkgs = prev_pkgs
         .iter()
@@ -159,9 +159,7 @@ struct RosPkg {
 
 //use std::{ffi::OsStr, path::PathBuf};
 
-use bstr::ByteSlice;
-
-fn list_packges_with_msgs(
+fn list_packages_with_msgs(
   workspace_dir: &str,
   ros2_abs_type: &str,
   colcon_log_directory: &Path,
@@ -187,16 +185,13 @@ fn list_packges_with_msgs(
 
   if colcon_output.status.success() {
     let mut result = Vec::new();
-    for line in colcon_output.stdout.lines() {
-      match line
-        .fields_with(|c| c.is_whitespace())
-        .collect::<Vec<&[u8]>>()
-        .as_slice()
-      {
+    let stdout = String::from_utf8_lossy(&colcon_output.stdout);
+    for line in stdout.lines() {
+      match line.split_whitespace().collect::<Vec<&str>>().as_slice() {
         [package_name, package_path, _build_tool] => {
           // let's see if there are any .msg
-          let package_path = String::from_utf8_lossy(package_path).into_owned();
-          let package_name = String::from_utf8_lossy(package_name).into_owned();
+          let package_path = (*package_path).to_string();
+          let package_name = (*package_name).to_string();
           let mut msg_dir = PathBuf::from(package_path.clone());
           msg_dir.push("msg");
           let mut types = BTreeMap::new();

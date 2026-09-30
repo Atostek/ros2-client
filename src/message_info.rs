@@ -68,14 +68,10 @@ mod dds_conv {
   use super::MessageInfo;
   use crate::{gid::Gid, request_id::RmwRequestId, ros_time::ROSTime};
 
+  // `Timestamp::ZERO` is the Unix epoch, a valid time; only `INVALID` means
+  // "no timestamp".
   fn timestamp_to_ros(ts: Timestamp) -> Option<ROSTime> {
-    // Historically MessageInfo used Timestamp::ZERO as a placeholder for
-    // "unknown received time"; treat ZERO as missing.
-    if ts == Timestamp::ZERO || ts == Timestamp::INVALID {
-      None
-    } else {
-      TryFrom::try_from(ts).ok()
-    }
+    TryFrom::try_from(ts).ok()
   }
 
   impl From<&SampleInfo> for MessageInfo {
@@ -96,7 +92,9 @@ mod dds_conv {
   impl<M> From<&rustdds::no_key::DeserializedCacheChange<M>> for MessageInfo {
     fn from(dcc: &rustdds::no_key::DeserializedCacheChange<M>) -> MessageInfo {
       MessageInfo {
-        received_timestamp: None,
+        // `receive_instant` is the local reception time RustDDS stamps on each
+        // incoming sample.
+        received_timestamp: timestamp_to_ros(dcc.receive_instant),
         source_timestamp: dcc.source_timestamp().and_then(timestamp_to_ros),
         sequence_number: i64::from(dcc.sequence_number),
         publisher_gid: Gid::from(dcc.writer_guid()),
@@ -106,4 +104,23 @@ mod dds_conv {
   }
 
   // sample_identity helper removed — use RmwRequestId fields directly
+
+  #[cfg(test)]
+  mod tests {
+    use rustdds::Timestamp;
+
+    use super::timestamp_to_ros;
+    use crate::ros_time::ROSTime;
+
+    #[test]
+    fn epoch_is_a_valid_timestamp() {
+      assert_eq!(timestamp_to_ros(Timestamp::ZERO), Some(ROSTime::UNIX_EPOCH));
+    }
+
+    #[test]
+    fn invalid_and_infinite_are_missing() {
+      assert_eq!(timestamp_to_ros(Timestamp::INVALID), None);
+      assert_eq!(timestamp_to_ros(Timestamp::INFINITE), None);
+    }
+  }
 }
