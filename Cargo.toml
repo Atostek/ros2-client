@@ -93,7 +93,7 @@ zenoh     = { version = "1", optional = true, features = ["unstable"] }
 zenoh-ext = { version = "1", optional = true, features = ["unstable"] }
 # Standalone CDR (de)serialization for the Zenoh backend (the DDS backend gets
 # CDR via RustDDS). Same author as RustDDS, so byte output matches (ADR-0003).
-cdr-encoding = { version = "0.10", optional = true }
+cdr-encoding = { version = "0.11", optional = true }
 byteorder = { version = "1", optional = true } # CDR byte-order selector
 
 # mio and bytes are consumed via the rustdds::mio and rustdds::bytes re-exports.
