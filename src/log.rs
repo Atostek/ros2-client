@@ -2,7 +2,7 @@
 //!
 //! Shared by DDS and Zenoh backends. Wire field layout matches
 //! [`rcl_interfaces/msg/Log`](https://github.com/ros2/rcl_interfaces/blob/master/rcl_interfaces/msg/Log.msg)
-//! (`stamp` is [`builtin_interfaces::Time`]).
+//! (`stamp` is [`builtin_interfaces::Time`](crate::builtin_interfaces::Time)).
 
 use serde::{Deserialize, Serialize};
 

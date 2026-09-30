@@ -1406,7 +1406,7 @@ impl Node {
   /// A stream of just the [`GraphEvent`]s from [`Self::status_receiver`]
   /// (filtering out `NodeEvent::ParticipantEntities`), for API parity with
   /// the Zenoh backend's
-  /// [`Context::graph_event_stream`](crate::Context::graph_event_stream).
+  /// `Context::graph_event_stream`.
   ///
   /// Same requirements/limitations as [`Self::status_receiver`] (needs a
   /// running [`Spinner`]; only sees events after this call) and the DDS

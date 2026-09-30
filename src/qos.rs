@@ -9,8 +9,10 @@
 //! * On the **`dds`** backend it converts to/from [`rustdds::QosPolicies`]
 //!   (this module's `From` impls, gated on the `dds` feature).
 //! * On the **`zenoh`** backend it drives publisher/subscriber options and the
-//!   compact QoS encoding embedded in liveliness keys (E2/E5). [`WhenFull`] is
-//!   part of [`Reliability::Reliable`] and is not part of that encoding.
+//!   compact QoS encoding embedded in liveliness keys (E2/E5).
+//!   [`WhenFull`](crate::qos::WhenFull) is part of
+//!   [`Reliability::Reliable`](crate::qos::Reliability::Reliable) and is not
+//!   part of that encoding.
 //!
 //! Phase 1 of ADR-0010: public `create_*` APIs take [`QosProfile`]; RustDDS
 //! `QosPolicies` is only used at the DDS adapter boundary (via `From`).

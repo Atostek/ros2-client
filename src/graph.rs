@@ -7,13 +7,13 @@
 //! mechanism onto these owned types:
 //!
 //! * The Zenoh backend derives them from parsed `@ros2_lv/**` liveliness tokens
-//!   (see [`crate::zenoh_backend::graph_cache`]), which carry full
-//!   node/topic/type information.
+//!   (`zenoh_backend::graph_cache`), which carry full node/topic/type
+//!   information.
 //! * The DDS backend derives them from
 //!   [`rustdds::dds::statusevents::DomainParticipantStatusEvent`]
-//!   matched-entity events (see [`crate::node`]). DDS SEDP matching events only
-//!   carry GUIDs, not topic/node names, so the DDS-sourced [`GraphEntity`] is
-//!   best-effort: `node_name` holds a `"guid:<GUID>"` placeholder and
+//!   matched-entity events (see [`crate::NodeEvent`]). DDS SEDP matching events
+//!   only carry GUIDs, not topic/node names, so the DDS-sourced [`GraphEntity`]
+//!   is best-effort: `node_name` holds a `"guid:<GUID>"` placeholder and
 //!   `name`/`type_name` are `None`. A future iteration could enrich this from
 //!   `ros_discovery_info` / SEDP topic data.
 //!
@@ -25,8 +25,8 @@
 ///
 /// Backend-neutral: produced by both the DDS backend (mapped from
 /// `DomainParticipantStatusEvent`, see [`crate::NodeEvent::Graph`]) and the
-/// Zenoh backend (mapped from liveliness tokens, see
-/// [`crate::zenoh_backend::context::Context::graph_event_stream`]).
+/// Zenoh backend (mapped from liveliness tokens; see
+/// `zenoh::Context::graph_event_stream`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GraphEvent {
   /// An entity became visible in the graph.

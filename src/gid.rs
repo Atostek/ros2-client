@@ -18,7 +18,7 @@ pub const GID_LENGTH: usize = 24;
 
 /// ROS 2 equivalent for DDS GUID / rmw GID.
 ///
-/// See https://github.com/ros2/rmw_dds_common/blob/master/rmw_dds_common/msg/Gid.msg
+/// See <https://github.com/ros2/rmw_dds_common/blob/master/rmw_dds_common/msg/Gid.msg>
 ///
 /// Size is selected by the distribution feature chain (see Cargo.toml):
 /// `galactic`/`humble` → 24 bytes; `iron` or newer → 16 bytes.

@@ -8,9 +8,9 @@
 //! unchanged, but fields are `pub(crate)` so each backend's `Node::new` can
 //! read/consume them directly (DDS keeps the whole struct; Zenoh wires
 //! `enable_rosout` / `enable_rosout_reading` / `start_parameter_services` /
-//! `declared_parameters` into an optional [`Logger`](crate::Logger) /
+//! `declared_parameters` into an optional `Logger` /
 //! rosout [`Subscription`](crate::Subscription) /
-//! [`ParameterServer`](crate::ParameterServer) at construction time; see
+//! `ParameterServer` at construction time; see
 //! `src/zenoh_backend/node.rs`). Fields not honored by a backend are
 //! documented as no-ops there (logged once at `debug` level).
 
