@@ -1,7 +1,7 @@
 use smol::future::{self, FutureExt};
 use async_ctrlc::CtrlC;
 use ros2_client::{
-  qos::{Durability, History, Reliability},
+  qos::{Durability, History, WhenFull},
   Context, MessageTypeName, Name, NodeName, NodeOptions, QosProfile,
 };
 use async_io::Timer;
@@ -33,7 +33,7 @@ fn main() {
   //smol::spawn(node.spinner().unwrap().spin()).detach();
 
   let reliable_qos = QosProfile::publisher_default()
-    .reliability(Reliability::Reliable)
+    .reliability_reliable(WhenFull::DEFAULT)
     .durability(Durability::TransientLocal)
     .history(History::KeepLast { depth: 10 });
 

@@ -100,8 +100,10 @@ pattern.
 - In-tree examples and tests build `QosProfile` instead of `QosPolicyBuilder`.
 - Escape hatch: `QosProfile::from(&QosPolicies)` remains; `ros2::QosPolicies`
   re-exports stay until Phase 5.
-- DDS-only knobs (`max_blocking_time`, `Ownership`, …): fixed defaults in the
-  adapter — **not** fields on `QosProfile`.
+- Reliable publish blocking is `Reliability::Reliable { when_full }`
+  (`WhenFull::Fail`, `Wait`, or `Block`). Zenoh liveliness keys do not carry
+  `when_full`. Other DDS-only knobs (`Ownership`, …) stay fixed defaults in the
+  adapter.
 
 **Phase 2 — Metadata, IDs, and discovery** — **done on branch `zenoh` (2026-08-05)**
 

@@ -3,7 +3,7 @@ use core::cmp::min;
 
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use ros2_client::{
-  qos::{Durability, History, Reliability},
+  qos::{Durability, History, WhenFull},
   Context, MessageTypeName, Name, Node, NodeName, NodeOptions, QosProfile,
 };
 
@@ -79,7 +79,7 @@ fn chatter_type() -> (&'static str, &'static str) {
 
 fn create_qos() -> QosProfile {
   QosProfile::publisher_default()
-    .reliability(Reliability::Reliable)
+    .reliability_reliable(WhenFull::DEFAULT)
     .durability(Durability::Volatile)
     .history(History::KeepLast { depth: 10 })
 }

@@ -20,17 +20,20 @@
 
 use std::time::Duration;
 
-use crate::qos::{Durability, History, Liveliness, QosProfile, Reliability};
+use crate::qos::{Durability, History, Liveliness, QosProfile, Reliability, WhenFull};
+
+/// `when_full` is not part of the liveliness string. Decode fills this in.
+const DECODED_WHEN_FULL: WhenFull = WhenFull::DEFAULT;
 
 // RMW default profile (`rmw_qos_profile_default`) used as the delta reference.
-const DEFAULT_RELIABILITY: Reliability = Reliability::Reliable;
+// Any `Reliable { when_full }` matches that default; `when_full` is not encoded.
 const DEFAULT_DURABILITY: Durability = Durability::Volatile;
 const DEFAULT_LIVELINESS: Liveliness = Liveliness::Automatic;
 // Default history is KEEP_LAST; only KEEP_ALL is non-default.
 
 fn reliability_code(r: Reliability) -> &'static str {
   match r {
-    Reliability::Reliable => "1",
+    Reliability::Reliable { .. } => "1",
     Reliability::BestEffort => "2",
   }
 }
@@ -60,7 +63,7 @@ fn duration_fields(d: Option<Duration>) -> (String, String) {
 
 /// Encode a [`QosProfile`] into the compact liveliness `<qos>` string.
 pub fn encode_qos(q: &QosProfile) -> String {
-  let rel = if q.reliability == DEFAULT_RELIABILITY {
+  let rel = if matches!(q.reliability, Reliability::Reliable { .. }) {
     ""
   } else {
     reliability_code(q.reliability)
@@ -110,8 +113,12 @@ pub fn decode_qos(s: &str) -> Result<QosProfile, QosDecodeError> {
   }
 
   let reliability = match groups[0] {
-    "" => DEFAULT_RELIABILITY,
-    "1" => Reliability::Reliable,
+    "" => Reliability::Reliable {
+      when_full: DECODED_WHEN_FULL,
+    },
+    "1" => Reliability::Reliable {
+      when_full: DECODED_WHEN_FULL,
+    },
     "2" => Reliability::BestEffort,
     _ => return Err(QosDecodeError),
   };
@@ -174,7 +181,9 @@ mod tests {
   // automatic, no deadline/lifespan/lease — only depth differs.
   fn keep_last(depth: usize) -> QosProfile {
     QosProfile {
-      reliability: Reliability::Reliable,
+      reliability: Reliability::Reliable {
+        when_full: DECODED_WHEN_FULL,
+      },
       durability: Durability::Volatile,
       history: History::KeepLast { depth },
       deadline: None,

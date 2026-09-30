@@ -33,7 +33,7 @@ use futures::{
 };
 use tokio::sync::oneshot;
 use ros2_client::{
-  qos::{Durability, History, QosProfile, Reliability},
+  qos::{Durability, History, QosProfile, WhenFull},
   Context, MessageTypeName, Name, NodeName, NodeOptions, Publisher, Subscription,
   DEFAULT_PUBLISHER_QOS,
 };
@@ -56,7 +56,7 @@ async fn make_subscriber(tx: oneshot::Sender<()>) {
     )
     .unwrap();
   // Subscriber must be Reliable, or it will not request past data.
-  let sub_policy = QosProfile::subscription_default().reliability(Reliability::Reliable);
+  let sub_policy = QosProfile::subscription_default().reliability_reliable(WhenFull::DEFAULT);
   let topic = node
     .create_topic(
       &Name::new("/", "late_topic").unwrap(),

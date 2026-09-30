@@ -32,7 +32,8 @@ use crate::{
 /// [`QosProfile::subscription_default`]).
 ///
 /// Note: If you want Reliable communication, both Publisher and Subscription
-/// must specify [`Reliability::Reliable`](crate::qos::Reliability::Reliable).
+/// must specify [`Reliability::Reliable`](crate::qos::Reliability::Reliable)
+/// (including `when_full`).
 pub const DEFAULT_SUBSCRIPTION_QOS: QosProfile = QosProfile::subscription_default();
 
 /// Basic Reliable QoS for publishing (same as

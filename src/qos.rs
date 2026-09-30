@@ -10,19 +10,46 @@
 //!   (this module's `From` impls, gated on the `dds` feature).
 //! * On the **`zenoh`** backend it drives publisher/subscriber options and the
 //!   compact QoS encoding embedded in liveliness keys (E2/E5).
+//!   [`WhenFull`] is part of [`Reliability::Reliable`] and is not part of that
+//!   encoding.
 //!
 //! Phase 1 of ADR-0010: public `create_*` APIs take [`QosProfile`]; RustDDS
 //! `QosPolicies` is only used at the DDS adapter boundary (via `From`).
 
 use std::time::Duration;
 
+/// What a Reliable `publish` does when the send window is full of samples that
+/// have not been acknowledged yet.
+///
+/// This is part of [`Reliability::Reliable`]. The Zenoh liveliness QoS string
+/// does not carry it; a decoded profile uses [`WhenFull::DEFAULT`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WhenFull {
+  /// Return [`crate::WriteError::WouldBlock`] immediately.
+  Fail,
+  /// Wait up to this long for space, then return
+  /// [`crate::WriteError::WouldBlock`].
+  Wait(Duration),
+  /// Wait until space is available.
+  Block,
+}
+
+impl WhenFull {
+  /// Historical default: wait 100 ms for send-buffer space.
+  pub const DEFAULT: Self = Self::Wait(Duration::from_millis(100));
+}
+
 /// Delivery guarantee.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reliability {
-  /// Samples may be dropped.
+  /// Samples may be dropped. `publish` does not wait for send-buffer space.
   BestEffort,
-  /// Lost samples are retransmitted.
-  Reliable,
+  /// Lost samples are retransmitted. `when_full` is what `publish` does when
+  /// the send window is full.
+  Reliable {
+    /// Behavior when the reliable send window is full.
+    when_full: WhenFull,
+  },
 }
 
 /// Whether late-joining subscriptions receive previously-published samples.
@@ -95,10 +122,12 @@ impl QosProfile {
   }
 
   /// The default used for publishers: like [`Self::subscription_default`] but
-  /// reliable (the DDS default for writers).
+  /// reliable, waiting 100 ms when the send window is full.
   pub const fn publisher_default() -> Self {
     Self {
-      reliability: Reliability::Reliable,
+      reliability: Reliability::Reliable {
+        when_full: WhenFull::DEFAULT,
+      },
       ..Self::subscription_default()
     }
   }
@@ -108,6 +137,18 @@ impl QosProfile {
   pub const fn reliability(mut self, reliability: Reliability) -> Self {
     self.reliability = reliability;
     self
+  }
+
+  /// Set [`Reliability::BestEffort`].
+  #[must_use]
+  pub const fn reliability_best_effort(self) -> Self {
+    self.reliability(Reliability::BestEffort)
+  }
+
+  /// Set [`Reliability::Reliable`] with the given full-window behavior.
+  #[must_use]
+  pub const fn reliability_reliable(self, when_full: WhenFull) -> Self {
+    self.reliability(Reliability::Reliable { when_full })
   }
 
   /// Builder-style setter for durability.
@@ -151,6 +192,7 @@ impl QosProfile {
     self.liveliness_lease = liveliness_lease;
     self
   }
+
 }
 
 impl Default for QosProfile {
@@ -167,12 +209,33 @@ impl Default for QosProfile {
 mod dds_conv {
   use rustdds::{policy, Duration as DdsDuration, QosPolicies, QosPolicyBuilder};
 
-  use super::{Durability, History, Liveliness, QosProfile, Reliability};
+  use super::{Durability, History, Liveliness, QosProfile, Reliability, WhenFull};
 
-  // Default DDS max_blocking_time for a Reliable writer/reader. RustDDS requires
-  // a value; ROS 2 QoS has no such knob, so we use the same 100 ms this crate
-  // historically used for publisher defaults.
-  const DEFAULT_MAX_BLOCKING: DdsDuration = DdsDuration::from_millis(100);
+  fn to_max_blocking(when_full: WhenFull) -> DdsDuration {
+    match when_full {
+      WhenFull::Fail => DdsDuration::ZERO,
+      WhenFull::Wait(d) => DdsDuration::from_nanos(d.as_nanos() as i64),
+      WhenFull::Block => DdsDuration::INFINITE,
+    }
+  }
+
+  fn from_max_blocking(d: DdsDuration) -> WhenFull {
+    if d == DdsDuration::INFINITE {
+      WhenFull::Block
+    } else if d == DdsDuration::ZERO {
+      WhenFull::Fail
+    } else {
+      // RTPS durations are 2^32 ticks per second, so `to_nanoseconds` truncates.
+      // Use the nanosecond count that encodes back to the same value.
+      let truncated = d.to_nanoseconds().max(0) as u64;
+      let nanos = if DdsDuration::from_nanos(truncated as i64) == d {
+        truncated
+      } else {
+        truncated.saturating_add(1)
+      };
+      WhenFull::Wait(std::time::Duration::from_nanos(nanos))
+    }
+  }
 
   fn to_dds_duration(d: Option<std::time::Duration>) -> DdsDuration {
     match d {
@@ -200,8 +263,8 @@ mod dds_conv {
         })
         .reliability(match p.reliability {
           Reliability::BestEffort => policy::Reliability::BestEffort,
-          Reliability::Reliable => policy::Reliability::Reliable {
-            max_blocking_time: DEFAULT_MAX_BLOCKING,
+          Reliability::Reliable { when_full } => policy::Reliability::Reliable {
+            max_blocking_time: to_max_blocking(when_full),
           },
         })
         .history(match p.history {
@@ -235,7 +298,9 @@ mod dds_conv {
   impl From<&QosPolicies> for QosProfile {
     fn from(q: &QosPolicies) -> Self {
       let reliability = match q.reliability() {
-        Some(policy::Reliability::Reliable { .. }) => Reliability::Reliable,
+        Some(policy::Reliability::Reliable { max_blocking_time }) => Reliability::Reliable {
+          when_full: from_max_blocking(max_blocking_time),
+        },
         _ => Reliability::BestEffort,
       };
       let durability = match q.durability() {
@@ -290,7 +355,9 @@ mod tests {
     );
     assert_eq!(
       QosProfile::publisher_default().reliability,
-      Reliability::Reliable
+      Reliability::Reliable {
+        when_full: WhenFull::DEFAULT
+      }
     );
     assert_eq!(
       QosProfile::default().history,
@@ -301,10 +368,21 @@ mod tests {
   #[test]
   fn builder_setters() {
     let q = QosProfile::default()
-      .reliability(Reliability::Reliable)
+      .reliability_reliable(WhenFull::Fail)
       .durability(Durability::TransientLocal)
       .history(History::KeepLast { depth: 10 });
-    assert_eq!(q.reliability, Reliability::Reliable);
+    assert_eq!(
+      q.reliability,
+      Reliability::Reliable {
+        when_full: WhenFull::Fail
+      }
+    );
+    assert_eq!(
+      QosProfile::publisher_default()
+        .reliability_best_effort()
+        .reliability,
+      Reliability::BestEffort
+    );
     assert_eq!(q.durability, Durability::TransientLocal);
     assert_eq!(q.history, History::KeepLast { depth: 10 });
   }
@@ -317,7 +395,9 @@ mod tests {
       QosProfile::subscription_default(),
       QosProfile::publisher_default(),
       QosProfile {
-        reliability: Reliability::Reliable,
+        reliability: Reliability::Reliable {
+          when_full: WhenFull::DEFAULT,
+        },
         durability: Durability::TransientLocal,
         history: History::KeepLast { depth: 10 },
         deadline: Some(Duration::from_millis(500)),
@@ -325,6 +405,10 @@ mod tests {
         liveliness: Liveliness::Automatic,
         liveliness_lease: Some(Duration::from_secs(2)),
       },
+      QosProfile::publisher_default().reliability_reliable(WhenFull::Fail),
+      QosProfile::publisher_default().reliability_reliable(WhenFull::Block),
+      QosProfile::publisher_default()
+        .reliability_reliable(WhenFull::Wait(Duration::from_millis(50))),
       QosProfile {
         history: History::KeepAll,
         ..QosProfile::publisher_default()

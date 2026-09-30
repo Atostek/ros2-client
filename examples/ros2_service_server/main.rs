@@ -2,7 +2,7 @@ use log::error;
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use serde::{Deserialize, Serialize};
 use ros2_client::{
-  qos::{Durability, History, Reliability},
+  qos::{Durability, History, WhenFull},
   Context, Message, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping, ServiceTypeName,
 };
 
@@ -89,7 +89,7 @@ fn main() {
 
 fn create_qos() -> QosProfile {
   QosProfile::publisher_default()
-    .reliability(Reliability::Reliable)
+    .reliability_reliable(WhenFull::DEFAULT)
     .durability(Durability::Volatile)
     .history(History::KeepLast { depth: 10 })
 }

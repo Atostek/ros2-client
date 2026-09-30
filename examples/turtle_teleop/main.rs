@@ -5,7 +5,7 @@ use futures::{channel::oneshot, StreamExt};
 use log::{error, info};
 use ros2_client::{
   action::{self, ActionClient},
-  qos::{Durability, History, Liveliness, Reliability},
+  qos::{Durability, History, Liveliness, WhenFull},
   ros2, rosout,
   service::CallServiceError,
   ActionTypeName, Client, Context, Message, MessageTypeName, Name, Node, NodeName, NodeOptions,
@@ -52,7 +52,7 @@ impl App {
     let topic_qos = QosProfile::publisher_default()
       .durability(Durability::Volatile)
       .liveliness(Liveliness::Automatic)
-      .reliability(Reliability::Reliable)
+      .reliability_reliable(WhenFull::DEFAULT)
       .history(History::KeepLast { depth: 1 });
 
     let ctx = Context::new().unwrap();
