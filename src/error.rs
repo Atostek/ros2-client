@@ -146,21 +146,12 @@ impl<D> WriteError<D> {
   /// Drop retained payload data (useful when `D` is not needed).
   pub fn forget_data(self) -> WriteError<()> {
     match self {
-      Self::Serialization { reason, data: _ } => WriteError::Serialization {
-        reason,
-        data: (),
-      },
-      Self::Poisoned { reason, data: _ } => WriteError::Poisoned {
-        reason,
-        data: (),
-      },
+      Self::Serialization { reason, data: _ } => WriteError::Serialization { reason, data: () },
+      Self::Poisoned { reason, data: _ } => WriteError::Poisoned { reason, data: () },
       Self::Io(e) => WriteError::Io(e),
       Self::WouldBlock { data: _ } => WriteError::WouldBlock { data: () },
       Self::Internal { reason } => WriteError::Internal { reason },
-      Self::Middleware { reason, data: _ } => WriteError::Middleware {
-        reason,
-        data: (),
-      },
+      Self::Middleware { reason, data: _ } => WriteError::Middleware { reason, data: () },
     }
   }
 }
@@ -288,8 +279,8 @@ mod dds_conv {
   }
 
   // RustDDS's CDR (de)serialization error, surfaced e.g. by
-  // `rustdds::serialization::{deserialize_from_cdr_with_rep_id, to_writer_with_rep_id}`
-  // used directly by `crate::service::wrappers`.
+  // `rustdds::serialization::{deserialize_from_cdr_with_rep_id,
+  // to_writer_with_rep_id}` used directly by `crate::service::wrappers`.
   impl From<rustdds::serialization::Error> for ReadError {
     fn from(e: rustdds::serialization::Error) -> Self {
       Self::Deserialization {

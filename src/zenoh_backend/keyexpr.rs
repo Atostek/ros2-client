@@ -286,8 +286,8 @@ mod tests {
 
   #[test]
   fn subscription_liveliness_key_matches_example() {
-    // @ros2_lv/0/aac.../0/10/MS/%/%/listener/%chatter/std_msgs::msg::dds_::String_/
-    // <hash>/::,10:,:,:,,
+    // @ros2_lv/0/aac.../0/10/MS/%/%/listener/%chatter/
+    // std_msgs::msg::dds_::String_/ <hash>/::,10:,:,:,,
     let ids = EntityIds {
       session_id: "aac3178e146ba6f1fc6e6a4085e77f21",
       node_id: 0,

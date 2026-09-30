@@ -525,7 +525,8 @@ mod tests {
       }
     });
 
-    // Client: send a goal, observe Executing status, cancel it, observe Canceled.
+    // Client: send a goal, observe Executing status, cancel it, observe
+    // Canceled.
     let deadline = Instant::now() + Duration::from_secs(30);
     let goal_id = loop {
       assert!(Instant::now() < deadline, "goal never accepted");

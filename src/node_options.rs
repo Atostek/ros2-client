@@ -17,7 +17,8 @@
 use crate::parameters::{Parameter, ParameterValue, SetParametersResult};
 
 /// Signature of a user-supplied parameter validator / set-action callback
-/// (see [`NodeOptions::parameter_validator`] / [`NodeOptions::parameter_set_action`]).
+/// (see [`NodeOptions::parameter_validator`] /
+/// [`NodeOptions::parameter_set_action`]).
 ///
 /// Currently only honored by the DDS backend; the Zenoh backend accepts and
 /// stores it (for API parity) but does not yet call it (logged once at

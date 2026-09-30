@@ -6,16 +6,16 @@
 //! Zenoh) into the public API. Both backends map their own discovery
 //! mechanism onto these owned types:
 //!
-//! * The Zenoh backend derives them from parsed `@ros2_lv/**` liveliness
-//!   tokens (see [`crate::zenoh_backend::graph_cache`]), which carry full
+//! * The Zenoh backend derives them from parsed `@ros2_lv/**` liveliness tokens
+//!   (see [`crate::zenoh_backend::graph_cache`]), which carry full
 //!   node/topic/type information.
 //! * The DDS backend derives them from
-//!   [`rustdds::dds::statusevents::DomainParticipantStatusEvent`] matched-entity
-//!   events (see [`crate::node`]). DDS SEDP matching events only carry GUIDs,
-//!   not topic/node names, so the DDS-sourced [`GraphEntity`] is best-effort:
-//!   `node_name` holds a `"guid:<GUID>"` placeholder and `name`/`type_name` are
-//!   `None`. A future iteration could enrich this from `ros_discovery_info` /
-//!   SEDP topic data.
+//!   [`rustdds::dds::statusevents::DomainParticipantStatusEvent`]
+//!   matched-entity events (see [`crate::node`]). DDS SEDP matching events only
+//!   carry GUIDs, not topic/node names, so the DDS-sourced [`GraphEntity`] is
+//!   best-effort: `node_name` holds a `"guid:<GUID>"` placeholder and
+//!   `name`/`type_name` are `None`. A future iteration could enrich this from
+//!   `ros_discovery_info` / SEDP topic data.
 //!
 //! This module has no dependency on either middleware crate, so it always
 //! compiles and is unit-testable regardless of which backend feature(s) are
@@ -86,9 +86,10 @@ impl EntityKind {
 
 /// A discovered ROS 2 topic: its fully-qualified name and DDS-form type name.
 ///
-/// Backend-neutral replacement for exposing `rustdds::discovery::DiscoveredTopicData`
-/// directly (ADR-0010 Phase 2). Produced by
-/// [`crate::context::Context::discovered_topics`] on the DDS backend.
+/// Backend-neutral replacement for exposing
+/// `rustdds::discovery::DiscoveredTopicData` directly (ADR-0010 Phase 2).
+/// Produced by [`crate::context::Context::discovered_topics`] on the DDS
+/// backend.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DiscoveredTopic {
   /// Fully-qualified topic name (e.g. `/chatter`).

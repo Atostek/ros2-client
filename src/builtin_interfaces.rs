@@ -118,7 +118,8 @@ impl From<Time> for repr::Time {
 
     if rem >= 0 {
       // positive time, no surprise here
-      // OR, negative time, but a whole number of seconds, fractional part is zero
+      // OR, negative time, but a whole number of seconds, fractional part is
+      // zero
       repr::Time {
         // Saturate seconds to i32. This is different from C++ implementation
         // in rclcpp, which just uses

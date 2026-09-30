@@ -116,8 +116,8 @@ fn main() -> io::Result<()> {
         .collect();
     }
 
-    // Now we should have a Vec of unique required pkgs from most primitive to least
-    // primitive.
+    // Now we should have a Vec of unique required pkgs from most primitive to
+    // least primitive.
     println!("Generating code to directory '{output_dir}'");
     let mut mod_file_name = output_dir.clone();
     mod_file_name.extend(["/mod.rs"]);

@@ -9,9 +9,8 @@
 //! * On the **`dds`** backend it converts to/from [`rustdds::QosPolicies`]
 //!   (this module's `From` impls, gated on the `dds` feature).
 //! * On the **`zenoh`** backend it drives publisher/subscriber options and the
-//!   compact QoS encoding embedded in liveliness keys (E2/E5).
-//!   [`WhenFull`] is part of [`Reliability::Reliable`] and is not part of that
-//!   encoding.
+//!   compact QoS encoding embedded in liveliness keys (E2/E5). [`WhenFull`] is
+//!   part of [`Reliability::Reliable`] and is not part of that encoding.
 //!
 //! Phase 1 of ADR-0010: public `create_*` APIs take [`QosProfile`]; RustDDS
 //! `QosPolicies` is only used at the DDS adapter boundary (via `From`).
@@ -192,7 +191,6 @@ impl QosProfile {
     self.liveliness_lease = liveliness_lease;
     self
   }
-
 }
 
 impl Default for QosProfile {
@@ -225,8 +223,9 @@ mod dds_conv {
     } else if d == DdsDuration::ZERO {
       WhenFull::Fail
     } else {
-      // RTPS durations are 2^32 ticks per second, so `to_nanoseconds` truncates.
-      // Use the nanosecond count that encodes back to the same value.
+      // RTPS durations are 2^32 ticks per second, so `to_nanoseconds`
+      // truncates. Use the nanosecond count that encodes back to the same
+      // value.
       let truncated = d.to_nanoseconds().max(0) as u64;
       let nanos = if DdsDuration::from_nanos(truncated as i64) == d {
         truncated

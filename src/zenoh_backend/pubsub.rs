@@ -71,7 +71,8 @@ impl<M: Serialize> Publisher<M> {
 
   fn encode(&self, msg: &M) -> Result<(Vec<u8>, zenoh::bytes::ZBytes), cdr::CdrError> {
     let payload = cdr::to_cdr(msg)?;
-    let sequence_number = self.seq.fetch_add(1, Ordering::Relaxed) + 1; // start at 1
+    let sequence_number = self.seq.fetch_add(1, Ordering::Relaxed) + 1; // start
+                                                                        // at 1
     let attachment = AttachmentData {
       sequence_number,
       source_timestamp: now_nanos(),

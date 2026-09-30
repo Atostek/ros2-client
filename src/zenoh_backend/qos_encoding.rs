@@ -26,7 +26,8 @@ use crate::qos::{Durability, History, Liveliness, QosProfile, Reliability, WhenF
 const DECODED_WHEN_FULL: WhenFull = WhenFull::DEFAULT;
 
 // RMW default profile (`rmw_qos_profile_default`) used as the delta reference.
-// Any `Reliable { when_full }` matches that default; `when_full` is not encoded.
+// Any `Reliable { when_full }` matches that default; `when_full` is not
+// encoded.
 const DEFAULT_DURABILITY: Durability = Durability::Volatile;
 const DEFAULT_LIVELINESS: Liveliness = Liveliness::Automatic;
 // Default history is KEEP_LAST; only KEEP_ALL is non-default.

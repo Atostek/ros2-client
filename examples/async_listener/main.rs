@@ -8,13 +8,14 @@ pub fn main() {
   // RustDDS main directory
   log4rs::init_file("examples/async_listener/log4rs.yaml", Default::default()).unwrap();
 
-  // We need to set a Ctrl-C-handler to prevent immediate stopping of the process
-  // at signal. If this is omitted, then destructors cannot run and RustDDS is
-  // unable to notify its peers over the network that it is exiting.
+  // We need to set a Ctrl-C-handler to prevent immediate stopping of the
+  // process at signal. If this is omitted, then destructors cannot run and
+  // RustDDS is unable to notify its peers over the network that it is
+  // exiting.
   //
-  // If this is not done, the program will still run, but the ROS2 Node will just
-  // vanish from the network on exit. This causes the other ROS2 nodes to think it
-  // is present for some time afterwards.
+  // If this is not done, the program will still run, but the ROS2 Node will
+  // just vanish from the network on exit. This causes the other ROS2 nodes to
+  // think it is present for some time afterwards.
   let ctrl_c_signal = CtrlC::new().expect("cannot create Ctrl+C handler?");
 
   let context = Context::new().unwrap();

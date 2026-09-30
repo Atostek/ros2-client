@@ -97,8 +97,9 @@ impl Context {
     };
     let session = zenoh::open(config).wait()?;
 
-    // Build the ROS graph cache from liveliness tokens: subscribe over the whole
-    // domain admin space with history so existing entities are delivered too.
+    // Build the ROS graph cache from liveliness tokens: subscribe over the
+    // whole domain admin space with history so existing entities are
+    // delivered too.
     let graph_cache = Arc::new(GraphCache::default());
     let cache_for_cb = graph_cache.clone();
     let liveliness_subscriber = session

@@ -662,8 +662,8 @@ impl Node {
 
     let parameter_events_writer = ros_context.create_publisher(&paramtopic, None)?;
 
-    // TODO: If there are duplicates, the later one will overwrite the earlier, but
-    // there is no warning or error.
+    // TODO: If there are duplicates, the later one will overwrite the earlier,
+    // but there is no warning or error.
     options.declared_parameters.push(Parameter {
       name: "use_sim_time".to_string(),
       value: ParameterValue::Boolean(false),
@@ -1518,7 +1518,8 @@ impl Node {
       action_qos.goal_service,
     )?;
 
-    //let cancel_service_name = action_name.to_owned() + "/_action/cancel_goal";
+    //let cancel_service_name = action_name.to_owned() +
+    // "/_action/cancel_goal";
     let cancel_goal_type = ServiceTypeName::new("action_msgs", "CancelGoal");
     let my_cancel_client = self
       .create_client::<action_msgs::CancelGoalRequest, action_msgs::CancelGoalResponse>(
@@ -1596,7 +1597,8 @@ impl Node {
       action_qos.goal_service,
     )?;
 
-    //let cancel_service_name = action_name.to_owned() + "/_action/cancel_goal";
+    //let cancel_service_name = action_name.to_owned() +
+    // "/_action/cancel_goal";
     let cancel_service_type = ServiceTypeName::new("action_msgs", "CancelGoal");
     let my_cancel_server = self
       .create_server::<action_msgs::CancelGoalRequest, action_msgs::CancelGoalResponse>(
@@ -1850,9 +1852,9 @@ impl Future for WriterWait<'_> {
       } => {
         debug!("wait_for_writer: Waiting for a writer.");
         loop {
-          // We loop to pump events out of the stream until we get the desired event
-          // or "Pending". If we stop at the first event, then there is no waker
-          // installed and we are stuck.
+          // We loop to pump events out of the stream until we get the desired
+          // event or "Pending". If we stop at the first event, then
+          // there is no waker installed and we are stuck.
           match status_event_stream.poll_next_unpin(cx) {
             // A GraphEvent carries only the *remote* entity (see `crate::graph`
             // docs), not which local reader it matched, so we cannot filter by

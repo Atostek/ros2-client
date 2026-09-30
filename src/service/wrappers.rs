@@ -87,13 +87,14 @@ impl<R: Message> RequestWrapper<R> {
 
         // Logic added for eProsima FastDDS compatibility:
         //
-        // If the SequenceNumber in related_sample_identity (presumable from inline QoS)
-        // is SEQUENCENUMBER_UNKNOWN, then it cannot refer to a real and valid DATA
-        // submessage. We patch the situation by using the actual SequenceNumber
-        // of the Request DATA submessage.
+        // If the SequenceNumber in related_sample_identity (presumable from
+        // inline QoS) is SEQUENCENUMBER_UNKNOWN, then it cannot refer
+        // to a real and valid DATA submessage. We patch the situation
+        // by using the actual SequenceNumber of the Request DATA
+        // submessage.
         //
-        // Maybe FastDDS just forgets to set the field in RELATED_SAMPLE_IDENTITY inline
-        // QoS parameter?
+        // Maybe FastDDS just forgets to set the field in
+        // RELATED_SAMPLE_IDENTITY inline QoS parameter?
         if rmw_req_id.sequence_number == i64::from(SequenceNumber::UNKNOWN) {
           rmw_req_id.sequence_number = message_info.sequence_number();
         }

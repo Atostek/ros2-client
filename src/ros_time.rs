@@ -119,7 +119,8 @@ impl TryFrom<Timestamp> for ROSTime {
       ts => {
         let ticks: u64 = ts.to_ticks(); // tick length is (1 / 2^32) seconds
         let seconds = ticks >> 32;
-        let frac_ticks = ticks - (seconds << 32); // fractional part only in ticks
+        let frac_ticks = ticks - (seconds << 32); // fractional part only in
+                                                  // ticks
         let frac_nanos = (frac_ticks * 1_000_000_000) >> 32;
         // Both Timestamp and ROSTime are represented as i64, but
         // units are different. Timestamp can count up to 2^32 = 4Gi seconds

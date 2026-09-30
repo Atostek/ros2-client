@@ -78,7 +78,8 @@ impl<M: Serialize> Publisher<M> {
       .map_err(Into::into)
   }
 
-  #[allow(dead_code)] // This is for async Service implementation. Remove this when it is implemented.
+  #[allow(dead_code)] // This is for async Service implementation. Remove this
+                      // when it is implemented.
   pub(crate) async fn async_publish_with_options(
     &self,
     message: M,

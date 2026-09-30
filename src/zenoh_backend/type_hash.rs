@@ -17,8 +17,9 @@
 //! `std_msgs/String` is the published hash. The other Jazzy interop types
 //! (AddTwoInts, actions, parameters, rosout) are computed from their field
 //! descriptions in [`super::jazzy_types`] and match the `type_hashes` in the
-//! installed Jazzy `share/<pkg>/**/*.json` files. Computing hashes for arbitrary types at code-gen time
-//! is the remaining `msggen` integration follow-up (ADR-0007).
+//! installed Jazzy `share/<pkg>/**/*.json` files. Computing hashes for
+//! arbitrary types at code-gen time is the remaining `msggen` integration
+//! follow-up (ADR-0007).
 
 /// Wildcard used in the type-hash slot of a *receiver's* key expression so it
 /// matches publishers/clients of any hash. A single-chunk `*` matches exactly

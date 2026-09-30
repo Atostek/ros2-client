@@ -218,7 +218,8 @@ impl Node {
     let qos = qos.unwrap_or_else(|| topic.qos.clone());
     let domain = self.context.domain_id();
     let sender_hash = type_hash::sender_hash(&topic.dds_type_name);
-    // A publisher `put`s on a concrete key (real hash if known, else placeholder).
+    // A publisher `put`s on a concrete key (real hash if known, else
+    // placeholder).
     let key = keyexpr::topic_keyexpr(
       domain,
       &topic.fully_qualified_name,
@@ -264,8 +265,8 @@ impl Node {
     );
     let zenoh_subscriber = self.context.session().declare_subscriber(key).wait()?;
 
-    // The liveliness token, unlike the data key, is concrete (real-or-placeholder
-    // hash) — it describes this entity for discovery.
+    // The liveliness token, unlike the data key, is concrete
+    // (real-or-placeholder hash) — it describes this entity for discovery.
     let entity_id = self.next_entity_id.fetch_add(1, Ordering::Relaxed);
     let sub_hash = type_hash::sender_hash(&topic.dds_type_name);
     let liveliness_key = self.entity_liveliness_key(

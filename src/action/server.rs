@@ -422,9 +422,9 @@ where
             status: GoalStatusEnum::Unknown,
             ..
           } => {
-            //o.into_mut().0 = GoalStatusEnum::Rejected; -- there is no such state
-            //self.publish_statuses().await; -- this is not reported as status
-            // Instead, we just forget the goal.
+            //o.into_mut().0 = GoalStatusEnum::Rejected; -- there is no such
+            // state self.publish_statuses().await; -- this is not
+            // reported as status Instead, we just forget the goal.
             o.remove();
             info!("Action server rejected goal {:?}", handle.goal_id());
             Ok(())
@@ -532,7 +532,8 @@ where
   /// accepts the goal.
   // TODO: It is a bit silly that we have to supply a "result" even though
   // goal got canceled. But we have to send something in the ResultResponse.
-  // And where does it say that result is not significant if cancelled or aborted?
+  // And where does it say that result is not significant if cancelled or
+  // aborted?
   pub async fn send_result_response(
     &self,
     handle: ExecutingGoalHandle<G>,
@@ -787,8 +788,8 @@ where
       .await
   }
 
-  // This function is private, because all status publishing happens automatically
-  // via goal status changes.
+  // This function is private, because all status publishing happens
+  // automatically via goal status changes.
   async fn publish_statuses(&self) {
     let goal_status_array = action_msgs::GoalStatusArray {
       status_list: self

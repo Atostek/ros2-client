@@ -446,8 +446,10 @@ fn test_name() {
   assert!(Name::new("", "/").is_err());
   assert!(Name::new("a", "b").is_ok());
   assert!(Name::new("a", "_b").is_ok());
-  assert!(Name::new("a", "b_b").is_ok()); // may contain [...] underscores (_), [...]
-  assert!(Name::new("a", "b__b").is_err()); // must not contain any number of repeated underscores (_)
+  assert!(Name::new("a", "b_b").is_ok()); // may contain [...] underscores (_),
+                                          // [...]
+  assert!(Name::new("a", "b__b").is_err()); // must not contain any number of
+                                            // repeated underscores (_)
   assert!(Name::new("a2//a", "b").is_err()); // must not contain any number of
                                              // repeated forward slashes (/)
 }
@@ -461,13 +463,19 @@ fn test_name_parse() {
   assert!(Name::parse("a/").is_err()); // must not be empty
   assert!(Name::parse("a/b/").is_err());
 
-  assert!(Name::parse("2").is_err()); // must not start with a numeric character ([0-9])
-  assert!(Name::parse("2/a").is_err()); // must not start with a numeric character ([0-9])
+  assert!(Name::parse("2").is_err()); // must not start with a numeric character
+                                      // ([0-9])
+  assert!(Name::parse("2/a").is_err()); // must not start with a numeric
+                                        // character ([0-9])
   assert!(Name::parse("a2/a").is_ok());
-  assert!(Name::parse("_a2/a").is_ok()); // may contain [...] underscores (_), [...]
-  assert!(Name::parse("some_name/a").is_ok()); // may contain [...] underscores (_), [...]
-  assert!(Name::parse("__a2/a").is_err()); // must not contain any number of repeated underscores (_)
-  assert!(Name::parse("a2//a").is_err()); // must not contain any number of repeated forward slashes (/)
+  assert!(Name::parse("_a2/a").is_ok()); // may contain [...] underscores (_),
+                                         // [...]
+  assert!(Name::parse("some_name/a").is_ok()); // may contain [...] underscores
+                                               // (_), [...]
+  assert!(Name::parse("__a2/a").is_err()); // must not contain any number of
+                                           // repeated underscores (_)
+  assert!(Name::parse("a2//a").is_err()); // must not contain any number of
+                                          // repeated forward slashes (/)
 
   assert_eq!(Name::parse("a/nn").unwrap(), Name::new("a", "nn").unwrap());
   assert_eq!(

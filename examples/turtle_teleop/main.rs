@@ -214,14 +214,14 @@ impl Requester {
 
     let service_qos = QosProfile::publisher_default().history(History::KeepLast { depth: 1 });
 
-    // create_client cyclone version tested against ROS2 Galactic. Obviously with
-    // CycloneDDS. Seems to work on the same host only.
+    // create_client cyclone version tested against ROS2 Galactic. Obviously
+    // with CycloneDDS. Seems to work on the same host only.
     //
     // create_client enhanced version tested against
     // * ROS2 Foxy with eProsima DDS. Works to another host also.
     // * ROS2 Galactic with RTI Connext (rmw_connextdds, not rmw_connext_cpp)
-    //   Environment variable RMW_CONNEXT_REQUEST_REPLY_MAPPING=extended Works to
-    //   another host also.
+    //   Environment variable RMW_CONNEXT_REQUEST_REPLY_MAPPING=extended Works
+    //   to another host also.
     //
     // * create_client basic version is untested.
 
