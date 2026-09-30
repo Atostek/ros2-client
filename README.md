@@ -99,7 +99,7 @@ logger.log_at(ros2_client::ros2::LogLevel::Info, "message", file!(), "fn", line!
 
 ### QoS (API convergence Phase 1)
 
-On branch `zenoh`, topic/service/action create APIs take the owned
+As of 0.11, topic/service/action create APIs take the owned
 [`QosProfile`](src/qos.rs) type on **both** backends (not `rustdds::QosPolicies`).
 Use `QosProfile::subscription_default()` / `publisher_default()` (also exported
 as `DEFAULT_SUBSCRIPTION_QOS` / `DEFAULT_PUBLISHER_QOS`) and the builder-style
@@ -108,7 +108,7 @@ setters. See [ADR-0010](docs/decisions/0010-converge-api-surfaces.md).
 
 ### Metadata and discovery (API convergence Phase 2)
 
-Breaking renames / types on branch `zenoh` (both backends where applicable):
+Breaking renames / types in 0.11 (both backends where applicable):
 
 * `MessageInfo`: use `publisher_gid()`, `source_timestamp()`,
   `sequence_number()`, etc. (no `writer_guid` / Zenoh-only `source_gid()`).
@@ -135,7 +135,7 @@ See [ADR-0010](docs/decisions/0010-converge-api-surfaces.md).
 
 ### Entity API parity (API convergence Phase 4)
 
-On branch `zenoh`:
+In 0.11:
 
 * `NodeOptions` is one shared, always-compiled builder
   ([`src/node_options.rs`](src/node_options.rs)) used by **both** backends.
@@ -195,7 +195,7 @@ See [ADR-0010](docs/decisions/0010-converge-api-surfaces.md).
 
 ### Escape hatches and dual-backend builds (API convergence Phase 5)
 
-On branch `zenoh`, `dds` and `zenoh` may both be enabled in the same build —
+In 0.11, `dds` and `zenoh` may both be enabled in the same build —
 see "Middleware backends: DDS and Zenoh" above for the feature matrix and
 `rosout!` caveat. `ros2_client::dds::rustdds` re-exports RustDDS (moved from
 the crate root); `dds::Context::domain_participant` /
@@ -267,12 +267,35 @@ distribution with, e.g., `cargo build --no-default-features --features humble`
 
 Please see [test results](interop/results) for details.  
 
+## Version 0.11
+
+**API breakage.** 0.11 replaces RustDDS types in the public API with owned ROS
+types, on both backends. Code written against 0.10 will not compile unchanged.
+Details are in the sections above and in
+[ADR-0010](docs/decisions/0010-converge-api-surfaces.md).
+
+* Create APIs take `QosProfile`, not `rustdds::QosPolicies`. A Reliable
+  publisher must say what happens when the send window is full:
+  `WhenFull::Fail`, `WhenFull::Wait(duration)`, or `WhenFull::Block`
+  (shorthand: `.reliability_reliable(WhenFull::…)` /
+  `.reliability_best_effort()`).
+* Create/read/write/wait/service APIs return owned `CreateError`, `ReadError`,
+  `WriteError`, `WaitError`, and `ServiceError`, not `rustdds::dds::*`.
+* `MessageInfo`, `RmwRequestId`, and `Gid` are owned types. `Log.stamp` and
+  `ParameterEvent.stamp` are `builtin_interfaces::Time`.
+* Discovery is `NodeEvent::Graph(...)`. `NodeEvent::DDS` is removed.
+* `Service`, `AService`, `ActionTypes`, and `Action` bundle generics are
+  removed. Use `Client<Req, Resp>` and `ActionClient<G, R, F>` (Zenoh uses the
+  same generics, without DDS-only `ServiceMapping`).
+* `Node::status_receiver()` returns `Option`: `None` when no Spinner is
+  running. It used to panic.
+* `ros2_client::rustdds` moved to `ros2_client::dds::rustdds`. With both `dds`
+  and `zenoh` enabled, entity types exist only under `dds::` and `zenoh::`.
+
+Also in 0.11: an experimental Zenoh backend (Cargo feature `zenoh`),
+interoperable with `rmw_zenoh`; Rust edition 2024 (MSRV 1.88); RustDDS 0.14.
+
 ## Version 0.10
-* Experimental **Zenoh** middleware backend (Cargo feature `zenoh`), mirroring
-  `rmw_zenoh`. See "Middleware backends: DDS and Zenoh" above.
-* `dds` and `zenoh` may now both be enabled in the same build; entity APIs are
-  namespaced under `ros2_client::dds` / `ros2_client::zenoh` (ADR-0010 Phase
-  5). `ros2_client::rustdds` moved to `ros2_client::dds::rustdds`.
 * Add interoperability tests and results.
 * ROS 2 distribution selection via a feature (`galactic` .. `lyrical`; default `jazzy`). 
 * `Context` now checks the `ROS_DISTRO` environment variable against the compiled distribution.
