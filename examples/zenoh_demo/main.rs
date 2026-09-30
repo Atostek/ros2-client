@@ -19,8 +19,8 @@
 use std::time::{Duration, Instant};
 
 use ros2_client::{
-  ros2::LogLevel, rosout, Context, ContextOptions, MessageTypeName, Name, NodeName, NodeOptions,
-  QosProfile,
+  Context, ContextOptions, MessageTypeName, Name, NodeName, NodeOptions, QosProfile,
+  ros2::LogLevel, rosout,
 };
 use zenoh::Config;
 

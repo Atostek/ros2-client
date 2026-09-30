@@ -7,7 +7,7 @@ use rustdds::{
 };
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
-use futures::{join, pin_mut, StreamExt};
+use futures::{StreamExt, join, pin_mut};
 
 use crate::{
   error::{CreateResult, ReadError, ReadResult, WriteError, WriteResult},
@@ -217,7 +217,8 @@ where
   /// a publisher for Responses.
   ///
   /// If the Node has no background Spinner running, this resolves immediately
-  /// (an error is logged), since without a Spinner no match events are delivered.
+  /// (an error is logged), since without a Spinner no match events are
+  /// delivered.
   pub async fn wait_for_service(&self, my_node: &Node) {
     join!(
       my_node.wait_for_reader(self.request_sender.guid()),

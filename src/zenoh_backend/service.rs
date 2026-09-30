@@ -16,18 +16,18 @@ use std::{
   collections::HashMap,
   marker::PhantomData,
   sync::{
-    atomic::{AtomicI64, Ordering},
     Mutex,
+    atomic::{AtomicI64, Ordering},
   },
   time::{SystemTime, UNIX_EPOCH},
 };
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use zenoh::{
+  Session, Wait,
   handlers::FifoChannelHandler,
   liveliness::LivelinessToken,
   query::{ConsolidationMode, Query, QueryTarget, Queryable},
-  Session, Wait,
 };
 
 use super::{attachment::AttachmentData, cdr};
@@ -239,8 +239,8 @@ impl<Req: DeserializeOwned, Resp: Serialize> Server<Req, Resp> {
 mod tests {
   use std::{
     sync::{
-      atomic::{AtomicBool, Ordering},
       Arc,
+      atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
   };
@@ -250,8 +250,8 @@ mod tests {
 
   use super::{Client, Server};
   use crate::{
-    zenoh_backend::context::{Context, ContextOptions},
     Name, NodeName, NodeOptions, ServiceTypeName,
+    zenoh_backend::context::{Context, ContextOptions},
   };
 
   #[derive(Serialize, Deserialize)]

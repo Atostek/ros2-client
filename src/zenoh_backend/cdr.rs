@@ -15,7 +15,7 @@
 
 use byteorder::{BigEndian, LittleEndian};
 use cdr_encoding::{from_bytes, to_vec};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 /// The 4-byte encapsulation header for little-endian plain CDR: representation
 /// identifier `CDR_LE` (`0x0001`) followed by zero options.

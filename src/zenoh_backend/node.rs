@@ -10,8 +10,8 @@ use std::{
   time::Duration,
 };
 
-use serde::{de::DeserializeOwned, Serialize};
-use zenoh::{liveliness::LivelinessToken, Wait};
+use serde::{Serialize, de::DeserializeOwned};
+use zenoh::{Wait, liveliness::LivelinessToken};
 use async_channel::Receiver;
 
 use super::{
@@ -29,6 +29,7 @@ use super::{
   type_hash,
 };
 use crate::{
+  NodeOptions,
   action_msgs::{CancelGoalRequest, CancelGoalResponse, GoalStatusArray},
   error::CreateResult,
   graph::GraphEvent,
@@ -36,7 +37,6 @@ use crate::{
   names::{ActionTypeName, MessageTypeName, Name, NodeName, ServiceTypeName},
   parameters::Parameter,
   qos::QosProfile,
-  NodeOptions,
 };
 
 /// The `get_result` action service is queried with a long timeout, mirroring
@@ -705,7 +705,7 @@ mod tests {
   use zenoh::{Config, Wait};
 
   use super::{
-    keyexpr::{graph_cache_keyexpr, parse_liveliness_key, EntityKind},
+    keyexpr::{EntityKind, graph_cache_keyexpr, parse_liveliness_key},
     *,
   };
   use crate::zenoh_backend::context::{Context, ContextOptions};

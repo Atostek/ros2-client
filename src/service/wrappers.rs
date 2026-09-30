@@ -196,7 +196,9 @@ impl<R: Message> ResponseWrapper<R> {
         let related_sample_identity = match message_info.related_request_id() {
           Some(rsi) => rsi,
           None => {
-            return read_error_deserialization!("ServiceMapping=Enhanced, but response message did not have related_sample_identity parameter!")
+            return read_error_deserialization!(
+              "ServiceMapping=Enhanced, but response message did not have related_sample_identity parameter!"
+            );
           }
         };
         Ok((related_sample_identity, response))
@@ -330,10 +332,11 @@ fn cyclone_unwrap<R: Message>(
   if bytes.len() < header_size {
     read_error_deserialization!("Service message too short")
   } else {
-    // `split_off` leaves `bytes` = [0, header_size) (the header) and returns the
-    // payload that follows it. The message is decoded from that payload. The
-    // CycloneHeader is 16 bytes (8-aligned), so CDR alignment of the payload is
-    // preserved when it is decoded from the start of this slice.
+    // `split_off` leaves `bytes` = [0, header_size) (the header) and returns
+    // the payload that follows it. The message is decoded from that
+    // payload. The CycloneHeader is 16 bytes (8-aligned), so CDR alignment
+    // of the payload is preserved when it is decoded from the start of this
+    // slice.
     let payload = bytes.split_off(header_size);
     let (response, _response_bytes) = deserialize_from_cdr_with_rep_id::<R>(&payload, encoding)?;
 

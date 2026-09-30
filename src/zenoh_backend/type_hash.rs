@@ -136,7 +136,7 @@ mod tests {
   #[test]
   fn std_msgs_scalars_have_computed_hashes() {
     use super::super::type_description::{
-      type_id as t, Field, FieldType, IndividualTypeDescription, TypeDescription,
+      Field, FieldType, IndividualTypeDescription, TypeDescription, type_id as t,
     };
 
     // Float64 (and the other scalars) are now known and well-formed.

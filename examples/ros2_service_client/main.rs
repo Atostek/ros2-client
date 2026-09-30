@@ -3,8 +3,8 @@ use std::time::{Duration, Instant};
 use rustdds::mio::{Events, Poll, PollOpt, Ready, Token};
 use serde::{Deserialize, Serialize};
 use ros2_client::{
-  qos::History, Context, Message, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping,
-  ServiceTypeName,
+  Context, Message, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping, ServiceTypeName,
+  qos::History,
 };
 
 const RESPONSE_TOKEN: Token = Token(7); // Just an arbitrary value

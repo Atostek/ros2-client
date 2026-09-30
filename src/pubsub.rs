@@ -6,11 +6,10 @@ use rustdds::{
   *,
 };
 use futures::{
-  pin_mut,
+  Future, pin_mut,
   stream::{FusedStream, StreamExt},
-  Future,
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 use super::{gid::Gid, message_info::MessageInfo, node::Node};
 use crate::error::{ReadError, ReadResult, WriteResult};
@@ -82,7 +81,7 @@ impl<M: Serialize> Publisher<M> {
   }
 
   #[allow(dead_code)] // This is for async Service implementation. Remove this
-                      // when it is implemented.
+  // when it is implemented.
   pub(crate) async fn async_publish_with_options(
     &self,
     message: M,

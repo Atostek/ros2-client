@@ -7,8 +7,8 @@
 //! and match `type_hashes` in the installed Jazzy `share/**/*.json` files.
 
 use super::type_description::{
-  service_type_description, time_description, type_id as t, Field, FieldType,
-  IndividualTypeDescription, TypeDescription,
+  Field, FieldType, IndividualTypeDescription, TypeDescription, service_type_description,
+  time_description, type_id as t,
 };
 
 fn field(name: &str, field_type: FieldType) -> Field {

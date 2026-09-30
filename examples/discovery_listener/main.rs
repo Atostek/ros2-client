@@ -17,9 +17,12 @@ pub fn main() {
   let executor = smol::Executor::new();
   executor.spawn(node.spinner().unwrap().spin()).detach();
 
-  let status_event_stream = node.status_receiver().unwrap().for_each(|event| async move {
-    println!("{event:?}");
-  });
+  let status_event_stream = node
+    .status_receiver()
+    .unwrap()
+    .for_each(|event| async move {
+      println!("{event:?}");
+    });
 
   future::block_on(executor.run(ctrl_c_signal.race(status_event_stream)));
 }

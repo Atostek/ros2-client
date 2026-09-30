@@ -120,9 +120,9 @@ mod tests {
   use zenoh::Config;
 
   use crate::{
+    NodeName, NodeOptions,
     ros2::LogLevel,
     zenoh_backend::context::{Context, ContextOptions},
-    NodeName, NodeOptions,
   };
 
   fn make_config(listen_port: u16, connect_port: Option<u16>) -> Config {

@@ -6,8 +6,8 @@ use futures::{FutureExt as StdFutureExt, StreamExt, TryFutureExt};
 use smol::{future::FutureExt, pin};
 use serde::{Deserialize, Serialize};
 use ros2_client::{
-  qos::History, service::CallServiceError, Context, Message, Name, Node, NodeName, NodeOptions,
-  QosProfile, ServiceMapping, ServiceTypeName, WriteError,
+  Context, Message, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping, ServiceTypeName,
+  WriteError, qos::History, service::CallServiceError,
 };
 
 // Test / demo program of ROS2 services, client side.
@@ -123,8 +123,8 @@ fn main() {
     debug!("main loop done");
   };
 
-  // let status_event_stream = node.status_receiver().unwrap().for_each(|event| async
-  // move {   println!("{:?}", event);
+  // let status_event_stream = node.status_receiver().unwrap().for_each(|event|
+  // async move {   println!("{:?}", event);
   // });
 
   // run it!

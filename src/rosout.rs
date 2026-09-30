@@ -88,10 +88,10 @@ impl RosoutRaw for NodeLoggingHandle {
 // is enabled and `zenoh` is not (see the macro's doc comment in `node.rs`).
 #[cfg(all(test, not(feature = "zenoh")))]
 mod tests {
-  use crate::{context::Context, log::LogLevel, rosout, NodeName};
+  use crate::{NodeName, context::Context, log::LogLevel, rosout};
 
   mod new_namespace {
-    use crate::{context::Context, log::LogLevel, rosout, NodeName};
+    use crate::{NodeName, context::Context, log::LogLevel, rosout};
 
     #[test]
     fn logging_works_without_import() {

@@ -1,7 +1,7 @@
 //! Defines [`Message`] trait, which defines data that is to be sent over
 //! Topics.
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 /// Trait to ensure Messages can be (de)serialized
 pub trait Message: Serialize + DeserializeOwned {}

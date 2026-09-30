@@ -79,9 +79,10 @@ impl fmt::Display for Time {
   fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
     // Steady time has no absolute epoch, so show it relative to a process-wide
     // origin captured on first use.
-    let since_origin = (*self - Time {
-      instant: process_origin(),
-    })
+    let since_origin = (*self
+      - Time {
+        instant: process_origin(),
+      })
     .as_nanos() as f64
       / 1e9;
     write!(fmt, "steady_time({since_origin:+.9}s from process origin)")
@@ -181,11 +182,7 @@ impl TimeDiff {
     } else {
       n as i64
     };
-    if self.is_negative {
-      -n
-    } else {
-      n
-    }
+    if self.is_negative { -n } else { n }
   }
 
   pub const fn as_millis(self) -> i64 {
@@ -236,7 +233,12 @@ impl fmt::Display for TimeDiff {
     let nanos = self.as_nanos();
     let sign = if nanos < 0 { "-" } else { "" };
     let abs = nanos.unsigned_abs();
-    write!(fmt, "{sign}{}.{:09}s", abs / 1_000_000_000, abs % 1_000_000_000)
+    write!(
+      fmt,
+      "{sign}{}.{:09}s",
+      abs / 1_000_000_000,
+      abs % 1_000_000_000
+    )
   }
 }
 

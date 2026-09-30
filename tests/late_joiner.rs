@@ -28,14 +28,14 @@
 use std::{pin::pin, str::FromStr, time::Duration};
 
 use futures::{
-  future::{join, select},
   StreamExt,
+  future::{join, select},
 };
 use tokio::sync::oneshot;
 use ros2_client::{
+  Context, DEFAULT_PUBLISHER_QOS, MessageTypeName, Name, NodeName, NodeOptions, Publisher,
+  Subscription,
   qos::{Durability, History, QosProfile, WhenFull},
-  Context, MessageTypeName, Name, NodeName, NodeOptions, Publisher, Subscription,
-  DEFAULT_PUBLISHER_QOS,
 };
 
 #[tokio::test]

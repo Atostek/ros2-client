@@ -2,11 +2,9 @@ use std::{convert::TryFrom, sync::Arc, time::Duration};
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
-use futures::{stream::StreamExt, FutureExt as StdFutureExt};
+use futures::{FutureExt as StdFutureExt, stream::StreamExt};
 use smol::{future::FutureExt, pin};
 use ros2_client::{
-  action::{self, AsyncActionServer, GoalEndStatus, NewGoalHandle},
-  qos::{Durability, History},
   ActionTypeName,
   Context,
   Name, //Node,
@@ -14,6 +12,8 @@ use ros2_client::{
   NodeOptions,
   QosProfile,
   ServiceMapping,
+  action::{self, AsyncActionServer, GoalEndStatus, NewGoalHandle},
+  qos::{Durability, History},
 };
 
 // Test / demo program of ROS2 Action, server side.
@@ -150,7 +150,7 @@ async fn action_runner(
   fib.push(0); // F_0
   fib.push(1); // F_1
   let mut i = 1; // we have work up to F_i
-                 // set up a timer to tick the computation forward
+  // set up a timer to tick the computation forward
   let mut work_timer = StreamExt::fuse(smol::Timer::interval(loop_rate));
 
   let result_status = loop {
@@ -185,8 +185,8 @@ async fn action_runner(
       }
     } // select!
   }; // loop
-     // We must return a result in all cases
-     // Also add a timeout in case client does not request a result.
+  // We must return a result in all cases
+  // Also add a timeout in case client does not request a result.
   fibonacci_action_server
     .send_result_response(executing_goal, result_status, fib)
     .or(async {

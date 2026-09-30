@@ -3,13 +3,13 @@ use std::{collections::VecDeque, f32::consts::PI, io, iter::FromIterator};
 use crossterm::event::{EventStream, KeyCode, KeyEvent, KeyModifiers};
 use futures::{Stream, TryStreamExt};
 use ratatui::{
+  Frame,
   layout::{Constraint, Layout},
   prelude::{Buffer, Rect},
   style::Stylize,
   symbols::border,
   text::{Line, Text},
   widgets::{Block, List, ListDirection, Paragraph, Widget},
-  Frame,
 };
 
 use crate::{PenRequest, Pose, Twist, Vector3};

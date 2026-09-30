@@ -12,6 +12,7 @@
 //!   escape and the next non-whitespace character
 
 use nom::{
+  IResult, Parser,
   branch::alt,
   bytes::streaming::{is_not, take_while_m_n},
   character::streaming::{char, multispace1},
@@ -19,7 +20,6 @@ use nom::{
   error::{FromExternalError, ParseError},
   multi::fold_many0,
   sequence::{delimited, preceded},
-  IResult, Parser,
 };
 
 // parser combinators are constructed from the bottom up:

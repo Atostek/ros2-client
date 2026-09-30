@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{parameters, Message};
+use crate::{Message, parameters};
 
 #[allow(non_snake_case)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,7 +64,8 @@ pub struct SetParametersResponse {
 impl Message for SetParametersResponse {}
 
 // https://github.com/ros2/rcl_interfaces/blob/humble/rcl_interfaces/srv/SetParametersAtomically.srv
-// Note: a single `result`, unlike SetParameters which returns one per parameter.
+// Note: a single `result`, unlike SetParameters which returns one per
+// parameter.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SetParametersAtomicallyResponse {
   pub result: parameters::raw::SetParametersResult,

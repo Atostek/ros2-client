@@ -2,8 +2,8 @@ use log::error;
 use rustdds::mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::timer;
 use ros2_client::{
-  qos::{Durability, History, WhenFull},
   Context, MessageTypeName, Name, Node, NodeName, NodeOptions, QosProfile,
+  qos::{Durability, History, WhenFull},
 };
 //use core::cmp::min;
 

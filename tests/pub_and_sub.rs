@@ -4,10 +4,10 @@
 
 use std::{pin::pin, time::Duration};
 
-use futures::{future::select, StreamExt};
+use futures::{StreamExt, future::select};
 use ros2_client::{
-  Context, MessageTypeName, Name, NodeName, NodeOptions, Publisher, Subscription,
-  DEFAULT_PUBLISHER_QOS,
+  Context, DEFAULT_PUBLISHER_QOS, MessageTypeName, Name, NodeName, NodeOptions, Publisher,
+  Subscription,
 };
 
 #[tokio::test]

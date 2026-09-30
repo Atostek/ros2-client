@@ -16,7 +16,7 @@ use rustdds::{
 };
 
 use crate::{
-  builtin_topics,
+  NodeOptions, builtin_topics,
   entities_info::{NodeEntitiesInfo, ParticipantEntitiesInfo},
   error::CreateResult,
   gid::Gid,
@@ -25,7 +25,6 @@ use crate::{
   node::{Node, NodeCreateError},
   pubsub::{Publisher, Subscription},
   qos::QosProfile,
-  NodeOptions,
 };
 
 /// Basic BestEffort QoS for subscribers (same as

@@ -20,7 +20,7 @@ pub struct RmwRequestId {
 
 #[cfg(feature = "dds")]
 mod dds_conv {
-  use rustdds::{rpc::SampleIdentity, SequenceNumber, GUID};
+  use rustdds::{GUID, SequenceNumber, rpc::SampleIdentity};
 
   use super::RmwRequestId;
   use crate::gid::Gid;

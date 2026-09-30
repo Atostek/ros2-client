@@ -3,8 +3,8 @@ use log::{debug, error, info, warn};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use ros2_client::{
-  qos::{Durability, History, WhenFull},
   Context, Message, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping, ServiceTypeName,
+  qos::{Durability, History, WhenFull},
 };
 
 // This is an example / test program.

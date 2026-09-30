@@ -64,8 +64,8 @@ impl Time {
       .unwrap_or_else(|| {
         error!("Timestamp out of range.");
         Time::ZERO // Since we have to return something
-                   // But your clock would have to rather far from year 2024 AD
-                   // in order to trigger this default.
+        // But your clock would have to rather far from year 2024 AD
+        // in order to trigger this default.
       })
   }
 
@@ -366,7 +366,8 @@ impl From<std::time::Duration> for Duration {
 
 impl TryFrom<Duration> for std::time::Duration {
   type Error = OutOfRangeError;
-  /// Fails for negative durations, which `std::time::Duration` cannot represent.
+  /// Fails for negative durations, which `std::time::Duration` cannot
+  /// represent.
   fn try_from(d: Duration) -> Result<Self, Self::Error> {
     let nanos = d.to_nanos();
     if nanos < 0 {
@@ -378,7 +379,8 @@ impl TryFrom<Duration> for std::time::Duration {
 }
 
 impl From<chrono::Duration> for Duration {
-  /// Saturates on overflow (chrono durations beyond the `i64` nanosecond range).
+  /// Saturates on overflow (chrono durations beyond the `i64` nanosecond
+  /// range).
   fn from(d: chrono::Duration) -> Self {
     let nanos = d.num_nanoseconds().unwrap_or({
       if d > chrono::Duration::zero() {
@@ -399,7 +401,7 @@ impl From<Duration> for chrono::Duration {
 
 #[cfg(test)]
 mod test {
-  use super::{repr, Duration, Time};
+  use super::{Duration, Time, repr};
 
   fn repr_conv_test(t: Time) {
     let rt: repr::Time = t.into();
@@ -415,7 +417,14 @@ mod test {
 
   #[test]
   fn time_chrono_roundtrip() {
-    for nanos in [0i64, 1, -1, 1_500_000_000, -1_500_000_000, 1_700_000_000_000_000_000] {
+    for nanos in [
+      0i64,
+      1,
+      -1,
+      1_500_000_000,
+      -1_500_000_000,
+      1_700_000_000_000_000_000,
+    ] {
       let t = Time::from_nanos(nanos);
       let dt: chrono::DateTime<chrono::Utc> = t.into();
       assert_eq!(Time::try_from(dt).unwrap(), t);

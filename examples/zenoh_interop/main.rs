@@ -19,11 +19,12 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use ros2_client::{
+  ActionTypeName, Context, MessageTypeName, Name, Node, NodeName, NodeOptions, QosProfile,
+  ServiceTypeName,
   action_msgs::{CancelGoalResponseEnum, GoalInfo, GoalStatus, GoalStatusEnum},
   builtin_interfaces::Time,
   ros2::LogLevel,
-  rosout, ActionTypeName, Context, MessageTypeName, Name, Node, NodeName, NodeOptions, QosProfile,
-  ServiceTypeName,
+  rosout,
 };
 
 fn main() -> ExitCode {

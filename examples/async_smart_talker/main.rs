@@ -1,6 +1,6 @@
 use ros2_client::{
-  qos::{Durability, History, WhenFull},
   Context, MessageTypeName, Name, NodeName, NodeOptions, QosProfile,
+  qos::{Durability, History, WhenFull},
 };
 use async_io::Timer;
 

@@ -1,5 +1,5 @@
 use std::{
-  collections::{btree_map::Entry, BTreeMap},
+  collections::{BTreeMap, btree_map::Entry},
   marker::PhantomData,
   sync::Mutex,
 };
@@ -15,7 +15,7 @@ use crate::{
   message::Message,
   names::Name,
   pubsub::Publisher,
-  service::{request_id::RmwRequestId, Server},
+  service::{Server, request_id::RmwRequestId},
 };
 use super::{
   FeedbackMessage, GetResultRequest, GetResultResponse, SendGoalRequest, SendGoalResponse,

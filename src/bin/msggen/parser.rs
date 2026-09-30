@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use nom::{
+  IResult, Parser,
   branch::alt,
   bytes::complete::tag,
   character::complete::{
@@ -9,7 +10,6 @@ use nom::{
   combinator::{map, opt, recognize, value},
   multi::{many0, many1},
   sequence::{delimited, pair, preceded, terminated},
-  IResult, Parser,
 };
 
 use super::stringparser::parse_string;

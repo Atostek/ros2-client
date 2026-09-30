@@ -35,7 +35,7 @@ use super::{
 use crate::{
   builtin_interfaces::Time,
   error::ServiceError,
-  parameters::{raw, Parameter, ParameterDescriptor, ParameterValue, SetParametersResult},
+  parameters::{Parameter, ParameterDescriptor, ParameterValue, SetParametersResult, raw},
   rcl_interfaces::{
     DescribeParametersRequest, DescribeParametersResponse, GetParameterTypesRequest,
     GetParameterTypesResponse, GetParametersRequest, GetParametersResponse, ListParametersRequest,
@@ -399,8 +399,8 @@ impl ParameterClient {
 mod tests {
   use std::{
     sync::{
-      atomic::{AtomicBool, Ordering},
       Arc,
+      atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
   };
@@ -408,9 +408,9 @@ mod tests {
   use zenoh::Config;
 
   use crate::{
+    Name, NodeName, NodeOptions, Parameter, ParameterValue,
     parameters::ParameterType,
     zenoh_backend::context::{Context, ContextOptions},
-    Name, NodeName, NodeOptions, Parameter, ParameterValue,
   };
 
   fn make_config(listen_port: u16, connect_port: Option<u16>) -> Config {

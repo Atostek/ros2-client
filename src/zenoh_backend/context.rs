@@ -7,19 +7,19 @@
 //! prefix). Node/pub/sub/service creation is added by E4–E6.
 
 use std::sync::{
-  atomic::{AtomicU64, Ordering},
   Arc,
+  atomic::{AtomicU64, Ordering},
 };
 
 use async_channel::Receiver;
-use zenoh::{pubsub::Subscriber, sample::SampleKind, Config, Session, Wait};
+use zenoh::{Config, Session, Wait, pubsub::Subscriber, sample::SampleKind};
 
 use super::{
   graph_cache::GraphCache,
   keyexpr::{self, EntityKind},
   node::Node,
 };
-use crate::{error::CreateResult, graph::GraphEvent, names::NodeName, NodeOptions};
+use crate::{NodeOptions, error::CreateResult, graph::GraphEvent, names::NodeName};
 
 /// Builder for configuring a [`Context`] on the Zenoh backend.
 pub struct ContextOptions {
@@ -282,11 +282,11 @@ mod tests {
 
   use super::*;
   use crate::{
+    MessageTypeName, Name, NodeName, NodeOptions, QosProfile,
     zenoh_backend::{
       node::Node,
       pubsub::{Publisher, Subscription},
     },
-    MessageTypeName, Name, NodeName, NodeOptions, QosProfile,
   };
 
   #[test]

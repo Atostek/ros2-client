@@ -3,8 +3,8 @@ use core::cmp::min;
 
 use rustdds::mio::{Events, Poll, PollOpt, Ready, Token};
 use ros2_client::{
-  qos::{Durability, History, WhenFull},
   Context, MessageTypeName, Name, Node, NodeName, NodeOptions, QosProfile,
+  qos::{Durability, History, WhenFull},
 };
 
 // Simple demo program.

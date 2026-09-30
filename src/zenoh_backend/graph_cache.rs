@@ -13,7 +13,7 @@ use std::{collections::HashMap, sync::Mutex};
 
 use async_channel::{Receiver, Sender};
 
-use super::keyexpr::{parse_liveliness_key, ParsedEntity};
+use super::keyexpr::{ParsedEntity, parse_liveliness_key};
 use crate::graph::{EntityKind, GraphEntity, GraphEvent};
 
 impl From<&ParsedEntity> for GraphEntity {
@@ -136,7 +136,7 @@ fn join_fqn(namespace: &str, name: &str) -> String {
 mod tests {
   use super::*;
   use crate::zenoh_backend::keyexpr::{
-    entity_liveliness_keyexpr, node_liveliness_keyexpr, EntityIds,
+    EntityIds, entity_liveliness_keyexpr, node_liveliness_keyexpr,
   };
 
   fn ids(entity_id: u64) -> EntityIds<'static> {

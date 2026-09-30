@@ -7,7 +7,7 @@ use rustdds::{
 };
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
-use futures::{pin_mut, stream::FusedStream, StreamExt};
+use futures::{StreamExt, pin_mut, stream::FusedStream};
 
 use crate::{
   error::{CreateResult, ReadError, ReadResult, WriteError, WriteResult},
@@ -107,7 +107,7 @@ where
       .write_with_options(resp_wrapper, write_opts)
       .map(|_| ())
       .map_err(|e| WriteError::from(e.forget_data())) // lose SampleIdentity
-                                                      // result
+    // result
   }
 
   /// The request_id must be sent back with the response to identify which
@@ -182,7 +182,7 @@ where
       .await
       .map(|_| ())
       .map_err(|e| WriteError::from(e.forget_data())) // lose SampleIdentity
-                                                      // result
+    // result
   }
 }
 

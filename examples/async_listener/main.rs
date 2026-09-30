@@ -34,21 +34,24 @@ pub fn main() {
   let executor = smol::Executor::new();
   executor.spawn(node.spinner().unwrap().spin()).detach();
 
-  let status_event_stream = node.status_receiver().unwrap().for_each(|event| async move {
-    match event {
-      NodeEvent::Graph(GraphEvent::EntityDeclared(entity))
-        if entity.kind == EntityKind::Publisher =>
-      {
-        println!("Matched remote writer {entity:?}");
+  let status_event_stream = node
+    .status_receiver()
+    .unwrap()
+    .for_each(|event| async move {
+      match event {
+        NodeEvent::Graph(GraphEvent::EntityDeclared(entity))
+          if entity.kind == EntityKind::Publisher =>
+        {
+          println!("Matched remote writer {entity:?}");
+        }
+        NodeEvent::Graph(GraphEvent::EntityUndeclared(entity))
+          if entity.kind == EntityKind::Publisher =>
+        {
+          println!("Lost remote writer {entity:?}");
+        }
+        _ => {}
       }
-      NodeEvent::Graph(GraphEvent::EntityUndeclared(entity))
-        if entity.kind == EntityKind::Publisher =>
-      {
-        println!("Lost remote writer {entity:?}");
-      }
-      _ => {}
-    }
-  });
+    });
   executor.spawn(status_event_stream).detach();
 
   let reliable_qos = QosProfile::publisher_default().history(History::KeepLast { depth: 10 });

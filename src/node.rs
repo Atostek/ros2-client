@@ -4,13 +4,13 @@ use std::{
   fmt,
   pin::Pin,
   sync::{
-    atomic::{AtomicBool, Ordering},
     Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
   },
 };
 
 use futures::{
-  pin_mut, stream, stream::FusedStream, task, task::Poll, Future, FutureExt, Stream, StreamExt,
+  Future, FutureExt, Stream, StreamExt, pin_mut, stream, stream::FusedStream, task, task::Poll,
 };
 use async_channel::Receiver;
 #[allow(unused_imports)]
@@ -101,17 +101,15 @@ struct ParameterServers {
     Server<rcl_interfaces::ListParametersRequest, rcl_interfaces::ListParametersResponse>,
   set_parameters_server:
     Server<rcl_interfaces::SetParametersRequest, rcl_interfaces::SetParametersResponse>,
-  set_parameters_atomically_server: Server<
-    rcl_interfaces::SetParametersRequest,
-    rcl_interfaces::SetParametersAtomicallyResponse,
-  >,
+  set_parameters_atomically_server:
+    Server<rcl_interfaces::SetParametersRequest, rcl_interfaces::SetParametersAtomicallyResponse>,
   describe_parameters_server:
     Server<rcl_interfaces::DescribeParametersRequest, rcl_interfaces::DescribeParametersResponse>,
 }
 
 /// Enforces static typing of parameters: an existing, typed parameter may not
-/// change its `ParameterType` unless undeclared parameters are allowed (which we
-/// treat as dynamic typing). Setting to `NotSet` is a deletion and is always
+/// change its `ParameterType` unless undeclared parameters are allowed (which
+/// we treat as dynamic typing). Setting to `NotSet` is a deletion and is always
 /// allowed. Shared by both `Node` and `Spinner` to keep the rule consistent.
 fn reject_type_change(
   parameters: &Mutex<BTreeMap<String, ParameterValue>>,
@@ -509,7 +507,12 @@ impl Spinner {
       },
       // application-defined parameters
       _ => {
-        reject_type_change(&self.parameters, self.allow_undeclared_parameters, name, value)?;
+        reject_type_change(
+          &self.parameters,
+          self.allow_undeclared_parameters,
+          name,
+          value,
+        )?;
         match self.parameter_validator {
           Some(ref v) => v.lock().unwrap()(name, value), // ask the validator to judge
           None => Ok(()),                                // no validator defined, always accept
@@ -607,7 +610,9 @@ impl Spinner {
     for Parameter { name, value } in &params {
       let already_set = self.parameters.lock().unwrap().contains_key(name);
       if !(self.allow_undeclared_parameters || already_set) {
-        return Err(format!("Setting undeclared parameter '{name}' is not allowed."));
+        return Err(format!(
+          "Setting undeclared parameter '{name}' is not allowed."
+        ));
       }
       self.validate_parameter_on_set(name, value)?;
     }
@@ -1152,10 +1157,11 @@ impl Node {
   }
 
   // Keep this function in sync with the same function in Spinner.
-  // The type-change rule is enforced via `reject_type_change`: an existing typed
-  // parameter keeps its type unless undeclared parameters are allowed. A
-  // per-parameter ParameterDescriptor with `dynamic_typing` is not yet consulted
-  // (descriptors are not stored), so `allow_undeclared_parameters` is the switch.
+  // The type-change rule is enforced via `reject_type_change`: an existing
+  // typed parameter keeps its type unless undeclared parameters are allowed.
+  // A per-parameter ParameterDescriptor with `dynamic_typing` is not yet
+  // consulted (descriptors are not stored), so `allow_undeclared_parameters`
+  // is the switch.
   fn validate_parameter_on_set(&self, name: &str, value: &ParameterValue) -> SetParametersResult {
     match name {
       // built-in parameter check
@@ -1225,8 +1231,9 @@ impl Node {
 
   // reader waits for at least one writer to be present
   pub(crate) fn wait_for_writer(&self, reader: GUID) -> impl Future<Output = ()> {
-    // Register the event receiver *before* reading the current match state, so a
-    // match that occurs between the check and the registration is not missed.
+    // Register the event receiver *before* reading the current match state, so
+    // a match that occurs between the check and the registration is not
+    // missed.
     let status_receiver = self.status_receiver();
 
     let already_present = self
@@ -1254,8 +1261,9 @@ impl Node {
   }
 
   pub(crate) fn wait_for_reader(&self, writer: GUID) -> impl Future<Output = ()> {
-    // Register the event receiver *before* reading the current match state, so a
-    // match that occurs between the check and the registration is not missed.
+    // Register the event receiver *before* reading the current match state, so
+    // a match that occurs between the check and the registration is not
+    // missed.
     let status_receiver = self.status_receiver();
 
     let already_present = self
@@ -2035,8 +2043,8 @@ impl Future for WriterWait<'_> {
 mod tests {
   use std::{collections::BTreeMap, sync::Mutex};
 
-  use super::{reject_type_change, Node, NodeName};
-  use crate::{context::Context, parameters::ParameterValue, NodeOptions};
+  use super::{Node, NodeName, reject_type_change};
+  use crate::{NodeOptions, context::Context, parameters::ParameterValue};
 
   #[test]
   fn type_change_rule() {

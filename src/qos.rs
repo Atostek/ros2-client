@@ -205,7 +205,7 @@ impl Default for QosProfile {
 
 #[cfg(feature = "dds")]
 mod dds_conv {
-  use rustdds::{policy, Duration as DdsDuration, QosPolicies, QosPolicyBuilder};
+  use rustdds::{Duration as DdsDuration, QosPolicies, QosPolicyBuilder, policy};
 
   use super::{Durability, History, Liveliness, QosProfile, Reliability, WhenFull};
 

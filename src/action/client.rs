@@ -3,9 +3,9 @@ use log::{debug, error, info, warn};
 pub use action_msgs::{CancelGoalRequest, CancelGoalResponse, GoalId, GoalInfo, GoalStatusEnum};
 use builtin_interfaces::Time;
 use futures::{
+  Future,
   //pin_mut,
   stream::{FusedStream, StreamExt},
-  Future,
 };
 
 use crate::{
@@ -14,7 +14,7 @@ use crate::{
   message::Message,
   names::Name,
   pubsub::Subscription,
-  service::{request_id::RmwRequestId, CallServiceError, Client},
+  service::{CallServiceError, Client, request_id::RmwRequestId},
   unique_identifier_msgs,
 };
 use super::{
@@ -97,7 +97,7 @@ where
         Ok(Some((incoming_req_id, resp))) if incoming_req_id == req_id =>
         // received the expected answer
         {
-          break Ok(Some(resp))
+          break Ok(Some(resp));
         }
         Ok(Some((incoming_req_id, _resp))) => {
           // got someone else's answer. Try again.
@@ -169,7 +169,7 @@ where
         Err(e) => break Err(e),
         Ok(None) => break Ok(None), // not yet
         Ok(Some((incoming_req_id, resp))) if incoming_req_id == cancel_request_id => {
-          break Ok(Some(resp))
+          break Ok(Some(resp));
         } // received expected answer
         Ok(Some(_)) => continue,    // got someone else's answer. Try again.
       }
@@ -213,7 +213,7 @@ where
         Ok(Some((incoming_req_id, GetResultResponse { status, result })))
           if incoming_req_id == result_request_id =>
         {
-          break Ok(Some((status, result)))
+          break Ok(Some((status, result)));
         } // received expected answer
         Ok(Some(_)) => continue,    // got someone else's answer. Try again.
       }
@@ -247,7 +247,7 @@ where
         Err(e) => break Err(e),
         Ok(None) => break Ok(None),
         Ok(Some((fb_msg, _msg_info))) if fb_msg.goal_id == goal_id => {
-          break Ok(Some(fb_msg.feedback))
+          break Ok(Some(fb_msg.feedback));
         }
         Ok(Some((fb_msg, _msg_info))) => {
           // feedback on some other goal

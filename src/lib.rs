@@ -234,7 +234,7 @@ pub mod zenoh {
 
 // Re-exports from crate root to simplify usage
 #[doc(inline)]
-pub use distributions::{RosDistro, COMPILED_ROS_DISTRO};
+pub use distributions::{COMPILED_ROS_DISTRO, RosDistro};
 #[doc(inline)]
 pub use message::Message;
 #[doc(inline)]
@@ -272,10 +272,10 @@ pub use log::Log;
 #[cfg(all(feature = "dds", not(feature = "zenoh")))]
 #[doc(inline)]
 pub use dds::{
-  ActionClient, ActionServer, AsyncActionServer, Client, Context, ContextOptions, Node,
-  NodeCreateError, NodeEvent, NodeLoggingHandle, ParameterError, Publisher, ReaderWait, RosoutRaw,
-  Server, ServiceMapping, Spinner, Subscription, WriterWait, DEFAULT_PUBLISHER_QOS,
-  DEFAULT_SUBSCRIPTION_QOS,
+  ActionClient, ActionServer, AsyncActionServer, Client, Context, ContextOptions,
+  DEFAULT_PUBLISHER_QOS, DEFAULT_SUBSCRIPTION_QOS, Node, NodeCreateError, NodeEvent,
+  NodeLoggingHandle, ParameterError, Publisher, ReaderWait, RosoutRaw, Server, ServiceMapping,
+  Spinner, Subscription, WriterWait,
 };
 #[cfg(all(feature = "zenoh", not(feature = "dds")))]
 #[doc(inline)]
@@ -289,7 +289,7 @@ pub mod ros2 {
   // RustDDS-derived re-exports are only available on the `dds` backend.
   // The `zenoh` backend provides owned equivalents (see issue E1 / ADR-0004).
   #[cfg(feature = "dds")]
-  pub use rustdds::{qos::policy, Duration, QosPolicies, QosPolicyBuilder, Timestamp};
+  pub use rustdds::{Duration, QosPolicies, QosPolicyBuilder, Timestamp, qos::policy};
 
   // Owned operation errors (ADR-0010 Phase 3); previously RustDDS types.
   pub use crate::error::{CreateError, ReadError, WaitError, WriteError};

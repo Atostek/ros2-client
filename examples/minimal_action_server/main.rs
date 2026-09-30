@@ -2,13 +2,12 @@ use std::{convert::TryFrom, time::Duration};
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
-use futures::{stream::StreamExt, FutureExt as StdFutureExt};
+use futures::{FutureExt as StdFutureExt, stream::StreamExt};
 use smol::{future::FutureExt, pin};
 use ros2_client::{
-  action,
+  ActionTypeName, Context, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping, action,
   action::GoalEndStatus,
   qos::{Durability, History},
-  ActionTypeName, Context, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping,
 };
 
 // Test / demo program of ROS2 Action, server side.

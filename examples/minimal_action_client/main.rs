@@ -2,12 +2,12 @@ use std::time::Duration;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
-use futures::{pin_mut, FutureExt as StdFutureExt, StreamExt};
+use futures::{FutureExt as StdFutureExt, StreamExt, pin_mut};
 use smol::{future::FutureExt, pin};
 use ros2_client::{
+  ActionTypeName, Context, Name, NodeName, NodeOptions, QosProfile, ServiceMapping, WriteError,
   action, action_msgs,
   qos::{Durability, History},
-  ActionTypeName, Context, Name, NodeName, NodeOptions, QosProfile, ServiceMapping, WriteError,
 };
 
 // Test / demo program of ROS2 Action, client side.

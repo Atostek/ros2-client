@@ -14,18 +14,18 @@ use std::{
 };
 
 use futures::stream::{self, FusedStream, StreamExt};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use zenoh::{
+  Wait,
   handlers::FifoChannelHandler,
   liveliness::LivelinessToken,
   pubsub::{Publisher as ZenohPublisher, Subscriber},
   sample::Sample,
-  Wait,
 };
 
 use super::{attachment::AttachmentData, cdr, node::Node};
 use crate::{
-  error::{write_middleware, write_serialization, ReadError, ReadResult, WriteResult},
+  error::{ReadError, ReadResult, WriteResult, write_middleware, write_serialization},
   gid::Gid,
   message_info::MessageInfo,
   ros_time::ROSTime,
@@ -72,7 +72,7 @@ impl<M: Serialize> Publisher<M> {
   fn encode(&self, msg: &M) -> Result<(Vec<u8>, zenoh::bytes::ZBytes), cdr::CdrError> {
     let payload = cdr::to_cdr(msg)?;
     let sequence_number = self.seq.fetch_add(1, Ordering::Relaxed) + 1; // start
-                                                                        // at 1
+    // at 1
     let attachment = AttachmentData {
       sequence_number,
       source_timestamp: now_nanos(),
@@ -238,11 +238,11 @@ mod tests {
 
   use super::{Publisher, Subscription};
   use crate::{
+    Gid, MessageTypeName, Name, NodeName, NodeOptions, QosProfile,
     zenoh_backend::{
       context::{Context, ContextOptions},
       node::Node,
     },
-    Gid, MessageTypeName, Name, NodeName, NodeOptions, QosProfile,
   };
 
   // Build a peer config on IPv4 loopback with multicast off. `listen`/`connect`

@@ -3,11 +3,11 @@ use std::{env, time::Duration};
 use futures::TryFutureExt;
 use smol::future::FutureExt;
 use ros2_client::{
+  Context, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping, ServiceTypeName,
   qos::History,
   rcl_interfaces::{ListParametersRequest, ListParametersResponse},
   ros2::WriteError,
   service::CallServiceError,
-  Context, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping, ServiceTypeName,
 };
 
 fn main() {

@@ -16,7 +16,7 @@
 //! and the `status` topic (`action_msgs/msg/GoalStatusArray`), completing the
 //! ROS 2 action surface.
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use super::{
   pubsub::{Publisher, Subscription},
@@ -287,8 +287,8 @@ mod tests {
   use std::{
     collections::BTreeMap,
     sync::{
-      atomic::{AtomicBool, Ordering},
       Arc,
+      atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
   };
@@ -296,10 +296,10 @@ mod tests {
   use serde::{Deserialize, Serialize};
   use zenoh::Config;
 
-  use super::{goal_status, ActionClient, ActionServer, GoalId};
+  use super::{ActionClient, ActionServer, GoalId, goal_status};
   use crate::{
-    zenoh_backend::context::{Context, ContextOptions},
     Name, NodeName, NodeOptions,
+    zenoh_backend::context::{Context, ContextOptions},
   };
 
   #[derive(Serialize, Deserialize)]
@@ -444,9 +444,9 @@ mod tests {
   #[test]
   fn cancel_and_status_roundtrip() {
     use crate::{
+      ActionTypeName,
       action_msgs::{CancelGoalResponseEnum, GoalInfo, GoalStatus, GoalStatusEnum},
       builtin_interfaces::Time,
-      ActionTypeName,
     };
 
     let srv_port = 17529;

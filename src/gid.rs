@@ -74,9 +74,9 @@ impl From<[u8; 16]> for Gid {
 
 #[cfg(feature = "dds")]
 mod dds_conv {
-  use rustdds::{dds::key::Key, GUID};
+  use rustdds::{GUID, dds::key::Key};
 
-  use super::{Gid, GID_LENGTH};
+  use super::{GID_LENGTH, Gid};
 
   impl From<GUID> for Gid {
     fn from(guid: GUID) -> Self {
@@ -89,11 +89,7 @@ mod dds_conv {
   impl From<Gid> for GUID {
     fn from(gid: Gid) -> GUID {
       GUID::from_bytes(std::array::from_fn(|i| {
-        if i < GID_LENGTH {
-          gid.0[i]
-        } else {
-          0
-        }
+        if i < GID_LENGTH { gid.0[i] } else { 0 }
       }))
     }
   }
