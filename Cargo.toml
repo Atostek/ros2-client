@@ -218,6 +218,11 @@ path = "examples/client_list_parameters/main.rs"
 required-features = ["dds"]
 
 [[example]]
+name = "parameter_server"
+path = "examples/parameter_server/main.rs"
+required-features = ["dds"]
+
+[[example]]
 name = "discovery_listener"
 path = "examples/discovery_listener/main.rs"
 required-features = ["dds"]
