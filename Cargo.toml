@@ -208,8 +208,8 @@ path = "examples/concurrent_action_server/main.rs"
 required-features = ["dds"]
 
 [[example]]
-name = "client_get_parameters"
-path = "examples/client_get_parameters/main.rs"
+name = "client_get_set_parameters"
+path = "examples/client_get_set_parameters/main.rs"
 required-features = ["dds"]
 
 [[example]]
