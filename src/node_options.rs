@@ -4,7 +4,8 @@
 //! Historically this type lived in the DDS-only `src/node.rs`; the Zenoh
 //! backend had its own empty placeholder. Both backends now share this one
 //! definition: the builder surface (`enable_rosout`, `read_rosout`,
-//! `declare_parameter`, `parameter_validator`, `parameter_set_action`) is
+//! `start_parameter_services`, `declare_parameter`, `parameter_validator`,
+//! `parameter_set_action`) is
 //! unchanged, but fields are `pub(crate)` so each backend's `Node::new` can
 //! read/consume them directly (DDS keeps the whole struct; Zenoh wires
 //! `enable_rosout` / `enable_rosout_reading` / `start_parameter_services` /
@@ -69,6 +70,25 @@ impl NodeOptions {
   pub fn enable_rosout(self, enable_rosout: bool) -> NodeOptions {
     NodeOptions {
       enable_rosout,
+      ..self
+    }
+  }
+
+  /// Whether to offer the six `rcl_interfaces` parameter services.
+  ///
+  /// The default is `true`. `false` means:
+  ///
+  /// * **DDS:** `Node::spinner` creates none of
+  ///   `get_parameters`, `get_parameter_types`, `set_parameters`,
+  ///   `set_parameters_atomically`, `list_parameters`, or
+  ///   `describe_parameters`. The local API (`get_parameter`,
+  ///   `set_parameter`, `has_parameter`) still works, and `/parameter_events`
+  ///   is still published.
+  /// * **Zenoh:** no `ParameterServer` is created, so declared parameters are
+  ///   not stored either. `Node::parameter_server()` returns `None`.
+  pub fn start_parameter_services(self, start_parameter_services: bool) -> NodeOptions {
+    NodeOptions {
+      start_parameter_services,
       ..self
     }
   }

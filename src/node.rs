@@ -2067,6 +2067,21 @@ mod tests {
   }
 
   #[test]
+  fn parameter_services_can_be_disabled() {
+    let mut node = Node::new(
+      NodeName::new("/", "param_off").unwrap(),
+      NodeOptions::new()
+        .start_parameter_services(false)
+        .declare_parameter("rate_hz", ParameterValue::Integer(1)),
+      Context::new().unwrap(),
+    )
+    .unwrap();
+
+    assert!(node.has_parameter("rate_hz"));
+    assert!(node.spinner().is_ok());
+  }
+
+  #[test]
   fn node_is_sync() {
     let node = Node::new(
       NodeName::new("/", "base_name").unwrap(),
