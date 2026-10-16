@@ -78,12 +78,11 @@ impl NodeOptions {
   ///
   /// The default is `true`. `false` means:
   ///
-  /// * **DDS:** `Node::spinner` creates none of
-  ///   `get_parameters`, `get_parameter_types`, `set_parameters`,
-  ///   `set_parameters_atomically`, `list_parameters`, or
-  ///   `describe_parameters`. The local API (`get_parameter`,
-  ///   `set_parameter`, `has_parameter`) still works, and `/parameter_events`
-  ///   is still published.
+  /// * **DDS:** `Node::spinner` creates none of `get_parameters`,
+  ///   `get_parameter_types`, `set_parameters`, `set_parameters_atomically`,
+  ///   `list_parameters`, or `describe_parameters`. The local API
+  ///   (`get_parameter`, `set_parameter`, `has_parameter`) still works, and
+  ///   `/parameter_events` is still published.
   /// * **Zenoh:** no `ParameterServer` is created, so declared parameters are
   ///   not stored either. `Node::parameter_server()` returns `None`.
   pub fn start_parameter_services(self, start_parameter_services: bool) -> NodeOptions {
