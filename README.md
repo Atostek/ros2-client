@@ -105,6 +105,9 @@ Details are in the sections above and in
 Also in 0.11: an experimental Zenoh backend (Cargo feature `zenoh`),
 interoperable with `rmw_zenoh`; Rust edition 2024 (MSRV 1.88); RustDDS 0.14.
 
+### Version 0.11.1
+ * Add missing function to enable/disable parameter services.
+
 ## Version 0.10
 * Add interoperability tests and results.
 * ROS 2 distribution selection via a feature (`galactic` .. `lyrical`; default `jazzy`). 
