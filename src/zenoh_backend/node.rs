@@ -82,9 +82,9 @@ pub struct Node {
   // Kept alive so the node stays discoverable; dropped => token undeclared.
   _node_token: Option<LivelinessToken>,
 
-  // Populated from `NodeOptions` at construction time; see `Self::new`. Getters below avoid double-creating these when the options
-  // already requested them; `create_logger` / `read_rosout` /
-  // `create_parameter_server` remain available for creating *additional*
+  // Populated from `NodeOptions` at construction time; see `Self::new`. Getters below avoid
+  // double-creating these when the options already requested them; `create_logger` /
+  // `read_rosout` / `create_parameter_server` remain available for creating *additional*
   // instances beyond the options-managed one.
   logger: Option<Logger>,
   rosout_reader: Option<Subscription<Log>>,
@@ -492,12 +492,14 @@ impl Node {
   /// added). Parameters not in the store cannot be set, and there is no
   /// validator or set action; the parameter server created from
   /// [`NodeOptions`] uses the rules given there instead. Drive the returned
-  /// server with [`ParameterServer::spin_once`]/[`spin`](ParameterServer::spin).
+  /// server with
+  /// [`ParameterServer::spin_once`]/[`spin`](ParameterServer::spin).
   pub fn create_parameter_server(
     &self,
     initial_parameters: impl IntoIterator<Item = Parameter>,
   ) -> CreateResult<ParameterServer> {
-    let store = ParameterStore::new(initial_parameters, false, None, None).map_err(bad_parameter)?;
+    let store =
+      ParameterStore::new(initial_parameters, false, None, None).map_err(bad_parameter)?;
     self.parameter_server_with_store(store)
   }
 

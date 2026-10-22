@@ -313,7 +313,11 @@ impl ParameterChanges {
   }
 
   /// A `ParameterEvent` reporting these changes.
-  pub fn into_event(self, stamp: crate::builtin_interfaces::Time, node: String) -> raw::ParameterEvent {
+  pub fn into_event(
+    self,
+    stamp: crate::builtin_interfaces::Time,
+    node: String,
+  ) -> raw::ParameterEvent {
     raw::ParameterEvent {
       stamp,
       node,
@@ -716,7 +720,9 @@ mod tests {
     let s = store(false);
     assert_eq!(s.get("use_sim_time"), Some(ParameterValue::Boolean(false)));
     assert!(s.set("use_sim_time", ParameterValue::Integer(1)).is_err());
-    let changes = s.set("use_sim_time", ParameterValue::Boolean(true)).unwrap();
+    let changes = s
+      .set("use_sim_time", ParameterValue::Boolean(true))
+      .unwrap();
     assert!(s.use_sim_time());
     // It existed already, so this is a change, not a new parameter.
     assert_eq!(changes.changed_parameters.len(), 1);

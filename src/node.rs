@@ -817,8 +817,9 @@ impl Node {
 
   /// Sets a parameter value. Parameter must be
   /// [declared](NodeOptions::declare_parameter) before setting, unless
-  /// [undeclared parameters are allowed](NodeOptions::allow_undeclared_parameters).
-  /// Setting a parameter to `NotSet` deletes it.
+  /// [undeclared parameters are
+  /// allowed](NodeOptions::allow_undeclared_parameters). Setting a parameter
+  /// to `NotSet` deletes it.
   pub fn set_parameter(&self, name: &str, value: ParameterValue) -> Result<(), String> {
     let changes = self.parameters.set(name, value)?;
     self.publish_parameter_changes(changes);
@@ -1693,12 +1694,24 @@ mod tests {
     .unwrap();
 
     assert!(node.set_parameter("p", ParameterValue::Integer(2)).is_ok());
-    assert!(node.set_parameter("p", ParameterValue::Double(2.0)).is_err());
+    assert!(
+      node
+        .set_parameter("p", ParameterValue::Double(2.0))
+        .is_err()
+    );
     assert!(node.set_parameter("q", ParameterValue::Integer(1)).is_err());
-    assert!(node.set_parameter("use_sim_time", ParameterValue::Integer(1)).is_err());
+    assert!(
+      node
+        .set_parameter("use_sim_time", ParameterValue::Integer(1))
+        .is_err()
+    );
 
     // With simulated time on and no /clock received, time stays at zero.
-    assert!(node.set_parameter("use_sim_time", ParameterValue::Boolean(true)).is_ok());
+    assert!(
+      node
+        .set_parameter("use_sim_time", ParameterValue::Boolean(true))
+        .is_ok()
+    );
     assert_eq!(node.time_now(), crate::ROSTime::ZERO);
 
     assert!(node.set_parameter("p", ParameterValue::NotSet).is_ok());
@@ -1715,7 +1728,11 @@ mod tests {
     .unwrap();
     assert!(node.allow_undeclared_parameters());
     assert!(node.set_parameter("q", ParameterValue::Integer(1)).is_ok());
-    assert!(node.set_parameter("q", ParameterValue::String("x".into())).is_ok());
+    assert!(
+      node
+        .set_parameter("q", ParameterValue::String("x".into()))
+        .is_ok()
+    );
   }
 
   #[test]
