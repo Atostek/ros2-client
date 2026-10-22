@@ -1,4 +1,4 @@
-//! Zenoh parameters (E8).
+//! Zenoh parameters.
 //!
 //! ROS 2 parameters are not a middleware primitive — a node that "has
 //! parameters" simply exposes six ordinary services and a `parameter_events`

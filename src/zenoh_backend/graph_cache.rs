@@ -1,4 +1,4 @@
-//! In-memory ROS 2 graph cache built from liveliness tokens (E5).
+//! In-memory ROS 2 graph cache built from liveliness tokens.
 //!
 //! A [`Context`](super::context::Context) declares a liveliness subscriber over
 //! `@ros2_lv/<domain>/**`; each PUT/DELETE sample is fed to [`GraphCache`],

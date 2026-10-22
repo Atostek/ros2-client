@@ -1,4 +1,4 @@
-//! Compact QoS encoding for Zenoh liveliness tokens (E5).
+//! Compact QoS encoding for Zenoh liveliness tokens.
 //!
 //! `rmw_zenoh` embeds a QoS string in each liveliness token's `<qos>` component
 //! (see `docs/zenoh_study/research/rmw_zenoh.md` §6). The layout is six

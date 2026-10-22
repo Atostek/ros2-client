@@ -1,10 +1,9 @@
-//! Zenoh [`Context`] — one `zenoh::Session` per ROS 2 context (E3).
+//! Zenoh [`Context`] — one `zenoh::Session` per ROS 2 context.
 //!
 //! Mirrors the `rmw_zenoh` model where a ROS 2 context maps to a single Zenoh
 //! session shared by all of its entities (see
-//! `docs/decisions/0009-zenoh-router-and-config.md`). This is the seed of E3:
-//! it opens the session and holds the domain id (used as the key-expression
-//! prefix). Node/pub/sub/service creation is added by E4–E6.
+//! `docs/decisions/0009-zenoh-router-and-config.md`). It opens the session and
+//! holds the domain id (used as the key-expression prefix).
 
 use std::sync::{
   Arc,
@@ -194,9 +193,9 @@ impl Context {
   }
 
   /// The underlying Zenoh session, shared by all entities in this context.
-  /// Used internally by pub/sub, discovery, and services (E4–E6).
+  /// Used internally by pub/sub, discovery, and services.
   ///
-  /// Escape hatch (ADR-0010 Phase 5): exposes the raw [`zenoh::Session`] for
+  /// Escape hatch (ADR-0010): exposes the raw [`zenoh::Session`] for
   /// advanced use cases not covered by the `ros2_client::zenoh` API.
   pub fn session(&self) -> &Session {
     &self.inner.session

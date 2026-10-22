@@ -1,9 +1,8 @@
-//! Zenoh `Node` and `Topic` (E4).
+//! Zenoh `Node` and `Topic`.
 //!
-//! A minimal node surface over a shared [`Context`] session: it resolves ROS
-//! names to key expressions and creates [`Publisher`]/[`Subscription`]
-//! entities. Discovery (liveliness tokens, graph), services, and actions land
-//! in E5/E6.
+//! A node over a shared [`Context`] session: it resolves ROS names to key
+//! expressions, declares its liveliness token for discovery, and creates
+//! publishers, subscriptions, services, actions, and parameter servers.
 
 use std::{
   sync::{
@@ -83,8 +82,7 @@ pub struct Node {
   // Kept alive so the node stays discoverable; dropped => token undeclared.
   _node_token: Option<LivelinessToken>,
 
-  // Populated from `NodeOptions` at construction time (ADR-0010 Phase 4); see
-  // `Self::new`. Getters below avoid double-creating these when the options
+  // Populated from `NodeOptions` at construction time; see `Self::new`. Getters below avoid double-creating these when the options
   // already requested them; `create_logger` / `read_rosout` /
   // `create_parameter_server` remain available for creating *additional*
   // instances beyond the options-managed one.

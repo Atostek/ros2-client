@@ -1,4 +1,4 @@
-//! Zenoh actions (E7).
+//! Zenoh actions.
 //!
 //! ROS 2 actions have no middleware-level concept — they are composed of
 //! ordinary services + topics (see `docs/zenoh_study/research/rmw_zenoh.md`

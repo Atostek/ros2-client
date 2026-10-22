@@ -16,7 +16,7 @@
 pub const ADMIN_SPACE: &str = "@ros2_lv";
 
 // `EntityKind` (and its liveliness-key `code()`) now lives in `crate::graph`
-// so it is shared with the DDS backend's discovery mapping (ADR-0010 Phase 2).
+// so it is shared with the DDS backend's discovery mapping (ADR-0010).
 pub use crate::graph::EntityKind;
 
 /// Mangle a ROS name for use in a liveliness key: `/`→`%`, and an empty string

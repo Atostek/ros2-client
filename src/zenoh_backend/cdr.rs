@@ -1,4 +1,4 @@
-//! CDR (de)serialization for the Zenoh backend (E2/E4).
+//! CDR (de)serialization for the Zenoh backend.
 //!
 //! ROS 2 message payloads are OMG CDR with a 4-byte *encapsulation header*
 //! (a 2-byte representation identifier + 2-byte options) followed by the CDR

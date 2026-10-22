@@ -1,9 +1,6 @@
-//! Shared [`NodeOptions`] builder for both middleware backends (ADR-0010
-//! Phase 4).
+//! Shared [`NodeOptions`] builder for both middleware backends (ADR-0010).
 //!
-//! Historically this type lived in the DDS-only `src/node.rs`; the Zenoh
-//! backend had its own empty placeholder. Both backends now share this one
-//! definition: the builder surface (`enable_rosout`, `read_rosout`,
+//! The builder surface (`enable_rosout`, `read_rosout`,
 //! `start_parameter_services`, `declare_parameter`, `parameter_validator`,
 //! `parameter_set_action`) is
 //! unchanged, but fields are `pub(crate)` so each backend's `Node::new` can

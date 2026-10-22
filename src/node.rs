@@ -3,10 +3,7 @@ use std::{
   error::Error,
   fmt,
   pin::Pin,
-  sync::{
-    Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
-  },
+  sync::{Arc, Mutex},
 };
 
 use futures::{
@@ -44,15 +41,12 @@ use crate::{
 
 /// ROS 2 Discovery events.
 ///
-/// `Graph` carries the backend-neutral [`GraphEvent`] (ADR-0005 / ADR-0010
-/// Phase 2), mapped from RustDDS's `DomainParticipantStatusEvent` matched-
+/// `Graph` carries the backend-neutral [`GraphEvent`] (ADR-0005 / ADR-0010),
+/// mapped from RustDDS's `DomainParticipantStatusEvent` matched-
 /// entity events (see the [`Spinner::spin`] loop and module docs on
 /// [`crate::graph`] for the DDS mapping's limitations). `ParticipantEntities`
 /// carries the raw `ros_discovery_info` update (`rmw_dds_common`); there is no
 /// owned equivalent yet.
-///
-/// The former `NodeEvent::DDS(DomainParticipantStatusEvent)` variant, which
-/// leaked a RustDDS type, has been removed.
 #[derive(Clone, Debug)]
 pub enum NodeEvent {
   /// A backend-neutral ROS 2 graph change (entity declared/undeclared).
@@ -135,7 +129,6 @@ pub struct Spinner {
   writers_to_remote_readers: Arc<Mutex<BTreeMap<GUID, BTreeSet<GUID>>>>,
   // Keep track of ros_discovery_info
   external_nodes: Arc<Mutex<BTreeMap<Gid, Vec<NodeEntitiesInfo>>>>,
-  //suppress_node_info_updates: Arc<AtomicBool>, // temporarily suppress sending updates
   status_event_senders: Arc<Mutex<Vec<async_channel::Sender<NodeEvent>>>>,
 
   sim_time: Arc<Mutex<ROSTime>>,
@@ -354,7 +347,7 @@ impl Spinner {
           //println!("{:?}", dp_status_event );
 
           // update remote reader/writer databases, and map onto the
-          // backend-neutral GraphEvent (ADR-0005 / ADR-0010 Phase 2).
+          // backend-neutral GraphEvent (ADR-0005 / ADR-0010).
           // See `crate::graph` module docs for the mapping's limitations
           // (DDS matched-entity events only carry GUIDs, not topic/node
           // names).
@@ -528,9 +521,8 @@ pub struct Node {
   readers: BTreeSet<Gid>,
   writers: BTreeSet<Gid>,
 
-  suppress_node_info_updates: Arc<AtomicBool>,
-  // temporarily suppress sending updates
-  // to prevent flood of messages. TODO: not shared: need not be atomic or Arc.
+  // Temporarily suppress sending updates, to prevent a flood of messages.
+  suppress_node_info_updates: bool,
 
   // Keep track of who is matched via DDS Discovery
   // Map keys are lists of local Subscriptions and Publishers.
@@ -592,7 +584,7 @@ impl Node {
       readers_to_remote_writers: Arc::new(Mutex::new(BTreeMap::new())),
       writers_to_remote_readers: Arc::new(Mutex::new(BTreeMap::new())),
       external_nodes: Arc::new(Mutex::new(BTreeMap::new())),
-      suppress_node_info_updates: Arc::new(AtomicBool::new(false)),
+      suppress_node_info_updates: false,
       stop_spin_sender: None,
       status_event_senders: Arc::new(Mutex::new(Vec::new())),
       rosout_writer: Arc::new(None), // Set below
@@ -772,9 +764,7 @@ impl Node {
   }
 
   fn suppress_node_info_updates(&mut self, suppress: bool) {
-    self
-      .suppress_node_info_updates
-      .store(suppress, Ordering::SeqCst);
+    self.suppress_node_info_updates = suppress;
 
     // Send updates when suppression ends
     if !suppress {
@@ -784,14 +774,14 @@ impl Node {
 
   fn add_reader(&mut self, reader: Gid) {
     self.readers.insert(reader);
-    if !self.suppress_node_info_updates.load(Ordering::SeqCst) {
+    if !self.suppress_node_info_updates {
       self.ros_context.update_node(self.generate_node_info());
     }
   }
 
   fn add_writer(&mut self, writer: Gid) {
     self.writers.insert(writer);
-    if !self.suppress_node_info_updates.load(Ordering::SeqCst) {
+    if !self.suppress_node_info_updates {
       self.ros_context.update_node(self.generate_node_info());
     }
   }

@@ -1,4 +1,4 @@
-//! Zenoh services: `Client` and `Server` over queryable/get (E6).
+//! Zenoh services: `Client` and `Server` over queryable/get.
 //!
 //! Mirrors `rmw_zenoh` (see `docs/zenoh_study/research/rmw_zenoh.md` §5 and
 //! `docs/decisions/0006-services-over-queryable-get.md`):
