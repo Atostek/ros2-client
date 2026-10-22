@@ -16,16 +16,17 @@
 //! Events use shared [`raw::ParameterEvent`] (`stamp:
 //! builtin_interfaces::Time`).
 //!
+//! Parameter values and the rules for changing them (declared names, fixed
+//! types, `use_sim_time`, and the [`NodeOptions`](crate::NodeOptions)
+//! validator and set action) are the same as on the DDS backend.
+//!
 //! Like the DDS backend's parameter machinery (which runs inside a `Spinner`),
 //! the server here is driven by the application: call [`ParameterServer::spin`]
 //! (or [`ParameterServer::spin_once`]) from your event loop to answer pending
-//! requests. `set_parameters_atomically` is not implemented (it returns a
-//! failure result, mirroring the DDS backend).
+//! requests.
 
-use std::{collections::BTreeMap, sync::Mutex};
+use std::sync::Arc;
 
-/// Re-export shared wire type for callers that historically imported
-/// `ParameterEvent` from this module.
 pub use raw::ParameterEvent;
 
 use super::{
@@ -35,11 +36,14 @@ use super::{
 use crate::{
   builtin_interfaces::Time,
   error::ServiceError,
-  parameters::{Parameter, ParameterDescriptor, ParameterValue, SetParametersResult, raw},
+  parameters::{
+    Parameter, ParameterChanges, ParameterStore, ParameterValue, SetParametersResult, raw,
+  },
   rcl_interfaces::{
     DescribeParametersRequest, DescribeParametersResponse, GetParameterTypesRequest,
     GetParameterTypesResponse, GetParametersRequest, GetParametersResponse, ListParametersRequest,
-    ListParametersResponse, ListParametersResult, SetParametersRequest, SetParametersResponse,
+    ListParametersResponse, ListParametersResult, SetParametersAtomicallyResponse,
+    SetParametersRequest, SetParametersResponse,
   },
 };
 
@@ -52,11 +56,11 @@ use crate::{
 /// [`spin_once`](Self::spin_once)) to service incoming requests.
 pub struct ParameterServer {
   node_fqn: String,
-  store: Mutex<BTreeMap<String, ParameterValue>>,
+  store: Arc<ParameterStore>,
   get_parameters: Server<GetParametersRequest, GetParametersResponse>,
   get_parameter_types: Server<GetParameterTypesRequest, GetParameterTypesResponse>,
   set_parameters: Server<SetParametersRequest, SetParametersResponse>,
-  set_parameters_atomically: Server<SetParametersRequest, SetParametersResponse>,
+  set_parameters_atomically: Server<SetParametersRequest, SetParametersAtomicallyResponse>,
   list_parameters: Server<ListParametersRequest, ListParametersResponse>,
   describe_parameters: Server<DescribeParametersRequest, DescribeParametersResponse>,
   events: Publisher<ParameterEvent>,
@@ -66,26 +70,18 @@ impl ParameterServer {
   #[allow(clippy::too_many_arguments)]
   pub(crate) fn new(
     node_fqn: String,
-    initial_parameters: impl IntoIterator<Item = Parameter>,
+    store: Arc<ParameterStore>,
     get_parameters: Server<GetParametersRequest, GetParametersResponse>,
     get_parameter_types: Server<GetParameterTypesRequest, GetParameterTypesResponse>,
     set_parameters: Server<SetParametersRequest, SetParametersResponse>,
-    set_parameters_atomically: Server<SetParametersRequest, SetParametersResponse>,
+    set_parameters_atomically: Server<SetParametersRequest, SetParametersAtomicallyResponse>,
     list_parameters: Server<ListParametersRequest, ListParametersResponse>,
     describe_parameters: Server<DescribeParametersRequest, DescribeParametersResponse>,
     events: Publisher<ParameterEvent>,
   ) -> Self {
-    let mut store: BTreeMap<String, ParameterValue> = initial_parameters
-      .into_iter()
-      .map(|Parameter { name, value }| (name, value))
-      .collect();
-    // Every node carries `use_sim_time` (default false), like rclcpp/rclpy.
-    store
-      .entry("use_sim_time".to_string())
-      .or_insert(ParameterValue::Boolean(false));
     Self {
       node_fqn,
-      store: Mutex::new(store),
+      store,
       get_parameters,
       get_parameter_types,
       set_parameters,
@@ -100,51 +96,49 @@ impl ParameterServer {
 
   /// Get a parameter's value, or `None` if it is not set.
   pub fn get_parameter(&self, name: &str) -> Option<ParameterValue> {
-    self.store.lock().unwrap().get(name).cloned()
+    self.store.get(name)
   }
 
   /// Set a parameter locally and publish a `parameter_events` notification.
-  pub fn set_parameter(&self, name: &str, value: ParameterValue) {
-    let _ = self.set_and_notify(name, value);
+  /// The same rules apply as for remote set requests; setting `NotSet`
+  /// deletes the parameter.
+  pub fn set_parameter(&self, name: &str, value: ParameterValue) -> Result<(), String> {
+    self.set_and_notify(name, value)
   }
 
   /// The names of all currently-set parameters.
   pub fn parameter_names(&self) -> Vec<String> {
-    self.store.lock().unwrap().keys().cloned().collect()
+    self.store.names()
+  }
+
+  /// Does the parameter exist?
+  pub fn has_parameter(&self, name: &str) -> bool {
+    self.store.has(name)
+  }
+
+  /// Remove a parameter, publishing a `parameter_events` notification if it
+  /// existed.
+  pub fn undeclare_parameter(&self, name: &str) {
+    let changes = self.store.undeclare(name);
+    self.publish_changes(changes);
+  }
+
+  /// Whether parameters not declared up front may be set.
+  pub fn allow_undeclared_parameters(&self) -> bool {
+    self.store.allow_undeclared()
   }
 
   fn set_and_notify(&self, name: &str, value: ParameterValue) -> SetParametersResult {
-    let raw_param = raw::Parameter {
-      name: name.to_string(),
-      value: value.clone().into(),
-    };
-    let already_set = {
-      let mut db = self.store.lock().unwrap();
-      let already = db.contains_key(name);
-      db.insert(name.to_string(), value);
-      already
-    };
-    if already_set {
-      self.publish_event(vec![], vec![raw_param], vec![]);
-    } else {
-      self.publish_event(vec![raw_param], vec![], vec![]);
-    }
+    let changes = self.store.set(name, value)?;
+    self.publish_changes(changes);
     Ok(())
   }
 
-  fn publish_event(
-    &self,
-    new_parameters: Vec<raw::Parameter>,
-    changed_parameters: Vec<raw::Parameter>,
-    deleted_parameters: Vec<raw::Parameter>,
-  ) {
-    let event = ParameterEvent {
-      stamp: Time::now(),
-      node: self.node_fqn.clone(),
-      new_parameters,
-      changed_parameters,
-      deleted_parameters,
-    };
+  fn publish_changes(&self, changes: ParameterChanges) {
+    if changes.is_empty() {
+      return;
+    }
+    let event = changes.into_event(Time::now(), self.node_fqn.clone());
     if let Err(e) = self.events.publish(event) {
       log::warn!("parameter_events publish failed: {e}");
     }
@@ -178,15 +172,12 @@ impl ParameterServer {
 
   fn handle_get_parameters(&self) {
     while let Ok(Some((id, req))) = self.get_parameters.try_receive_request() {
-      let values = {
-        let db = self.store.lock().unwrap();
-        req
-          .names
-          .iter()
-          .map(|name| db.get(name).cloned().unwrap_or(ParameterValue::NotSet))
-          .map(raw::ParameterValue::from)
-          .collect()
-      };
+      let values = self
+        .store
+        .get_many(&req.names)
+        .into_iter()
+        .map(raw::ParameterValue::from)
+        .collect();
       if let Err(e) = self
         .get_parameters
         .send_response(id, GetParametersResponse { values })
@@ -198,15 +189,7 @@ impl ParameterServer {
 
   fn handle_get_parameter_types(&self) {
     while let Ok(Some((id, req))) = self.get_parameter_types.try_receive_request() {
-      let values = {
-        let db = self.store.lock().unwrap();
-        req
-          .names
-          .iter()
-          .map(|name| db.get(name).cloned().unwrap_or(ParameterValue::NotSet))
-          .map(|v| v.to_parameter_type() as u8)
-          .collect()
-      };
+      let values = self.store.get_types(&req.names);
       if let Err(e) = self
         .get_parameter_types
         .send_response(id, GetParameterTypesResponse { values })
@@ -220,8 +203,7 @@ impl ParameterServer {
     while let Ok(Some((id, req))) = self.set_parameters.try_receive_request() {
       let results = req
         .parameter
-        .iter()
-        .cloned()
+        .into_iter()
         .map(Parameter::from)
         .map(|Parameter { name, value }| self.set_and_notify(&name, value))
         .map(raw::SetParametersResult::from)
@@ -237,20 +219,17 @@ impl ParameterServer {
 
   fn handle_set_parameters_atomically(&self) {
     while let Ok(Some((id, req))) = self.set_parameters_atomically.try_receive_request() {
-      // Not implemented — mirror the DDS backend and fail every entry.
-      let results = req
-        .parameter
-        .iter()
-        .map(|_| {
-          raw::SetParametersResult::from(Err(
-            "Setting parameters atomically is not implemented.".to_owned(),
-          ))
-        })
-        .collect();
-      if let Err(e) = self
-        .set_parameters_atomically
-        .send_response(id, SetParametersResponse { results })
-      {
+      let params = req.parameter.into_iter().map(Parameter::from).collect();
+      let result = self
+        .store
+        .set_atomically(params)
+        .map(|changes| self.publish_changes(changes));
+      if let Err(e) = self.set_parameters_atomically.send_response(
+        id,
+        SetParametersAtomicallyResponse {
+          result: result.into(),
+        },
+      ) {
         log::warn!("set_parameters_atomically response failed: {e}");
       }
     }
@@ -258,19 +237,7 @@ impl ParameterServer {
 
   fn handle_list_parameters(&self) {
     while let Ok(Some((id, req))) = self.list_parameters.try_receive_request() {
-      let names = {
-        let db = self.store.lock().unwrap();
-        db.keys()
-          .filter(|name| {
-            req.prefixes.is_empty() || req.prefixes.iter().any(|p| name.starts_with(p))
-          })
-          .cloned()
-          .collect()
-      };
-      let result = ListParametersResult {
-        names,
-        prefixes: vec![],
-      };
+      let result = self.store.list(&req.prefixes, req.depth);
       if let Err(e) = self
         .list_parameters
         .send_response(id, ListParametersResponse { result })
@@ -282,18 +249,12 @@ impl ParameterServer {
 
   fn handle_describe_parameters(&self) {
     while let Ok(Some((id, req))) = self.describe_parameters.try_receive_request() {
-      let values = {
-        let db = self.store.lock().unwrap();
-        req
-          .names
-          .iter()
-          .map(|name| match db.get(name) {
-            Some(value) => ParameterDescriptor::from_value(name, value),
-            None => ParameterDescriptor::unknown(name),
-          })
-          .map(raw::ParameterDescriptor::from)
-          .collect()
-      };
+      let values = self
+        .store
+        .describe(&req.names)
+        .into_iter()
+        .map(raw::ParameterDescriptor::from)
+        .collect();
       if let Err(e) = self
         .describe_parameters
         .send_response(id, DescribeParametersResponse { values })
@@ -313,6 +274,7 @@ pub struct ParameterClient {
   get_parameters: Client<GetParametersRequest, GetParametersResponse>,
   get_parameter_types: Client<GetParameterTypesRequest, GetParameterTypesResponse>,
   set_parameters: Client<SetParametersRequest, SetParametersResponse>,
+  set_parameters_atomically: Client<SetParametersRequest, SetParametersAtomicallyResponse>,
   list_parameters: Client<ListParametersRequest, ListParametersResponse>,
   describe_parameters: Client<DescribeParametersRequest, DescribeParametersResponse>,
 }
@@ -323,6 +285,7 @@ impl ParameterClient {
     get_parameters: Client<GetParametersRequest, GetParametersResponse>,
     get_parameter_types: Client<GetParameterTypesRequest, GetParameterTypesResponse>,
     set_parameters: Client<SetParametersRequest, SetParametersResponse>,
+    set_parameters_atomically: Client<SetParametersRequest, SetParametersAtomicallyResponse>,
     list_parameters: Client<ListParametersRequest, ListParametersResponse>,
     describe_parameters: Client<DescribeParametersRequest, DescribeParametersResponse>,
   ) -> Self {
@@ -330,6 +293,7 @@ impl ParameterClient {
       get_parameters,
       get_parameter_types,
       set_parameters,
+      set_parameters_atomically,
       list_parameters,
       describe_parameters,
     }
@@ -372,13 +336,40 @@ impl ParameterClient {
     )
   }
 
+  /// Set parameters all-or-nothing (blocking): if any parameter is rejected,
+  /// none are changed.
+  pub fn set_parameters_atomically(
+    &self,
+    parameters: impl IntoIterator<Item = Parameter>,
+  ) -> Result<SetParametersResult, ServiceError> {
+    let req = SetParametersRequest {
+      parameter: parameters.into_iter().map(raw::Parameter::from).collect(),
+    };
+    let r = self.set_parameters_atomically.call(req)?.result;
+    Ok(if r.successful { Ok(()) } else { Err(r.reason) })
+  }
+
   /// List parameter names, optionally filtered by prefix (blocking).
+  ///
+  /// A prefix matches a parameter of that name and parameters under that
+  /// namespace (`prefix.`).
   pub fn list_parameters(&self, prefixes: &[&str]) -> Result<Vec<String>, ServiceError> {
+    Ok(self.list_parameters_with_depth(prefixes, 0)?.names)
+  }
+
+  /// List parameter names and namespace prefixes (blocking). `depth` limits
+  /// how many `.`-separated levels below the prefix are included; 0 means
+  /// unlimited.
+  pub fn list_parameters_with_depth(
+    &self,
+    prefixes: &[&str],
+    depth: u64,
+  ) -> Result<ListParametersResult, ServiceError> {
     let req = ListParametersRequest {
       prefixes: prefixes.iter().map(|s| s.to_string()).collect(),
-      depth: 0,
+      depth,
     };
-    Ok(self.list_parameters.call(req)?.result.names)
+    Ok(self.list_parameters.call(req)?.result)
   }
 
   /// Describe the named parameters (blocking).
@@ -454,10 +445,16 @@ mod tests {
       .unwrap();
 
     let server = srv_node
-      .create_parameter_server([Parameter {
-        name: "speed".to_string(),
-        value: ParameterValue::Double(1.0),
-      }])
+      .create_parameter_server([
+        Parameter {
+          name: "speed".to_string(),
+          value: ParameterValue::Double(1.0),
+        },
+        Parameter {
+          name: "name".to_string(),
+          value: ParameterValue::String("".to_string()),
+        },
+      ])
       .unwrap();
     let client = cli_node.create_parameter_client(&srv_node_name).unwrap();
 
@@ -488,7 +485,7 @@ mod tests {
     }
     assert_eq!(initial.as_deref(), Some(&[ParameterValue::Double(1.0)][..]));
 
-    // set a new value + a brand-new parameter
+    // set new values for both declared parameters
     let set_results = client
       .set_parameters([
         Parameter {
@@ -523,9 +520,11 @@ mod tests {
     assert!(names.contains(&"name".to_string()));
     assert!(names.contains(&"use_sim_time".to_string()));
 
-    // prefix filter
-    let filtered = client.list_parameters(&["spe"]).expect("list w/ prefix");
+    // prefix filter: a prefix matches whole names or namespaces only
+    let filtered = client.list_parameters(&["speed"]).expect("list w/ prefix");
     assert_eq!(filtered, vec!["speed".to_string()]);
+    let partial = client.list_parameters(&["spe"]).expect("list w/ partial");
+    assert!(partial.is_empty());
 
     // an unset parameter comes back as NotSet
     let missing = client.get_parameters(&["nope"]).expect("get missing");

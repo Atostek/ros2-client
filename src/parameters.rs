@@ -393,6 +393,7 @@ impl ParameterStore {
   }
 
   /// Current value of the built-in `use_sim_time` parameter.
+  #[cfg(any(feature = "dds", test))]
   pub fn use_sim_time(&self) -> bool {
     self.use_sim_time.load(Ordering::SeqCst)
   }
