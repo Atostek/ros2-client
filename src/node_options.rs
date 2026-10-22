@@ -98,6 +98,17 @@ impl NodeOptions {
     self
   }
 
+  /// Whether parameters that were not declared may be set, both locally and
+  /// through the parameter services. Default `false`.
+  ///
+  /// When `true`, parameters may also change type (dynamic typing).
+  pub fn allow_undeclared_parameters(self, allow_undeclared_parameters: bool) -> NodeOptions {
+    NodeOptions {
+      allow_undeclared_parameters,
+      ..self
+    }
+  }
+
   pub fn parameter_validator(mut self, validator: Box<ParameterFunc>) -> NodeOptions {
     self.parameter_validator = Some(validator);
     self
