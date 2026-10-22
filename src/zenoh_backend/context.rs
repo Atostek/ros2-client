@@ -169,10 +169,11 @@ impl Context {
       return;
     }
     while let Ok(event) = stream.recv().await {
-      if let GraphEvent::EntityDeclared(e) = event {
-        if e.kind == kind && e.name.as_deref() == Some(name) {
-          return;
-        }
+      if let GraphEvent::EntityDeclared(e) = event
+        && e.kind == kind
+        && e.name.as_deref() == Some(name)
+      {
+        return;
       }
     }
   }

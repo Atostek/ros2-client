@@ -6,8 +6,8 @@ cargo +nightly fmt
 
 # Run linter
 echo cargo +nightly clippy
-cargo +nightly clippy
+cargo +nightly clippy --lib --bins --examples -- -D warnings
 
-# Run linter on examples
-echo cargo +nightly clippy --examples
-cargo +nightly clippy --examples
+echo cargo +nightly clippy --features zenoh
+cargo +nightly clippy --no-default-features --features zenoh --lib --bins --examples -- -D warnings
+

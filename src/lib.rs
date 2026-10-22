@@ -52,6 +52,8 @@
 // become live as E4–E6 wire up the Zenoh side. Allow dead_code on the `zenoh`
 // build so it stays warning-clean without scattering per-item cfgs.
 #![cfg_attr(not(feature = "dds"), allow(dead_code))]
+// Zenoh requires a complex path of auto-deriving Send trait.
+#![cfg_attr(feature = "zenoh", recursion_limit = "192")]
 
 // ---------------------------------------------------------------------------
 // Middleware backend selection. See
