@@ -93,11 +93,6 @@ impl GraphCache {
     self.count_kind_on_topic(EntityKind::Subscription, topic)
   }
 
-  /// Number of discovered service servers on a service name.
-  pub fn service_server_count(&self, service: &str) -> usize {
-    self.count_kind_on_topic(EntityKind::ServiceServer, service)
-  }
-
   /// Fully-qualified names of all discovered nodes, sorted and de-duplicated.
   pub fn node_names(&self) -> Vec<String> {
     let guard = self.entities.lock().unwrap();
@@ -111,14 +106,10 @@ impl GraphCache {
     names
   }
 
-  /// Total number of cached entities (all kinds). Mainly for diagnostics/tests.
+  /// Total number of cached entities (all kinds).
+  #[cfg(test)]
   pub fn len(&self) -> usize {
     self.entities.lock().unwrap().len()
-  }
-
-  /// Whether the cache is empty.
-  pub fn is_empty(&self) -> bool {
-    self.entities.lock().unwrap().is_empty()
   }
 }
 

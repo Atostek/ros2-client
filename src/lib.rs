@@ -5,6 +5,8 @@
 //! # Example
 //!
 //! ```
+//! # // Uses the crate-root DDS API, so only built when `dds` is the sole backend.
+//! # #[cfg(all(feature = "dds", not(feature = "zenoh")))] {
 //! use futures::StreamExt;
 //! use ros2_client::*;
 //!
@@ -45,13 +47,9 @@
 //!
 //!   // Uncomment this to execute until interrupted.
 //!   // --> smol::block_on( subscription_stream );
+//! # }
 //! ```
 
-// During the incremental Zenoh port, several backend-neutral helpers (name
-// mangling, time, etc.) are currently only consumed by the DDS backend; they
-// become live as E4–E6 wire up the Zenoh side. Allow dead_code on the `zenoh`
-// build so it stays warning-clean without scattering per-item cfgs.
-#![cfg_attr(not(feature = "dds"), allow(dead_code))]
 // Zenoh requires a complex path of auto-deriving Send trait.
 #![cfg_attr(feature = "zenoh", recursion_limit = "192")]
 
@@ -150,10 +148,11 @@ pub(crate) mod node;
 
 /// Zenoh middleware backend (cargo feature `zenoh`).
 ///
-/// The module is compiled unconditionally so its backend-neutral "wire-format
-/// spec" submodules (key expressions, type hashes, GID) can be unit-tested on
-/// any build. Submodules that depend on the `zenoh` crate are gated behind
-/// `#[cfg(feature = "zenoh")]` inside the module.
+/// Also compiled for `cfg(test)` so its backend-neutral "wire-format spec"
+/// submodules (key expressions, type hashes, GID) are unit-tested on the
+/// default `dds` build. Submodules that depend on the `zenoh` crate are gated
+/// behind `#[cfg(feature = "zenoh")]` inside the module.
+#[cfg(any(feature = "zenoh", test))]
 pub(crate) mod zenoh_backend;
 
 // ---------------------------------------------------------------------------
@@ -227,7 +226,7 @@ pub mod zenoh {
   #[doc(inline)]
   pub use crate::zenoh_backend::service::{Client, Server};
   #[doc(inline)]
-  pub use crate::zenoh_backend::action::{ActionClient, ActionServer, GoalId};
+  pub use crate::zenoh_backend::action::{ActionClient, ActionServer, GoalId, goal_status};
   #[doc(inline)]
   pub use crate::zenoh_backend::parameters::{ParameterClient, ParameterEvent, ParameterServer};
   #[doc(inline)]

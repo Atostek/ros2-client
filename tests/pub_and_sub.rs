@@ -1,13 +1,14 @@
 //! Ensures that two `ros2_client` nodes can speak to each other.
 
 // Test case contributed by @onkoe, https://github.com/onkoe
+#![cfg(feature = "dds")]
 
 use std::{pin::pin, time::Duration};
 
 use futures::{StreamExt, future::select};
 use ros2_client::{
-  Context, DEFAULT_PUBLISHER_QOS, MessageTypeName, Name, NodeName, NodeOptions, Publisher,
-  Subscription,
+  MessageTypeName, Name, NodeName, NodeOptions,
+  dds::{Context, DEFAULT_PUBLISHER_QOS, Publisher, Subscription},
 };
 
 #[tokio::test]

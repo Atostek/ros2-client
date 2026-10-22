@@ -13,10 +13,8 @@
 //! `docs/zenoh_study/refactoring_plan.md`).
 //!
 //! The "wire-format spec" submodules below ([`keyexpr`], [`type_hash`],
-//! [`gid`]) are pure (no dependency on the `zenoh` crate), so they compile and
-//! are unit-tested on any build — including the default `dds` build, where they
-//! are otherwise unused.
-#![allow(dead_code)] // spec modules are unused on the `dds` build
+//! [`gid`]) are pure (no dependency on the `zenoh` crate), so they are also
+//! compiled and unit-tested by `cargo test` on the default `dds` build.
 
 // E2 — backend-neutral wire-format spec (pure; compiled on every build).
 pub(crate) mod gid;
@@ -60,15 +58,3 @@ pub(crate) mod parameters;
 // E9 — rosout logging (`/rosout` topic; needs the `zenoh` crate).
 #[cfg(feature = "zenoh")]
 pub(crate) mod rosout;
-
-// E4 — Pub/Sub.
-// #[cfg(feature = "zenoh")]
-// pub(crate) mod pubsub;
-
-// E5 — Discovery: liveliness tokens + graph cache.
-// #[cfg(feature = "zenoh")]
-// pub(crate) mod graph_cache;
-
-// E6 — Services over queryable / get.
-// #[cfg(feature = "zenoh")]
-// pub(crate) mod service;

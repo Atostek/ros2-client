@@ -417,6 +417,60 @@ pub(crate) fn describe_parameters() -> TypeDescription {
   )
 }
 
+/// `(dds type name, description)` for every Jazzy interop type whose hash
+/// must be concrete on the send / queryable side.
+pub(crate) fn interop_descriptions() -> Vec<(&'static str, TypeDescription)> {
+  vec![
+    ("example_interfaces::srv::dds_::AddTwoInts_", add_two_ints()),
+    ("rcl_interfaces::msg::dds_::Log_", log_message()),
+    (
+      "rcl_interfaces::msg::dds_::ParameterEvent_",
+      parameter_event(),
+    ),
+    (
+      "action_msgs::msg::dds_::GoalStatusArray_",
+      goal_status_array(),
+    ),
+    (
+      "action_tutorials_interfaces::action::dds_::Fibonacci_FeedbackMessage_",
+      fibonacci_feedback_message(),
+    ),
+    ("action_msgs::srv::dds_::CancelGoal_", cancel_goal()),
+    (
+      "action_tutorials_interfaces::action::dds_::Fibonacci_SendGoal_",
+      fibonacci_send_goal(),
+    ),
+    (
+      "action_tutorials_interfaces::action::dds_::Fibonacci_GetResult_",
+      fibonacci_get_result(),
+    ),
+    (
+      "rcl_interfaces::srv::dds_::GetParameters_",
+      get_parameters(),
+    ),
+    (
+      "rcl_interfaces::srv::dds_::GetParameterTypes_",
+      get_parameter_types(),
+    ),
+    (
+      "rcl_interfaces::srv::dds_::SetParameters_",
+      set_parameters(),
+    ),
+    (
+      "rcl_interfaces::srv::dds_::SetParametersAtomically_",
+      set_parameters_atomically(),
+    ),
+    (
+      "rcl_interfaces::srv::dds_::ListParameters_",
+      list_parameters(),
+    ),
+    (
+      "rcl_interfaces::srv::dds_::DescribeParameters_",
+      describe_parameters(),
+    ),
+  ]
+}
+
 #[cfg(test)]
 mod tests {
   use super::interop_descriptions;
@@ -498,58 +552,4 @@ mod tests {
       );
     }
   }
-}
-
-/// `(dds type name, description)` for every Jazzy interop type whose hash
-/// must be concrete on the send / queryable side.
-pub(crate) fn interop_descriptions() -> Vec<(&'static str, TypeDescription)> {
-  vec![
-    ("example_interfaces::srv::dds_::AddTwoInts_", add_two_ints()),
-    ("rcl_interfaces::msg::dds_::Log_", log_message()),
-    (
-      "rcl_interfaces::msg::dds_::ParameterEvent_",
-      parameter_event(),
-    ),
-    (
-      "action_msgs::msg::dds_::GoalStatusArray_",
-      goal_status_array(),
-    ),
-    (
-      "action_tutorials_interfaces::action::dds_::Fibonacci_FeedbackMessage_",
-      fibonacci_feedback_message(),
-    ),
-    ("action_msgs::srv::dds_::CancelGoal_", cancel_goal()),
-    (
-      "action_tutorials_interfaces::action::dds_::Fibonacci_SendGoal_",
-      fibonacci_send_goal(),
-    ),
-    (
-      "action_tutorials_interfaces::action::dds_::Fibonacci_GetResult_",
-      fibonacci_get_result(),
-    ),
-    (
-      "rcl_interfaces::srv::dds_::GetParameters_",
-      get_parameters(),
-    ),
-    (
-      "rcl_interfaces::srv::dds_::GetParameterTypes_",
-      get_parameter_types(),
-    ),
-    (
-      "rcl_interfaces::srv::dds_::SetParameters_",
-      set_parameters(),
-    ),
-    (
-      "rcl_interfaces::srv::dds_::SetParametersAtomically_",
-      set_parameters_atomically(),
-    ),
-    (
-      "rcl_interfaces::srv::dds_::ListParameters_",
-      list_parameters(),
-    ),
-    (
-      "rcl_interfaces::srv::dds_::DescribeParameters_",
-      describe_parameters(),
-    ),
-  ]
 }

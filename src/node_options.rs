@@ -33,14 +33,6 @@ pub(crate) type ParameterFunc = dyn Fn(&str, &ParameterValue) -> SetParametersRe
 /// they ae always needed and have no reasonable default.
 #[must_use]
 pub struct NodeOptions {
-  /// DDS-only today; Zenoh logs (once, at `debug` level) that it is ignored
-  /// when non-empty.
-  #[allow(dead_code)]
-  pub(crate) cli_args: Vec<String>,
-  /// DDS-only today; Zenoh logs (once, at `debug` level) if set to `false`
-  /// (the non-default value).
-  #[allow(dead_code)]
-  pub(crate) use_global_arguments: bool, // process-wide command line args
   pub(crate) enable_rosout: bool, // use rosout topic for logging?
   pub(crate) enable_rosout_reading: bool,
   pub(crate) start_parameter_services: bool,
@@ -56,8 +48,6 @@ impl NodeOptions {
     // These defaults are from rclpy reference
     // https://docs.ros2.org/latest/api/rclpy/api/node.html
     NodeOptions {
-      cli_args: Vec::new(),
-      use_global_arguments: true,
       enable_rosout: true,
       enable_rosout_reading: false,
       start_parameter_services: true,

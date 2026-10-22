@@ -125,22 +125,6 @@ impl Node {
     };
 
     // Fields the Zenoh backend does not (yet) honor: no-op, logged once here.
-    if !options.cli_args.is_empty() {
-      log::debug!(
-        "NodeOptions::cli_args is not supported on the Zenoh backend; ignoring {} entr{}",
-        options.cli_args.len(),
-        if options.cli_args.len() == 1 {
-          "y"
-        } else {
-          "ies"
-        }
-      );
-    }
-    if !options.use_global_arguments {
-      log::debug!(
-        "NodeOptions::use_global_arguments(false) is not supported on the Zenoh backend; ignoring"
-      );
-    }
     if options.parameter_validator.is_some() {
       log::debug!(
         "NodeOptions::parameter_validator is not supported on the Zenoh backend; ignoring"
@@ -771,17 +755,17 @@ mod tests {
     while Instant::now() < deadline && !(saw_node && saw_publisher) {
       let replies = ctx_b.session().liveliness().get(&graph_key).wait().unwrap();
       while let Ok(reply) = replies.recv() {
-        if let Ok(sample) = reply.result() {
-          if let Some(e) = parse_liveliness_key(sample.key_expr().as_str()) {
-            match e.kind {
-              EntityKind::Node if e.node_name == "talker" => saw_node = true,
-              EntityKind::Publisher
-                if e.topic_name.as_deref() == Some("/chatter") && e.node_name == "talker" =>
-              {
-                saw_publisher = true
-              }
-              _ => {}
+        if let Ok(sample) = reply.result()
+          && let Some(e) = parse_liveliness_key(sample.key_expr().as_str())
+        {
+          match e.kind {
+            EntityKind::Node if e.node_name == "talker" => saw_node = true,
+            EntityKind::Publisher
+              if e.topic_name.as_deref() == Some("/chatter") && e.node_name == "talker" =>
+            {
+              saw_publisher = true
             }
+            _ => {}
           }
         }
       }

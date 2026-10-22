@@ -189,7 +189,6 @@ impl TimeDiff {
     self.as_nanos() / 1_000_000
   }
 
-  #[allow(dead_code)]
   pub const fn as_seconds(self) -> i64 {
     self.as_nanos() / 1_000_000_000
   }

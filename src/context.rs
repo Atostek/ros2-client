@@ -117,7 +117,7 @@ impl Context {
 
   /// Create a new Context.
   pub fn with_options(opt: ContextOptions) -> CreateResult<Context> {
-    #[allow(unused_mut)] // only mutated with security
+    #[cfg_attr(not(feature = "security"), allow(unused_mut))]
     let mut dpb = DomainParticipantBuilder::new(opt.domain_id);
 
     #[cfg(feature = "security")]

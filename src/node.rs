@@ -53,7 +53,6 @@ use crate::{
 ///
 /// The former `NodeEvent::DDS(DomainParticipantStatusEvent)` variant, which
 /// leaked a RustDDS type, has been removed.
-#[allow(clippy::large_enum_variant)] // TODO: fix this
 #[derive(Clone, Debug)]
 pub enum NodeEvent {
   /// A backend-neutral ROS 2 graph change (entity declared/undeclared).

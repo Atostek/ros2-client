@@ -62,15 +62,6 @@ pub struct Client<Req, Resp> {
 }
 
 impl<Req: Serialize, Resp: DeserializeOwned> Client<Req, Resp> {
-  pub(crate) fn new(
-    session: Session,
-    selector: String,
-    client_gid: [u8; 16],
-    liveliness_token: Option<LivelinessToken>,
-  ) -> Self {
-    Self::new_with_timeout(session, selector, client_gid, liveliness_token, None)
-  }
-
   pub(crate) fn new_with_timeout(
     session: Session,
     selector: String,

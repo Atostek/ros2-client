@@ -256,6 +256,7 @@ impl Name {
     result
   }
 
+  #[cfg(feature = "dds")]
   pub(crate) fn push(&self, new_suffix: &str) -> Name {
     //TODO: Check that we still satisfy naming rules
     let mut preceeding_tokens = self.preceeding_tokens.clone();
@@ -378,6 +379,7 @@ impl ServiceTypeName {
     )
   }
 
+  #[cfg(feature = "dds")]
   pub(crate) fn dds_request_type(&self) -> String {
     slash_to_colons(
       self.package_name().to_owned()
@@ -389,6 +391,7 @@ impl ServiceTypeName {
     )
   }
 
+  #[cfg(feature = "dds")]
   pub(crate) fn dds_response_type(&self) -> String {
     slash_to_colons(
       self.package_name().to_owned()

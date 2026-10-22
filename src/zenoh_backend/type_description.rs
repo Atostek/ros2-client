@@ -25,6 +25,9 @@ use sha2::{Digest, Sha256};
 /// The base (scalar) ids are 1..=22. Array / bounded-sequence /
 /// unbounded-sequence variants of a base id `b` are `b + 48`, `b + 96`,
 /// `b + 144` respectively.
+// The complete `FieldType` id table is kept, although the type descriptions we
+// build only use a subset of the ids.
+#[allow(dead_code)]
 pub mod type_id {
   /// No type set.
   pub const NOT_SET: u8 = 0;
@@ -359,6 +362,32 @@ fn write_json_string(s: &str, out: &mut String) {
 
 // ---------------------------------------------------------------------------
 
+/// Jazzy `builtin_interfaces/msg/Time`.
+pub(crate) fn time_description() -> IndividualTypeDescription {
+  IndividualTypeDescription::new(
+    "builtin_interfaces/msg/Time",
+    vec![
+      Field::new("sec", FieldType::scalar(type_id::INT32)),
+      Field::new("nanosec", FieldType::scalar(type_id::UINT32)),
+    ],
+  )
+}
+
+/// Jazzy `service_msgs/msg/ServiceEventInfo`. The `.msg` says `char[16]
+/// client_gid`, but rosidl maps IDL `char` to `uint8`, so the installed type
+/// description (and therefore the hash) uses `uint8[16]` (type id 51).
+pub(crate) fn service_event_info() -> IndividualTypeDescription {
+  IndividualTypeDescription::new(
+    "service_msgs/msg/ServiceEventInfo",
+    vec![
+      Field::new("event_type", FieldType::scalar(type_id::UINT8)),
+      Field::new("stamp", FieldType::nested("builtin_interfaces/msg/Time")),
+      Field::new("client_gid", FieldType::array(type_id::UINT8, 16)),
+      Field::new("sequence_number", FieldType::scalar(type_id::INT64)),
+    ],
+  )
+}
+
 #[cfg(test)]
 mod tests {
   use super::{type_id as t, *};
@@ -471,30 +500,4 @@ mod tests {
       t::NESTED_TYPE + t::UNBOUNDED_SEQUENCE_OFFSET
     );
   }
-}
-
-/// Jazzy `builtin_interfaces/msg/Time`.
-pub(crate) fn time_description() -> IndividualTypeDescription {
-  IndividualTypeDescription::new(
-    "builtin_interfaces/msg/Time",
-    vec![
-      Field::new("sec", FieldType::scalar(type_id::INT32)),
-      Field::new("nanosec", FieldType::scalar(type_id::UINT32)),
-    ],
-  )
-}
-
-/// Jazzy `service_msgs/msg/ServiceEventInfo`. The `.msg` says `char[16]
-/// client_gid`, but rosidl maps IDL `char` to `uint8`, so the installed type
-/// description (and therefore the hash) uses `uint8[16]` (type id 51).
-pub(crate) fn service_event_info() -> IndividualTypeDescription {
-  IndividualTypeDescription::new(
-    "service_msgs/msg/ServiceEventInfo",
-    vec![
-      Field::new("event_type", FieldType::scalar(type_id::UINT8)),
-      Field::new("stamp", FieldType::nested("builtin_interfaces/msg/Time")),
-      Field::new("client_gid", FieldType::array(type_id::UINT8, 16)),
-      Field::new("sequence_number", FieldType::scalar(type_id::INT64)),
-    ],
-  )
 }
