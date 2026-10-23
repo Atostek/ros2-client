@@ -2,6 +2,8 @@
 //! `NodeOptions` apply to remote set requests, atomic sets are all-or-nothing,
 //! and listing reports namespace prefixes.
 #![cfg(feature = "zenoh")]
+// Proving the Zenoh `Node` is `Send` needs more than the default limit.
+#![recursion_limit = "192"]
 
 use std::{
   sync::{

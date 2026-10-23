@@ -34,7 +34,14 @@ autoexamples = false
 #   cargo build --no-default-features --features zenoh
 # ---------------------------------------------------------------------------
 dds   = ["dep:rustdds", "dep:cdr-encoding-size"]
-zenoh = ["dep:zenoh", "dep:zenoh-ext", "dep:cdr-encoding", "dep:byteorder"]
+zenoh = [
+  "dep:zenoh",
+  "dep:zenoh-ext",
+  "dep:cdr-encoding",
+  "dep:byteorder",
+  "dep:xxhash-rust",
+  "dep:sha2",
+]
 
 # declare the existence of "security" feature (Secure ROS 2 support).
 # Security is a DDS-only capability (RustDDS security); it implies `dds`.
@@ -114,18 +121,17 @@ widestring = "1.0" # msggen
 tracing = "0.1.41"
 
 # Entity GID for the Zenoh backend is XXH3-128 of the liveliness key
-# (docs/decisions/0008). The algorithm is backend-neutral spec code, so the
-# dependency is unconditional (it is tiny and pure-Rust) to keep the wire-format
-# modules unit-testable on any build.
-xxhash-rust = { version = "0.8", features = ["xxh3"] }
+# (docs/decisions/0008).
+xxhash-rust = { version = "0.8", features = ["xxh3"], optional = true }
 # REP-2016 `RIHS01_…` type hashes are SHA-256 over a canonical JSON type
-# description (docs/decisions/0007). Like the GID hashing above, this is
-# backend-neutral spec code, so the (pure-Rust) dependency is unconditional to
-# keep the type-hash module unit-testable on any build.
-sha2 = "0.10"
+# description (docs/decisions/0007).
+sha2 = { version = "0.10", optional = true }
 
 [dev-dependencies]
 log = "0.4"
+# The Zenoh wire-format spec modules are also unit-tested on non-zenoh builds.
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+sha2 = "0.10"
 mio-extras = "2.0.6" # examples/talker
 pretty_env_logger = "0.5.0"
 # turtle_teleop
