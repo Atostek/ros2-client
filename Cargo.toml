@@ -57,7 +57,11 @@ security = [
 # Import mio 1.2 as `rustdds::mio1`.
 # `mio_06`: they implement the mio 0.6 `Evented` trait, as in 0.12.
 # Import mio 0.6 as `rustdds::mio`.
-mio_1  = ["dds", "rustdds/mio_1"]
+# `dep:rustix` is only here for its `time` feature. rustix 1.1.5's `net`
+# feature uses `timespec` but does not compile that module unless another
+# API feature is enabled. RustDDS `mio_1` pulls in socketpair, which enables
+# only `net`, so `cargo check --lib` fails. Drop this once rustix fixes it.
+mio_1  = ["dds", "rustdds/mio_1", "dep:rustix"]
 mio_06 = ["dds"]
 
 # ROS 2 distribution selection.
@@ -117,6 +121,8 @@ byteorder = { version = "1", optional = true } # CDR byte-order selector
 
 # mio and bytes are consumed via the rustdds::mio (0.6), rustdds::mio1 (1.2)
 # and rustdds::bytes re-exports.
+# Feature unification only. See the `mio_1` feature comment.
+rustix = { version = "1.1.5", features = ["time"], optional = true }
 log = "0.4.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_repr = "0.1"
