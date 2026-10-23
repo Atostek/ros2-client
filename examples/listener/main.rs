@@ -1,7 +1,7 @@
 //use log::error;
 use core::cmp::min;
 
-use rustdds::mio::{Events, Poll, PollOpt, Ready, Token};
+use rustdds::mio1::{Events, Interest, Poll, Token};
 use ros2_client::{
   Context, MessageTypeName, Name, Node, NodeName, NodeOptions, QosProfile,
   qos::{Durability, History, WhenFull},
@@ -30,19 +30,15 @@ fn main() {
       &topic_qos,
     )
     .unwrap();
-  let chatter_subscription = node
+  let mut chatter_subscription = node
     .create_subscription::<String>(&chatter_topic, None)
     .unwrap();
 
-  let poll = Poll::new().unwrap();
+  let mut poll = Poll::new().unwrap();
 
   poll
-    .register(
-      &chatter_subscription,
-      Token(1),
-      Ready::readable(),
-      PollOpt::edge(),
-    )
+    .registry()
+    .register(&mut chatter_subscription, Token(1), Interest::READABLE)
     .unwrap();
   let mut events = Events::with_capacity(8);
 
@@ -51,14 +47,18 @@ fn main() {
 
     for event in events.iter() {
       match event.token() {
-        Token(1) => match chatter_subscription.take() {
-          Ok(Some((message, _message_info))) => {
-            let l = message.len();
-            println!("message len={} : {:?}", l, &message[..min(l, 50)]);
-          }
-          Ok(None) => println!("No message?!"),
-          Err(e) => {
-            println!(">>> error with response handling, e: {e:?}")
+        // Edge-triggered: take everything that has arrived.
+        Token(1) => loop {
+          match chatter_subscription.take() {
+            Ok(Some((message, _message_info))) => {
+              let l = message.len();
+              println!("message len={} : {:?}", l, &message[..min(l, 50)]);
+            }
+            Ok(None) => break,
+            Err(e) => {
+              println!(">>> error with response handling, e: {e:?}");
+              break;
+            }
           }
         },
         _ => println!(">>> Unknown poll token {:?}", event.token()),

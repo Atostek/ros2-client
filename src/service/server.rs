@@ -1,10 +1,11 @@
+#[cfg(any(feature = "mio_06", feature = "mio_1"))]
 use std::io;
 
-use rustdds::{
-  mio::{Evented, Poll, PollOpt, Ready, Token},
-  rpc::*,
-  *,
-};
+#[cfg(feature = "mio_06")]
+use rustdds::mio::{Evented, Poll, PollOpt, Ready, Token};
+#[cfg(feature = "mio_1")]
+use rustdds::mio1;
+use rustdds::{rpc::*, *};
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 use futures::{StreamExt, pin_mut, stream::FusedStream};
@@ -186,6 +187,7 @@ where
   }
 }
 
+#[cfg(feature = "mio_06")]
 impl<Req, Resp> Evented for Server<Req, Resp>
 where
   Req: Message + 'static,
@@ -209,5 +211,34 @@ where
 
   fn deregister(&self, poll: &Poll) -> io::Result<()> {
     self.request_receiver.deregister(poll)
+  }
+}
+
+#[cfg(feature = "mio_1")]
+impl<Req, Resp> mio1::event::Source for Server<Req, Resp>
+where
+  Req: Message + 'static,
+  Resp: Message + 'static,
+{
+  fn register(
+    &mut self,
+    registry: &mio1::Registry,
+    token: mio1::Token,
+    interests: mio1::Interest,
+  ) -> io::Result<()> {
+    mio1::event::Source::register(&mut self.request_receiver, registry, token, interests)
+  }
+
+  fn reregister(
+    &mut self,
+    registry: &mio1::Registry,
+    token: mio1::Token,
+    interests: mio1::Interest,
+  ) -> io::Result<()> {
+    mio1::event::Source::reregister(&mut self.request_receiver, registry, token, interests)
+  }
+
+  fn deregister(&mut self, registry: &mio1::Registry) -> io::Result<()> {
+    mio1::event::Source::deregister(&mut self.request_receiver, registry)
   }
 }
