@@ -1,4 +1,4 @@
-//! Zenoh actions (E7).
+//! Zenoh actions.
 //!
 //! ROS 2 actions have no middleware-level concept — they are composed of
 //! ordinary services + topics (see `docs/zenoh_study/research/rmw_zenoh.md`
@@ -493,8 +493,8 @@ mod tests {
         }
         if let Some((id, goal_id)) = server.try_receive_cancel() {
           // Single-goal cancel (goal_id non-zero in this test).
-          let canceling = if statuses.contains_key(&goal_id) {
-            statuses.insert(goal_id, GoalStatusEnum::Canceled);
+          let canceling = if let Some(status) = statuses.get_mut(&goal_id) {
+            *status = GoalStatusEnum::Canceled;
             vec![GoalInfo {
               goal_id,
               stamp: Time::ZERO,
@@ -539,14 +539,13 @@ mod tests {
     let status_of = |gid: GoalId, want: GoalStatusEnum| -> bool {
       let end = Instant::now() + Duration::from_secs(20);
       while Instant::now() < end {
-        if let Some(array) = client.take_status() {
-          if array
+        if let Some(array) = client.take_status()
+          && array
             .status_list
             .iter()
             .any(|s| s.goal_info.goal_id == gid && s.status == want)
-          {
-            return true;
-          }
+        {
+          return true;
         }
         std::thread::sleep(Duration::from_millis(50));
       }

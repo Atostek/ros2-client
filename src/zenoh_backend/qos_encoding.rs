@@ -1,4 +1,4 @@
-//! Compact QoS encoding for Zenoh liveliness tokens (E5).
+//! Compact QoS encoding for Zenoh liveliness tokens.
 //!
 //! `rmw_zenoh` embeds a QoS string in each liveliness token's `<qos>` component
 //! (see `docs/zenoh_study/research/rmw_zenoh.md` §6). The layout is six
@@ -20,10 +20,11 @@
 
 use std::time::Duration;
 
-use crate::qos::{Durability, History, Liveliness, QosProfile, Reliability, WhenFull};
+use crate::qos::{Durability, History, Liveliness, QosProfile, Reliability};
 
 /// `when_full` is not part of the liveliness string. Decode fills this in.
-const DECODED_WHEN_FULL: WhenFull = WhenFull::DEFAULT;
+#[cfg(test)]
+const DECODED_WHEN_FULL: crate::qos::WhenFull = crate::qos::WhenFull::DEFAULT;
 
 // RMW default profile (`rmw_qos_profile_default`) used as the delta reference.
 // Any `Reliable { when_full }` matches that default; `when_full` is not
@@ -90,10 +91,15 @@ pub fn encode_qos(q: &QosProfile) -> String {
   format!("{rel}:{dur}:{hist},{depth}:{dl_s},{dl_ns}:{ls_s},{ls_ns}:{liv},{lease_s},{lease_ns}")
 }
 
+// Decoding is only exercised by the encode/decode round-trip tests; remote QoS
+// strings are not interpreted at run time.
+
 /// Failure to parse a compact QoS string.
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QosDecodeError;
 
+#[cfg(test)]
 fn parse_duration(sec: &str, nsec: &str) -> Result<Option<Duration>, QosDecodeError> {
   match (sec.is_empty(), nsec.is_empty()) {
     (true, true) => Ok(None),
@@ -107,6 +113,7 @@ fn parse_duration(sec: &str, nsec: &str) -> Result<Option<Duration>, QosDecodeEr
 
 /// Decode a compact liveliness `<qos>` string into a [`QosProfile`], filling
 /// empty (default) fields from the RMW default profile.
+#[cfg(test)]
 pub fn decode_qos(s: &str) -> Result<QosProfile, QosDecodeError> {
   let groups: Vec<&str> = s.split(':').collect();
   if groups.len() != 6 {

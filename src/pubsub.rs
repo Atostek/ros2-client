@@ -35,14 +35,6 @@ impl<M: Serialize> Publisher<M> {
       .map_err(Into::into)
   }
 
-  // pub(crate) fn publish_with_options(
-  //   &self,
-  //   message: M,
-  //   wo: WriteOptions,
-  // ) -> dds::Result<rustdds::rpc::SampleIdentity> {
-  //   self.datawriter.write_with_options(message, wo)
-  // }
-
   pub fn assert_liveliness(&self) -> WriteResult<(), ()> {
     self.datawriter.assert_liveliness().map_err(Into::into)
   }
@@ -76,20 +68,6 @@ impl<M: Serialize> Publisher<M> {
     self
       .datawriter
       .async_write(message, Some(Timestamp::now()))
-      .await
-      .map_err(Into::into)
-  }
-
-  #[allow(dead_code)] // This is for async Service implementation. Remove this
-  // when it is implemented.
-  pub(crate) async fn async_publish_with_options(
-    &self,
-    message: M,
-    wo: WriteOptions,
-  ) -> WriteResult<rustdds::rpc::SampleIdentity, M> {
-    self
-      .datawriter
-      .async_write_with_options(message, wo)
       .await
       .map_err(Into::into)
   }

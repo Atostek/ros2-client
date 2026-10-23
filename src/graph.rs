@@ -1,4 +1,4 @@
-//! Backend-neutral ROS 2 graph / discovery types (ADR-0005, ADR-0010 Phase 2).
+//! Backend-neutral ROS 2 graph / discovery types (ADR-0005, ADR-0010).
 //!
 //! [`GraphEvent`] / [`GraphEntity`] / [`EntityKind`] describe discovery
 //! (entities appearing/disappearing) without leaking either middleware's wire
@@ -87,7 +87,7 @@ impl EntityKind {
 /// A discovered ROS 2 topic: its fully-qualified name and DDS-form type name.
 ///
 /// Backend-neutral replacement for exposing
-/// `rustdds::discovery::DiscoveredTopicData` directly (ADR-0010 Phase 2).
+/// `rustdds::discovery::DiscoveredTopicData` directly (ADR-0010).
 /// Produced by [`crate::context::Context::discovered_topics`] on the DDS
 /// backend.
 #[derive(Clone, Debug, PartialEq, Eq)]

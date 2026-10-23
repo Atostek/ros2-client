@@ -1,4 +1,4 @@
-//! Owned operation errors shared by DDS and Zenoh backends (ADR-0010 Phase 3).
+//! Owned operation errors shared by DDS and Zenoh backends (ADR-0010).
 //!
 //! Public APIs return these types (and the [`CreateResult`] / [`ReadResult`] /
 //! [`WriteResult`] / [`WaitResult`] aliases) instead of `rustdds::dds::*` or

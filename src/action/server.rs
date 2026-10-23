@@ -585,7 +585,8 @@ where
       Entry::Occupied(o) => {
         match o.get() {
           // Accepted, executing, or canceling goal can be canceled or aborted
-          // TODO: Accepted goal cannot succeed, it must be executing before success.
+          // TODO: Accepted goal cannot succeed, it must be executing before
+          // success.
           AsyncGoal {
             status: GoalStatusEnum::Accepted,
             ..

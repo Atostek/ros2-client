@@ -41,8 +41,8 @@ impl NodeName {
         ));
       }
       Some(c) if c.is_ascii_alphabetic() || c == '/' => { /*ok*/ }
-      // Character '~' is not accepted, because we do not know what that would mean in a Node's
-      // name.
+      // Character '~' is not accepted, because we do not know what that would
+      // mean in a Node's name.
       Some(other) => return Err(NameError::BadChar(other)),
     }
 
@@ -256,6 +256,7 @@ impl Name {
     result
   }
 
+  #[cfg(feature = "dds")]
   pub(crate) fn push(&self, new_suffix: &str) -> Name {
     //TODO: Check that we still satisfy naming rules
     let mut preceeding_tokens = self.preceeding_tokens.clone();
@@ -294,8 +295,8 @@ impl fmt::Display for Name {
 #[derive(Clone, Debug)]
 pub struct MessageTypeName {
   prefix: String, // typically "msg", but may be "action". What should this part be called?
-  //TODO: String is strictly UTF-8, but ROS2 uses just byte strings that are recommended to be
-  // UTF-8
+  //TODO: String is strictly UTF-8, but ROS2 uses just byte strings that are
+  // recommended to be UTF-8
   ros2_package_name: String, // or should this be "namespace"?
   ros2_type_name: String,
 }
@@ -378,6 +379,7 @@ impl ServiceTypeName {
     )
   }
 
+  #[cfg(feature = "dds")]
   pub(crate) fn dds_request_type(&self) -> String {
     slash_to_colons(
       self.package_name().to_owned()
@@ -389,6 +391,7 @@ impl ServiceTypeName {
     )
   }
 
+  #[cfg(feature = "dds")]
   pub(crate) fn dds_response_type(&self) -> String {
     slash_to_colons(
       self.package_name().to_owned()

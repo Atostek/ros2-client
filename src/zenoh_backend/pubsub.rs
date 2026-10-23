@@ -1,4 +1,4 @@
-//! Zenoh `Publisher` and `Subscription` (E4).
+//! Zenoh `Publisher` and `Subscription`.
 //!
 //! A publisher `put`s a CDR payload (see [`super::cdr`]) with an
 //! [`AttachmentData`] carrying `(sequence, source_timestamp, source_gid)` — the

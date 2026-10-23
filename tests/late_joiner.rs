@@ -1,4 +1,5 @@
 //! Check that late-joining subscriber gets messages in Reliable topic.
+#![cfg(feature = "dds")]
 
 // Test idea:
 //
@@ -33,8 +34,8 @@ use futures::{
 };
 use tokio::sync::oneshot;
 use ros2_client::{
-  Context, DEFAULT_PUBLISHER_QOS, MessageTypeName, Name, NodeName, NodeOptions, Publisher,
-  Subscription,
+  MessageTypeName, Name, NodeName, NodeOptions,
+  dds::{Context, DEFAULT_PUBLISHER_QOS, Publisher, Subscription},
   qos::{Durability, History, QosProfile, WhenFull},
 };
 

@@ -1,9 +1,6 @@
-//! Shared [`NodeOptions`] builder for both middleware backends (ADR-0010
-//! Phase 4).
+//! Shared [`NodeOptions`] builder for both middleware backends (ADR-0010).
 //!
-//! Historically this type lived in the DDS-only `src/node.rs`; the Zenoh
-//! backend had its own empty placeholder. Both backends now share this one
-//! definition: the builder surface (`enable_rosout`, `read_rosout`,
+//! The builder surface (`enable_rosout`, `read_rosout`,
 //! `start_parameter_services`, `declare_parameter`, `parameter_validator`,
 //! `parameter_set_action`) is
 //! unchanged, but fields are `pub(crate)` so each backend's `Node::new` can
@@ -33,14 +30,6 @@ pub(crate) type ParameterFunc = dyn Fn(&str, &ParameterValue) -> SetParametersRe
 /// they ae always needed and have no reasonable default.
 #[must_use]
 pub struct NodeOptions {
-  /// DDS-only today; Zenoh logs (once, at `debug` level) that it is ignored
-  /// when non-empty.
-  #[allow(dead_code)]
-  pub(crate) cli_args: Vec<String>,
-  /// DDS-only today; Zenoh logs (once, at `debug` level) if set to `false`
-  /// (the non-default value).
-  #[allow(dead_code)]
-  pub(crate) use_global_arguments: bool, // process-wide command line args
   pub(crate) enable_rosout: bool, // use rosout topic for logging?
   pub(crate) enable_rosout_reading: bool,
   pub(crate) start_parameter_services: bool,
@@ -56,8 +45,6 @@ impl NodeOptions {
     // These defaults are from rclpy reference
     // https://docs.ros2.org/latest/api/rclpy/api/node.html
     NodeOptions {
-      cli_args: Vec::new(),
-      use_global_arguments: true,
       enable_rosout: true,
       enable_rosout_reading: false,
       start_parameter_services: true,
@@ -106,6 +93,17 @@ impl NodeOptions {
     });
     // TODO: check for duplicate parameter names
     self
+  }
+
+  /// Whether parameters that were not declared may be set, both locally and
+  /// through the parameter services. Default `false`.
+  ///
+  /// When `true`, parameters may also change type (dynamic typing).
+  pub fn allow_undeclared_parameters(self, allow_undeclared_parameters: bool) -> NodeOptions {
+    NodeOptions {
+      allow_undeclared_parameters,
+      ..self
+    }
   }
 
   pub fn parameter_validator(mut self, validator: Box<ParameterFunc>) -> NodeOptions {

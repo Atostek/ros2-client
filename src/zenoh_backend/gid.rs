@@ -22,6 +22,7 @@ pub fn gid_from_liveliness_key(liveliness_key: &str) -> [u8; GID_LEN] {
 }
 
 /// Lowercase hex rendering of a GID, matching the `Gid` `Debug` format.
+#[cfg(test)]
 pub fn gid_hex(gid: &[u8; GID_LEN]) -> String {
   let mut s = String::with_capacity(GID_LEN * 2);
   for b in gid {

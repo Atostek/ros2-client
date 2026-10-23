@@ -1,4 +1,4 @@
-//! Message / request / response attachment (E2).
+//! Message / request / response attachment.
 //!
 //! Every Zenoh publication, service request, and service reply carries an
 //! attachment with three fields, in this order (see

@@ -1,7 +1,7 @@
 //! Owned ROS 2 request identity ([`RmwRequestId`]).
 //!
 //! Backend-neutral replacement for DDS `SampleIdentity` / Zenoh
-//! `(client_gid, seq)` pairs (ADR-0010 Phase 2).
+//! `(client_gid, seq)` pairs (ADR-0010).
 
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +12,7 @@ use crate::gid::Gid;
 /// [rmw_request_id_t](https://docs.ros2.org/foxy/api/rmw/structrmw__request__id__t.html)
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct RmwRequestId {
-  /// GID of the requesting client (historically `writer_guid` on DDS).
+  /// GID of the requesting client (`writer_guid` on DDS).
   pub writer_gid: Gid,
   /// Client-assigned request sequence number.
   pub sequence_number: i64,

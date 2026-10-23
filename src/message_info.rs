@@ -1,6 +1,6 @@
 //! Metadata for received `Message`s (source time, sequence, publisher GID).
 //!
-//! Backend-neutral (ADR-0010 Phase 2). DDS and Zenoh adapters populate the
+//! Backend-neutral (ADR-0010). DDS and Zenoh adapters populate the
 //! same type; fields that a backend cannot supply are `None`.
 
 use crate::{gid::Gid, request_id::RmwRequestId, ros_time::ROSTime};

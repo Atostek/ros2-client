@@ -1,4 +1,4 @@
-//! Zenoh services: `Client` and `Server` over queryable/get (E6).
+//! Zenoh services: `Client` and `Server` over queryable/get.
 //!
 //! Mirrors `rmw_zenoh` (see `docs/zenoh_study/research/rmw_zenoh.md` §5 and
 //! `docs/decisions/0006-services-over-queryable-get.md`):
@@ -62,15 +62,6 @@ pub struct Client<Req, Resp> {
 }
 
 impl<Req: Serialize, Resp: DeserializeOwned> Client<Req, Resp> {
-  pub(crate) fn new(
-    session: Session,
-    selector: String,
-    client_gid: [u8; 16],
-    liveliness_token: Option<LivelinessToken>,
-  ) -> Self {
-    Self::new_with_timeout(session, selector, client_gid, liveliness_token, None)
-  }
-
   pub(crate) fn new_with_timeout(
     session: Session,
     selector: String,

@@ -117,7 +117,7 @@ impl Context {
 
   /// Create a new Context.
   pub fn with_options(opt: ContextOptions) -> CreateResult<Context> {
-    #[allow(unused_mut)] // only mutated with security
+    #[cfg_attr(not(feature = "security"), allow(unused_mut))]
     let mut dpb = DomainParticipantBuilder::new(opt.domain_id);
 
     #[cfg(feature = "security")]
@@ -162,8 +162,8 @@ impl Context {
     self.inner.lock().unwrap().domain_participant.domain_id()
   }
 
-  /// Which topics have been discovered? Owned, backend-neutral view (ADR-0010
-  /// Phase 2). For the raw RustDDS data, see [`Self::discovered_topics_raw`].
+  /// Which topics have been discovered? Owned, backend-neutral view (ADR-0010).
+  /// For the raw RustDDS data, see [`Self::discovered_topics_raw`].
   pub fn discovered_topics(&self) -> Vec<DiscoveredTopic> {
     self
       .discovered_topics_raw()

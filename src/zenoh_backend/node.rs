@@ -1,12 +1,14 @@
-//! Zenoh `Node` and `Topic` (E4).
+//! Zenoh `Node` and `Topic`.
 //!
-//! A minimal node surface over a shared [`Context`] session: it resolves ROS
-//! names to key expressions and creates [`Publisher`]/[`Subscription`]
-//! entities. Discovery (liveliness tokens, graph), services, and actions land
-//! in E5/E6.
+//! A node over a shared [`Context`] session: it resolves ROS names to key
+//! expressions, declares its liveliness token for discovery, and creates
+//! publishers, subscriptions, services, actions, and parameter servers.
 
 use std::{
-  sync::atomic::{AtomicU64, Ordering},
+  sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+  },
   time::Duration,
 };
 
@@ -31,11 +33,11 @@ use super::{
 use crate::{
   NodeOptions,
   action_msgs::{CancelGoalRequest, CancelGoalResponse, GoalStatusArray},
-  error::CreateResult,
+  error::{CreateError, CreateResult},
   graph::GraphEvent,
   log::Log,
   names::{ActionTypeName, MessageTypeName, Name, NodeName, ServiceTypeName},
-  parameters::Parameter,
+  parameters::{Parameter, ParameterStore},
   qos::QosProfile,
 };
 
@@ -80,11 +82,11 @@ pub struct Node {
   // Kept alive so the node stays discoverable; dropped => token undeclared.
   _node_token: Option<LivelinessToken>,
 
-  // Populated from `NodeOptions` at construction time (ADR-0010 Phase 4); see
-  // `Self::new`. Getters below avoid double-creating these when the options
-  // already requested them; `create_logger` / `read_rosout` /
-  // `create_parameter_server` remain available for creating *additional*
-  // instances beyond the options-managed one.
+  // Populated from `NodeOptions` at construction time; see `Self::new`. Getters
+  // below avoid double-creating these when the options already requested them;
+  // `create_logger` / `read_rosout` / `create_parameter_server` remain
+  // available for creating *additional* instances beyond the options-managed
+  // one.
   logger: Option<Logger>,
   rosout_reader: Option<Subscription<Log>>,
   parameter_server: Option<ParameterServer>,
@@ -124,35 +126,6 @@ impl Node {
       parameter_server: None,
     };
 
-    // Fields the Zenoh backend does not (yet) honor: no-op, logged once here.
-    if !options.cli_args.is_empty() {
-      log::debug!(
-        "NodeOptions::cli_args is not supported on the Zenoh backend; ignoring {} entr{}",
-        options.cli_args.len(),
-        if options.cli_args.len() == 1 {
-          "y"
-        } else {
-          "ies"
-        }
-      );
-    }
-    if !options.use_global_arguments {
-      log::debug!(
-        "NodeOptions::use_global_arguments(false) is not supported on the Zenoh backend; ignoring"
-      );
-    }
-    if options.parameter_validator.is_some() {
-      log::debug!(
-        "NodeOptions::parameter_validator is not supported on the Zenoh backend; ignoring"
-      );
-    }
-    if options.parameter_set_action.is_some() {
-      log::debug!(
-        "NodeOptions::parameter_set_action is not supported on the Zenoh backend; ignoring"
-      );
-    }
-
-    // Fields the Zenoh backend does honor.
     if options.enable_rosout {
       node.logger = Some(node.create_logger()?);
     }
@@ -160,8 +133,14 @@ impl Node {
       node.rosout_reader = Some(node.read_rosout()?);
     }
     if options.start_parameter_services {
-      let declared_parameters = std::mem::take(&mut options.declared_parameters);
-      node.parameter_server = Some(node.create_parameter_server(declared_parameters)?);
+      let store = ParameterStore::new(
+        std::mem::take(&mut options.declared_parameters),
+        options.allow_undeclared_parameters,
+        options.parameter_validator.take(),
+        options.parameter_set_action.take(),
+      )
+      .map_err(bad_parameter)?;
+      node.parameter_server = Some(node.parameter_server_with_store(store)?);
     }
 
     Ok(node)
@@ -511,12 +490,21 @@ impl Node {
   /// `/talker/get_parameters`) plus the global `/parameter_events` publisher.
   ///
   /// `initial_parameters` seeds the parameter store (`use_sim_time` is always
-  /// added). Drive the returned server with
+  /// added). Parameters not in the store cannot be set, and there is no
+  /// validator or set action; the parameter server created from
+  /// [`NodeOptions`] uses the rules given there instead. Drive the returned
+  /// server with
   /// [`ParameterServer::spin_once`]/[`spin`](ParameterServer::spin).
   pub fn create_parameter_server(
     &self,
     initial_parameters: impl IntoIterator<Item = Parameter>,
   ) -> CreateResult<ParameterServer> {
+    let store =
+      ParameterStore::new(initial_parameters, false, None, None).map_err(bad_parameter)?;
+    self.parameter_server_with_store(store)
+  }
+
+  fn parameter_server_with_store(&self, store: ParameterStore) -> CreateResult<ParameterServer> {
     let node_fqn = self.node_name.fully_qualified_name();
     let svc = |base: &str| param_service_name(&node_fqn, base);
     let param_type = |ty: &str| ServiceTypeName::new("rcl_interfaces", ty);
@@ -549,7 +537,7 @@ impl Node {
 
     Ok(ParameterServer::new(
       node_fqn,
-      initial_parameters,
+      Arc::new(store),
       get_parameters,
       get_parameter_types,
       set_parameters,
@@ -574,6 +562,10 @@ impl Node {
     )?;
     let set_parameters =
       self.create_client(&svc("set_parameters")?, &param_type("SetParameters"))?;
+    let set_parameters_atomically = self.create_client(
+      &svc("set_parameters_atomically")?,
+      &param_type("SetParametersAtomically"),
+    )?;
     let list_parameters =
       self.create_client(&svc("list_parameters")?, &param_type("ListParameters"))?;
     let describe_parameters = self.create_client(
@@ -585,6 +577,7 @@ impl Node {
       get_parameters,
       get_parameter_types,
       set_parameters,
+      set_parameters_atomically,
       list_parameters,
       describe_parameters,
     ))
@@ -655,6 +648,10 @@ fn param_service_name(node_fqn: &str, base: &str) -> zenoh::Result<Name> {
 
 fn name_err(e: crate::names::NameError) -> zenoh::Error {
   Box::new(e)
+}
+
+fn bad_parameter(reason: String) -> CreateError {
+  CreateError::BadParameter { reason }
 }
 
 /// Build the absolute `Name` of an action sub-entity, e.g.
@@ -771,17 +768,17 @@ mod tests {
     while Instant::now() < deadline && !(saw_node && saw_publisher) {
       let replies = ctx_b.session().liveliness().get(&graph_key).wait().unwrap();
       while let Ok(reply) = replies.recv() {
-        if let Ok(sample) = reply.result() {
-          if let Some(e) = parse_liveliness_key(sample.key_expr().as_str()) {
-            match e.kind {
-              EntityKind::Node if e.node_name == "talker" => saw_node = true,
-              EntityKind::Publisher
-                if e.topic_name.as_deref() == Some("/chatter") && e.node_name == "talker" =>
-              {
-                saw_publisher = true
-              }
-              _ => {}
+        if let Ok(sample) = reply.result()
+          && let Some(e) = parse_liveliness_key(sample.key_expr().as_str())
+        {
+          match e.kind {
+            EntityKind::Node if e.node_name == "talker" => saw_node = true,
+            EntityKind::Publisher
+              if e.topic_name.as_deref() == Some("/chatter") && e.node_name == "talker" =>
+            {
+              saw_publisher = true
             }
+            _ => {}
           }
         }
       }

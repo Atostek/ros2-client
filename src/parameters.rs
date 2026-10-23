@@ -8,6 +8,16 @@
 //! `rqt` tools from ROS 2. This only works for [`Node`](crate::Node)s that have
 //! enabled Parameter Services and are running a `Spinner`.
 
+use std::{
+  collections::BTreeMap,
+  sync::{
+    Mutex,
+    atomic::{AtomicBool, Ordering},
+  },
+};
+
+use crate::{node_options::ParameterFunc, rcl_interfaces::ListParametersResult};
+
 /// Named parameter
 #[derive(Debug, Clone)]
 pub struct Parameter {
@@ -286,6 +296,302 @@ impl From<ParameterDescriptor> for raw::ParameterDescriptor {
   }
 }
 
+/// The parameter changes made by one set or undeclare operation, as reported
+/// in a `ParameterEvent`.
+#[derive(Debug, Default)]
+pub(crate) struct ParameterChanges {
+  pub new_parameters: Vec<raw::Parameter>,
+  pub changed_parameters: Vec<raw::Parameter>,
+  pub deleted_parameters: Vec<raw::Parameter>,
+}
+
+impl ParameterChanges {
+  pub fn is_empty(&self) -> bool {
+    self.new_parameters.is_empty()
+      && self.changed_parameters.is_empty()
+      && self.deleted_parameters.is_empty()
+  }
+
+  /// A `ParameterEvent` reporting these changes.
+  pub fn into_event(
+    self,
+    stamp: crate::builtin_interfaces::Time,
+    node: String,
+  ) -> raw::ParameterEvent {
+    raw::ParameterEvent {
+      stamp,
+      node,
+      new_parameters: self.new_parameters,
+      changed_parameters: self.changed_parameters,
+      deleted_parameters: self.deleted_parameters,
+    }
+  }
+}
+
+/// A Node's parameter values and the rules for changing them, shared by both
+/// middleware backends and by local and remote (service) access.
+///
+/// Rules applied to every set:
+/// - A parameter that does not exist may only be set if undeclared parameters
+///   are allowed.
+/// - `use_sim_time` must be a Boolean.
+/// - A parameter may not change its type, unless undeclared parameters are
+///   allowed (treated as dynamic typing).
+/// - The user validator, if any, must accept the value.
+///
+/// Applying a value runs the user set action, if any, and then stores it.
+/// Setting a parameter to `NotSet` deletes it.
+///
+/// The store never publishes anything; set operations return the
+/// [`ParameterChanges`] the caller should publish as a `ParameterEvent`.
+pub(crate) struct ParameterStore {
+  values: Mutex<BTreeMap<String, ParameterValue>>,
+  allow_undeclared: bool,
+  // Not held at the same time as `values`, as the callbacks may be slow.
+  validator: Option<Mutex<Box<ParameterFunc>>>,
+  set_action: Option<Mutex<Box<ParameterFunc>>>,
+  use_sim_time: AtomicBool,
+}
+
+impl ParameterStore {
+  /// Built-in parameter present on every node.
+  pub const USE_SIM_TIME: &'static str = "use_sim_time";
+
+  /// Create a store holding `declared` plus `use_sim_time` (default `false`).
+  ///
+  /// Each declared value is validated and its set action run; the first
+  /// failure is returned.
+  pub fn new(
+    declared: impl IntoIterator<Item = Parameter>,
+    allow_undeclared: bool,
+    validator: Option<Box<ParameterFunc>>,
+    set_action: Option<Box<ParameterFunc>>,
+  ) -> Result<Self, String> {
+    // If a name is declared more than once, the last value wins.
+    let mut values: BTreeMap<String, ParameterValue> = declared
+      .into_iter()
+      .map(|Parameter { name, value }| (name, value))
+      .collect();
+    values
+      .entry(Self::USE_SIM_TIME.to_string())
+      .or_insert(ParameterValue::Boolean(false));
+    let initial: Vec<(String, ParameterValue)> =
+      values.iter().map(|(n, v)| (n.clone(), v.clone())).collect();
+
+    let store = ParameterStore {
+      values: Mutex::new(values),
+      allow_undeclared,
+      validator: validator.map(Mutex::new),
+      set_action: set_action.map(Mutex::new),
+      use_sim_time: AtomicBool::new(false),
+    };
+    for (name, value) in &initial {
+      store.check_value(name, value)?;
+      store.run_set_action(name, value)?;
+    }
+    Ok(store)
+  }
+
+  pub fn allow_undeclared(&self) -> bool {
+    self.allow_undeclared
+  }
+
+  /// Current value of the built-in `use_sim_time` parameter.
+  #[cfg(any(feature = "dds", test))]
+  pub fn use_sim_time(&self) -> bool {
+    self.use_sim_time.load(Ordering::SeqCst)
+  }
+
+  pub fn get(&self, name: &str) -> Option<ParameterValue> {
+    self.values.lock().unwrap().get(name).cloned()
+  }
+
+  /// Values for `names`, with `NotSet` for unknown names.
+  pub fn get_many(&self, names: &[String]) -> Vec<ParameterValue> {
+    let values = self.values.lock().unwrap();
+    names
+      .iter()
+      .map(|name| values.get(name).cloned().unwrap_or(ParameterValue::NotSet))
+      .collect()
+  }
+
+  /// `ParameterType` codes for `names`, with `NOT_SET` for unknown names.
+  pub fn get_types(&self, names: &[String]) -> Vec<u8> {
+    self
+      .get_many(names)
+      .iter()
+      .map(ParameterValue::to_parameter_type_raw)
+      .collect()
+  }
+
+  pub fn describe(&self, names: &[String]) -> Vec<ParameterDescriptor> {
+    let values = self.values.lock().unwrap();
+    names
+      .iter()
+      .map(|name| match values.get(name) {
+        Some(value) => ParameterDescriptor::from_value(name, value),
+        None => ParameterDescriptor::unknown(name),
+      })
+      .collect()
+  }
+
+  pub fn has(&self, name: &str) -> bool {
+    self.values.lock().unwrap().contains_key(name)
+  }
+
+  pub fn names(&self) -> Vec<String> {
+    self.values.lock().unwrap().keys().cloned().collect()
+  }
+
+  /// Answer a `ListParameters` request, with the same semantics as rclcpp.
+  ///
+  /// With no `prefixes`, lists names with fewer than `depth` `.` separators
+  /// (`depth` 0 means unlimited). Otherwise lists names that equal a prefix,
+  /// or lie under `prefix.` within `depth` further levels. The returned
+  /// `prefixes` are the distinct namespaces (up to the last `.`) of the
+  /// listed names.
+  pub fn list(&self, prefixes: &[String], depth: u64) -> ListParametersResult {
+    let within_depth = |s: &str| depth == 0 || (s.matches('.').count() as u64) < depth;
+    let mut result = ListParametersResult {
+      names: vec![],
+      prefixes: vec![],
+    };
+    for name in self.values.lock().unwrap().keys() {
+      let get_all = prefixes.is_empty() && within_depth(name);
+      let prefix_matches = prefixes.iter().any(|prefix| {
+        name == prefix
+          || name
+            .strip_prefix(prefix.as_str())
+            .and_then(|rest| rest.strip_prefix('.'))
+            .is_some_and(|rest| within_depth(&format!(".{rest}")))
+      });
+      if get_all || prefix_matches {
+        result.names.push(name.clone());
+        if let Some((namespace, _)) = name.rsplit_once('.')
+          && !result.prefixes.iter().any(|p| p == namespace)
+        {
+          result.prefixes.push(namespace.to_string());
+        }
+      }
+    }
+    result
+  }
+
+  /// Set one parameter, subject to the rules.
+  pub fn set(&self, name: &str, value: ParameterValue) -> Result<ParameterChanges, String> {
+    self.validate(name, &value)?;
+    let mut changes = ParameterChanges::default();
+    self.apply(name.to_string(), value, &mut changes)?;
+    Ok(changes)
+  }
+
+  /// Set several parameters as one all-or-nothing transaction.
+  ///
+  /// Every parameter is validated before any is applied. A set action that
+  /// fails while applying cannot be rolled back, so set actions should not
+  /// fail for values the validator has accepted.
+  pub fn set_atomically(&self, params: Vec<Parameter>) -> Result<ParameterChanges, String> {
+    for Parameter { name, value } in &params {
+      self.validate(name, value)?;
+    }
+    let mut changes = ParameterChanges::default();
+    for Parameter { name, value } in params {
+      self.apply(name, value, &mut changes)?;
+    }
+    Ok(changes)
+  }
+
+  /// Remove a parameter, bypassing the rules (local API).
+  pub fn undeclare(&self, name: &str) -> ParameterChanges {
+    let mut changes = ParameterChanges::default();
+    if let Some(value) = self.values.lock().unwrap().remove(name) {
+      changes.deleted_parameters.push(raw::Parameter {
+        name: name.to_string(),
+        value: value.into(),
+      });
+    }
+    changes
+  }
+
+  fn validate(&self, name: &str, value: &ParameterValue) -> SetParametersResult {
+    let existing = self.get(name);
+    if existing.is_none() && !self.allow_undeclared {
+      return Err(format!(
+        "Setting undeclared parameter '{name}' is not allowed."
+      ));
+    }
+    if !self.allow_undeclared
+      && !matches!(value, ParameterValue::NotSet)
+      && let Some(existing) = &existing
+      && !matches!(existing, ParameterValue::NotSet)
+      && std::mem::discriminant(existing) != std::mem::discriminant(value)
+    {
+      return Err(format!(
+        "Cannot change type of parameter '{name}' from {:?} to {:?}.",
+        existing.to_parameter_type(),
+        value.to_parameter_type()
+      ));
+    }
+    self.check_value(name, value)
+  }
+
+  /// The built-in `use_sim_time` check, or else the user validator.
+  fn check_value(&self, name: &str, value: &ParameterValue) -> SetParametersResult {
+    if name == Self::USE_SIM_TIME {
+      return match value {
+        ParameterValue::Boolean(_) => Ok(()),
+        _ => Err(format!("Parameter '{name}' must be Boolean.")),
+      };
+    }
+    match &self.validator {
+      Some(v) => v.lock().unwrap()(name, value),
+      None => Ok(()),
+    }
+  }
+
+  fn run_set_action(&self, name: &str, value: &ParameterValue) -> SetParametersResult {
+    if name == Self::USE_SIM_TIME {
+      if let ParameterValue::Boolean(b) = value {
+        self.use_sim_time.store(*b, Ordering::SeqCst);
+      }
+      return Ok(());
+    }
+    match &self.set_action {
+      Some(a) => a.lock().unwrap()(name, value),
+      None => Ok(()),
+    }
+  }
+
+  fn apply(
+    &self,
+    name: String,
+    value: ParameterValue,
+    changes: &mut ParameterChanges,
+  ) -> SetParametersResult {
+    self.run_set_action(&name, &value)?;
+    let raw_p = raw::Parameter {
+      name: name.clone(),
+      value: value.clone().into(),
+    };
+    let mut values = self.values.lock().unwrap();
+    match value {
+      ParameterValue::NotSet => {
+        if values.remove(&name).is_some() {
+          changes.deleted_parameters.push(raw_p);
+        }
+      }
+      _ => {
+        if values.insert(name, value).is_some() {
+          changes.changed_parameters.push(raw_p);
+        } else {
+          changes.new_parameters.push(raw_p);
+        }
+      }
+    }
+    Ok(())
+  }
+}
+
 /// Raw, ROS2-compatible Parameters for sending over the wire.
 /// Not for use in a Rust application.
 pub mod raw {
@@ -383,5 +689,166 @@ pub mod raw {
     pub from_value: f64,
     pub to_value: f64,
     pub step: f64,
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::sync::{Arc, Mutex};
+
+  use super::{Parameter, ParameterStore, ParameterValue};
+
+  fn param(name: &str, value: ParameterValue) -> Parameter {
+    Parameter {
+      name: name.to_string(),
+      value,
+    }
+  }
+
+  fn store(allow_undeclared: bool) -> ParameterStore {
+    ParameterStore::new(
+      vec![param("p", ParameterValue::Integer(1))],
+      allow_undeclared,
+      None,
+      None,
+    )
+    .unwrap()
+  }
+
+  #[test]
+  fn use_sim_time_is_builtin_and_boolean() {
+    let s = store(false);
+    assert_eq!(s.get("use_sim_time"), Some(ParameterValue::Boolean(false)));
+    assert!(s.set("use_sim_time", ParameterValue::Integer(1)).is_err());
+    let changes = s
+      .set("use_sim_time", ParameterValue::Boolean(true))
+      .unwrap();
+    assert!(s.use_sim_time());
+    // It existed already, so this is a change, not a new parameter.
+    assert_eq!(changes.changed_parameters.len(), 1);
+    assert!(changes.new_parameters.is_empty());
+  }
+
+  #[test]
+  fn declared_use_sim_time_is_kept() {
+    let s = ParameterStore::new(
+      vec![param("use_sim_time", ParameterValue::Boolean(true))],
+      false,
+      None,
+      None,
+    )
+    .unwrap();
+    assert!(s.use_sim_time());
+  }
+
+  #[test]
+  fn undeclared_rule() {
+    assert!(store(false).set("q", ParameterValue::Integer(1)).is_err());
+    let changes = store(true).set("q", ParameterValue::Integer(1)).unwrap();
+    assert_eq!(changes.new_parameters.len(), 1);
+  }
+
+  #[test]
+  fn type_change_rule() {
+    let s = store(false);
+    assert!(s.set("p", ParameterValue::Integer(2)).is_ok());
+    assert!(s.set("p", ParameterValue::Double(2.0)).is_err());
+    assert_eq!(s.get("p"), Some(ParameterValue::Integer(2)));
+    // Undeclared parameters allowed means dynamic typing.
+    assert!(store(true).set("p", ParameterValue::Double(2.0)).is_ok());
+  }
+
+  #[test]
+  fn not_set_deletes() {
+    let s = store(false);
+    let changes = s.set("p", ParameterValue::NotSet).unwrap();
+    assert_eq!(changes.deleted_parameters.len(), 1);
+    assert!(!s.has("p"));
+  }
+
+  #[test]
+  fn atomic_set_is_all_or_nothing() {
+    let s = store(false);
+    let bad = vec![
+      param("p", ParameterValue::Integer(5)),
+      param("p2", ParameterValue::Integer(5)), // undeclared
+    ];
+    assert!(s.set_atomically(bad).is_err());
+    assert_eq!(s.get("p"), Some(ParameterValue::Integer(1)));
+
+    let good = vec![
+      param("p", ParameterValue::Integer(5)),
+      param("use_sim_time", ParameterValue::Boolean(true)),
+    ];
+    let changes = s.set_atomically(good).unwrap();
+    assert_eq!(changes.changed_parameters.len(), 2);
+    assert_eq!(s.get("p"), Some(ParameterValue::Integer(5)));
+  }
+
+  #[test]
+  fn validator_and_set_action() {
+    let applied = Arc::new(Mutex::new(Vec::new()));
+    let applied_in_action = Arc::clone(&applied);
+    let s = ParameterStore::new(
+      vec![param("rate", ParameterValue::Integer(1))],
+      false,
+      Some(Box::new(|_name, value| match value {
+        ParameterValue::Integer(i) if *i <= 0 => Err("must be positive".to_string()),
+        _ => Ok(()),
+      })),
+      Some(Box::new(move |name, _value| {
+        applied_in_action.lock().unwrap().push(name.to_string());
+        Ok(())
+      })),
+    )
+    .unwrap();
+    assert!(s.set("rate", ParameterValue::Integer(0)).is_err());
+    assert!(s.set("rate", ParameterValue::Integer(10)).is_ok());
+    // Once for the declared value, once for the accepted set.
+    assert_eq!(*applied.lock().unwrap(), vec!["rate", "rate"]);
+  }
+
+  #[test]
+  fn declared_values_are_validated() {
+    let result = ParameterStore::new(
+      vec![param("rate", ParameterValue::Integer(0))],
+      false,
+      Some(Box::new(|_name, _value| Err("no".to_string()))),
+      None,
+    );
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn list_matches_rclcpp() {
+    let s = ParameterStore::new(
+      ["a", "a.b", "a.b.c", "ab", "x.y"]
+        .iter()
+        .map(|n| param(n, ParameterValue::Integer(0))),
+      false,
+      None,
+      None,
+    )
+    .unwrap();
+    let names = |prefixes: &[&str], depth| {
+      let prefixes: Vec<String> = prefixes.iter().map(|p| p.to_string()).collect();
+      s.list(&prefixes, depth)
+    };
+
+    let all = names(&[], 0);
+    assert_eq!(
+      all.names,
+      ["a", "a.b", "a.b.c", "ab", "use_sim_time", "x.y"]
+    );
+    assert_eq!(all.prefixes, ["a", "a.b", "x"]);
+
+    // depth 1: only names without a separator.
+    assert_eq!(names(&[], 1).names, ["a", "ab", "use_sim_time"]);
+
+    // A prefix matches itself and names under `prefix.`, not "ab".
+    assert_eq!(names(&["a"], 0).names, ["a", "a.b", "a.b.c"]);
+    // The separator after the prefix counts towards depth.
+    assert_eq!(names(&["a"], 1).names, ["a"]);
+    assert_eq!(names(&["a"], 2).names, ["a", "a.b"]);
   }
 }

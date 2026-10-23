@@ -1,4 +1,4 @@
-//! Zenoh rosout logging (E9).
+//! Zenoh rosout logging.
 //!
 //! ROS 2 nodes publish log records to the global `/rosout` topic
 //! (`rcl_interfaces/msg/Log`). This module provides a [`Logger`] that `put`s

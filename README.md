@@ -77,6 +77,15 @@ distribution with, e.g., `cargo build --no-default-features --features humble`
 
 Please see [test results](interop/results) for details.  
 
+## Version 0.12
+
+Parameters now behave the same on the DDS and Zenoh backends.
+
+* **API breakage (Zenoh, minor):** `ParameterServer::set_parameter` returns
+  `Result<(), String>`, because the parameter rules now apply to local sets
+  too.
+* The parameter server now should have the same features with DDS and Zenoh backends.
+
 ## Version 0.11
 
 **API breakage.** 0.11 replaces RustDDS types in the public API with owned ROS
