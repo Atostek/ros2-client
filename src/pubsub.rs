@@ -1,10 +1,12 @@
-use std::{io, marker::PhantomData};
+#[cfg(any(feature = "mio_06", feature = "mio_1"))]
+use std::io;
+use std::marker::PhantomData;
 
-use rustdds::{
-  mio::{Evented, Poll, PollOpt, Ready, Token},
-  serialization::CdrDeserializeSeedDecoder,
-  *,
-};
+#[cfg(feature = "mio_06")]
+use rustdds::mio::{Evented, Poll, PollOpt, Ready, Token};
+#[cfg(feature = "mio_1")]
+use rustdds::mio1;
+use rustdds::{serialization::CdrDeserializeSeedDecoder, *};
 use futures::{
   Future, pin_mut,
   stream::{FusedStream, StreamExt},
@@ -190,6 +192,7 @@ fn dcc_to_value_and_messageinfo<M>(dcc: no_key::DeserializedCacheChange<M>) -> (
   (dcc.into_value(), mi)
 }
 
+#[cfg(feature = "mio_06")]
 impl<D> Evented for Subscription<D>
 where
   D: DeserializeOwned,
@@ -212,5 +215,33 @@ where
 
   fn deregister(&self, poll: &Poll) -> io::Result<()> {
     self.datareader.deregister(poll)
+  }
+}
+
+#[cfg(feature = "mio_1")]
+impl<D> mio1::event::Source for Subscription<D>
+where
+  D: DeserializeOwned,
+{
+  fn register(
+    &mut self,
+    registry: &mio1::Registry,
+    token: mio1::Token,
+    interests: mio1::Interest,
+  ) -> io::Result<()> {
+    mio1::event::Source::register(&mut self.datareader, registry, token, interests)
+  }
+
+  fn reregister(
+    &mut self,
+    registry: &mio1::Registry,
+    token: mio1::Token,
+    interests: mio1::Interest,
+  ) -> io::Result<()> {
+    mio1::event::Source::reregister(&mut self.datareader, registry, token, interests)
+  }
+
+  fn deregister(&mut self, registry: &mio1::Registry) -> io::Result<()> {
+    mio1::event::Source::deregister(&mut self.datareader, registry)
   }
 }
