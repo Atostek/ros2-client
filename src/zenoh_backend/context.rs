@@ -71,7 +71,8 @@ struct ContextInner {
   domain_id: u16,
   next_node_id: AtomicU64,
   graph_cache: Arc<GraphCache>,
-  // Kept alive to keep the graph cache updating; dropped => subscriber undeclared.
+  // Kept alive to keep the graph cache updating; dropped => subscriber
+  // undeclared.
   _liveliness_subscriber: Subscriber<()>,
 }
 

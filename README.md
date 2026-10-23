@@ -81,23 +81,10 @@ Please see [test results](interop/results) for details.
 
 Parameters now behave the same on the DDS and Zenoh backends.
 
-* **API breakage (Zenoh):** `ParameterServer::set_parameter` returns
+* **API breakage (Zenoh, minor):** `ParameterServer::set_parameter` returns
   `Result<(), String>`, because the parameter rules now apply to local sets
   too.
-* The Zenoh parameter server applies the same rules as DDS: only declared
-  parameters may be set, a parameter keeps its type, `use_sim_time` must be
-  Boolean, and the `NodeOptions` validator and set action are used.
-  `set_parameters_atomically` is implemented (it used to fail every request),
-  and `ParameterClient` gains `set_parameters_atomically` and
-  `list_parameters_with_depth`.
-* New `NodeOptions::allow_undeclared_parameters(bool)` lets a node accept
-  parameters that were not declared up front, and changes of type.
-* Listing parameters by prefix follows rclcpp on both backends: a prefix
-  matches a parameter of that name or names under `prefix.`, not any name
-  starting with the same characters, and the result includes the namespace
-  prefixes.
-* `Node::set_parameter(name, ParameterValue::NotSet)` deletes the parameter,
-  as remote set requests already did.
+* The parameter server now should have the same features with DDS and Zenoh backends.
 
 ## Version 0.11
 

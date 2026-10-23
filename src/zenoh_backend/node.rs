@@ -82,10 +82,11 @@ pub struct Node {
   // Kept alive so the node stays discoverable; dropped => token undeclared.
   _node_token: Option<LivelinessToken>,
 
-  // Populated from `NodeOptions` at construction time; see `Self::new`. Getters below avoid
-  // double-creating these when the options already requested them; `create_logger` /
-  // `read_rosout` / `create_parameter_server` remain available for creating *additional*
-  // instances beyond the options-managed one.
+  // Populated from `NodeOptions` at construction time; see `Self::new`. Getters
+  // below avoid double-creating these when the options already requested them;
+  // `create_logger` / `read_rosout` / `create_parameter_server` remain
+  // available for creating *additional* instances beyond the options-managed
+  // one.
   logger: Option<Logger>,
   rosout_reader: Option<Subscription<Log>>,
   parameter_server: Option<ParameterServer>,
