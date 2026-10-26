@@ -59,8 +59,9 @@
 //!   1.2 through the `rustdds::mio1` re-export, so the version always matches
 //!   RustDDS. See examples `listener` and `ros2_service_server`.
 //! * Feature `mio_06` (default): they implement the mio 0.6 `Evented` trait, as
-//!   in ros2-client 0.12. Use mio 0.6 through `rustdds::mio`. See example
-//!   `listener_mio_06`.
+//!   in ros2-client 0.12, and RustDDS is built with its `mio_06` feature. Use
+//!   mio 0.6 through `rustdds::mio`. See example `listener_mio_06`. Omit
+//!   `mio_06` to build and run with mio 1.2 only.
 //!
 //! mio 1.2 registrations are edge-triggered, so after an event, read until no
 //! more data is returned.

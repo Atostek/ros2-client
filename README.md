@@ -86,6 +86,15 @@ Parameters now behave the same on the DDS and Zenoh backends.
   too.
 * The parameter server now should have the same features with DDS and Zenoh backends.
 
+### Version 0.12.1
+
+* Upgrade to RustDDS 0.15.0.
+* mio 1.2 polling is the default (`mio_1`): `Subscription`, `Client`, and
+  `Server` implement `event::Source`. Import mio 1.2 as `rustdds::mio1`.
+* mio 0.6 polling stays available and on by default (`mio_06`), including
+  RustDDS's `mio_06` feature. Disable `mio_06` to build and run with mio 1.2
+  only.
+
 ## Version 0.11
 
 **API breakage.** 0.11 replaces RustDDS types in the public API with owned ROS

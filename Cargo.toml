@@ -33,7 +33,11 @@ autoexamples = false
 # Build the Zenoh backend with:
 #   cargo build --no-default-features --features zenoh
 # ---------------------------------------------------------------------------
-dds   = ["dep:rustdds", "dep:cdr-encoding-size"]
+# `dep:rustix` enables rustix's `time` feature. RustDDS always depends on
+# socketpair, which enables only rustix `net`, and rustix 1.1.5's `net` uses
+# `timespec` without compiling that module unless another API feature is on.
+# Drop this once rustix fixes it.
+dds   = ["dep:rustdds", "dep:cdr-encoding-size", "dep:rustix"]
 zenoh = [
   "dep:zenoh",
   "dep:zenoh-ext",
@@ -54,15 +58,13 @@ security = [
 #
 # Both are in the default set, so 0.12 callers keep compiling.
 # `mio_1`: Subscription, Client and Server implement mio 1.2 `event::Source`.
-# Import mio 1.2 as `rustdds::mio1`.
+# Import mio 1.2 as `rustdds::mio1`. RustDDS 0.15 always exposes that API;
+# `rustdds/mio_1` is a no-op kept for feature compatibility.
 # `mio_06`: they implement the mio 0.6 `Evented` trait, as in 0.12.
-# Import mio 0.6 as `rustdds::mio`.
-# `dep:rustix` is only here for its `time` feature. rustix 1.1.5's `net`
-# feature uses `timespec` but does not compile that module unless another
-# API feature is enabled. RustDDS `mio_1` pulls in socketpair, which enables
-# only `net`, so `cargo check --lib` fails. Drop this once rustix fixes it.
-mio_1  = ["dds", "rustdds/mio_1", "dep:rustix"]
-mio_06 = ["dds"]
+# Import mio 0.6 as `rustdds::mio`. This also enables RustDDS's `mio_06`
+# feature. Omit `mio_06` to build without mio 0.6.
+mio_1  = ["dds", "rustdds/mio_1"]
+mio_06 = ["dds", "rustdds/mio_06"]
 
 # ROS 2 distribution selection.
 #
@@ -101,11 +103,10 @@ default = ["dds", "jazzy", "mio_1", "mio_06"]
 
 # RustDDS backend (feature `dds`). Optional so the `zenoh` backend can be built
 # without pulling RustDDS in.
-# rustdds = {  path = "../RustDDS"  } # dev setting
-# rustdds = {   git = "https://github.com/Atostek/RustDDS.git" }
-# rustdds = { version = "0.14.1", optional = true } # release setting
-# The mio-1.2 branch adds the `rustdds::mio1` re-export (feature `mio_1`).
-rustdds = { git = "https://github.com/Atostek/RustDDS.git", branch = "mio-1.2", optional = true }
+# rustdds = { path = "../RustDDS", default-features = false, optional = true } # dev setting
+# mio 1.2 is always part of RustDDS. Disable its default `mio_06` feature here
+# so this crate's `mio_06` feature is what opts into mio 0.6.
+rustdds = { version = "0.15.0", optional = true, default-features = false }
 # Direct dependency so `derive(CdrEncodingSize)` on `Gid` can see the crate.
 cdr-encoding-size = { version = "^0.5", optional = true }
 
