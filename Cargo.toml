@@ -145,13 +145,13 @@ tracing = "0.1.41"
 xxhash-rust = { version = "0.8", features = ["xxh3"], optional = true }
 # REP-2016 `RIHS01_…` type hashes are SHA-256 over a canonical JSON type
 # description (docs/decisions/0007).
-sha2 = { version = "0.10", optional = true }
+sha2 = { version = "0.11", optional = true }
 
 [dev-dependencies]
 log = "0.4"
 # The Zenoh wire-format spec modules are also unit-tested on non-zenoh builds.
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
-sha2 = "0.10"
+sha2 = "0.11"
 pretty_env_logger = "0.5.0"
 # turtle_teleop
 log4rs = "1.2"
