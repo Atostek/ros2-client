@@ -1,6 +1,7 @@
+use std::time::{Duration, Instant};
+
 use log::error;
-use rustdds::mio::{Events, Poll, PollOpt, Ready, Token};
-use mio_extras::timer;
+use rustdds::mio1::{Events, Poll};
 use ros2_client::{
   Context, MessageTypeName, Name, Node, NodeName, NodeOptions, QosProfile,
   qos::{Durability, History, WhenFull},
@@ -40,16 +41,11 @@ fn main() {
     .create_publisher::<String>(&chatter_topic, None)
     .unwrap();
 
-  let mut talk_timer: timer::Timer<()> = timer::Builder::default().build();
+  // Nothing is registered: the poll timeout is the talk timer.
+  let talk_period = Duration::from_secs(2);
+  let mut next_talk = Instant::now() + talk_period;
 
-  let poll = Poll::new().unwrap();
-
-  poll
-    .register(&talk_timer, Token(1), Ready::readable(), PollOpt::edge())
-    .unwrap();
-
-  talk_timer.set_timeout(std::time::Duration::from_secs(2), ());
-
+  let mut poll = Poll::new().unwrap();
   let mut events = Events::with_capacity(8);
   let mut count = 0;
 
@@ -59,22 +55,18 @@ fn main() {
   // Change repeat count to e.g. 100 to test data fragmentation.
 
   loop {
-    poll.poll(&mut events, None).unwrap();
+    let timeout = next_talk.saturating_duration_since(Instant::now());
+    poll.poll(&mut events, Some(timeout)).unwrap();
 
-    for event in events.iter() {
-      match event.token() {
-        Token(1) => {
-          count += 1;
-          let message = format!("count={count} {filler}");
-          println!("Talking, count={} len={}", count, message.len());
-          chatter_publisher
-            .publish(message)
-            .unwrap_or_else(|e| error!("publish failed: {e:?}"));
-          talk_timer.set_timeout(std::time::Duration::from_secs(2), ());
-        }
-        _ => println!(">>> Unknown poll token {:?}", event.token()),
-      } // match
-    } // for
+    if Instant::now() >= next_talk {
+      count += 1;
+      let message = format!("count={count} {filler}");
+      println!("Talking, count={} len={}", count, message.len());
+      chatter_publisher
+        .publish(message)
+        .unwrap_or_else(|e| error!("publish failed: {e:?}"));
+      next_talk += talk_period;
+    }
   } // loop
 } // main
 

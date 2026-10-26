@@ -1,5 +1,5 @@
 use log::error;
-use rustdds::mio::{Events, Poll, PollOpt, Ready, Token};
+use rustdds::mio1::{Events, Interest, Poll, Token};
 use serde::{Deserialize, Serialize};
 use ros2_client::{
   Context, Message, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping, ServiceTypeName,
@@ -39,7 +39,7 @@ fn main() {
   let service_mapping = service_mapping_from_env();
   println!(">>> using ServiceMapping::{service_mapping:?}");
 
-  let server = node
+  let mut server = node
     .create_server::<AddTwoIntsRequest, AddTwoIntsResponse>(
       service_mapping,
       &Name::new("/", "add_two_ints").unwrap(),
@@ -51,10 +51,11 @@ fn main() {
 
   println!(">>> ros2_service server created");
 
-  let poll = Poll::new().unwrap();
+  let mut poll = Poll::new().unwrap();
 
   poll
-    .register(&server, Token(1), Ready::readable(), PollOpt::edge())
+    .registry()
+    .register(&mut server, Token(1), Interest::READABLE)
     .unwrap();
 
   loop {
@@ -64,9 +65,10 @@ fn main() {
 
     for event in events.iter() {
       match event.token() {
-        Token(1) => match server.receive_request() {
-          Ok(req_option) => match req_option {
-            Some((id, request)) => {
+        // Edge-triggered: answer every request that has arrived.
+        Token(1) => loop {
+          match server.receive_request() {
+            Ok(Some((id, request))) => {
               println!(">>> Request received - id: {id:?}, request: {request:?}");
               let sum = request.a + request.b;
               let response = AddTwoIntsResponse { sum };
@@ -76,12 +78,11 @@ fn main() {
                 Err(e) => error!(">>> Server response error: {e:?}"),
               }
             }
-            None => {
-              println!(">>> No request available.")
+            Ok(None) => break,
+            Err(e) => {
+              println!(">>> error with response handling, e: {e:?}");
+              break;
             }
-          },
-          Err(e) => {
-            println!(">>> error with response handling, e: {e:?}")
           }
         },
         _ => println!(">>> Unknown poll token {:?}", event.token()),

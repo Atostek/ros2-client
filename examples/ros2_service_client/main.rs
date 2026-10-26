@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use rustdds::mio::{Events, Poll, PollOpt, Ready, Token};
+use rustdds::mio1::{Events, Interest, Poll, Token};
 use serde::{Deserialize, Serialize};
 use ros2_client::{
   Context, Message, Name, Node, NodeName, NodeOptions, QosProfile, ServiceMapping, ServiceTypeName,
@@ -43,7 +43,7 @@ fn main() {
   let service_mapping = service_mapping_from_env();
   println!(">>> using ServiceMapping::{service_mapping:?}");
 
-  let client = node
+  let mut client = node
     .create_client::<AddTwoIntsRequest, AddTwoIntsResponse>(
       service_mapping,
       &Name::new("/", "add_two_ints").unwrap(),
@@ -55,10 +55,11 @@ fn main() {
 
   println!(">>> ros2_service client created");
 
-  let poll = Poll::new().unwrap();
+  let mut poll = Poll::new().unwrap();
 
   poll
-    .register(&client, RESPONSE_TOKEN, Ready::readable(), PollOpt::edge())
+    .registry()
+    .register(&mut client, RESPONSE_TOKEN, Interest::READABLE)
     .unwrap();
 
   let mut request_generator = 0;
