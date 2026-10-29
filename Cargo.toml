@@ -103,10 +103,12 @@ default = ["dds", "jazzy", "mio_1", "mio_06"]
 
 # RustDDS backend (feature `dds`). Optional so the `zenoh` backend can be built
 # without pulling RustDDS in.
-# rustdds = { path = "../RustDDS", default-features = false, optional = true } # dev setting
 # mio 1.2 is always part of RustDDS. Disable its default `mio_06` feature here
 # so this crate's `mio_06` feature is what opts into mio 0.6.
+
+# rustdds = { path = "../RustDDS", default-features = false, optional = true } # dev setting
 rustdds = { version = "0.15.0", optional = true, default-features = false }
+
 # Direct dependency so `derive(CdrEncodingSize)` on `Gid` can see the crate.
 cdr-encoding-size = { version = "^0.5", optional = true }
 
