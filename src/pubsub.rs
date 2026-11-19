@@ -54,8 +54,20 @@ impl<M: Serialize> Publisher<M> {
   /// This is the count the underlying DataWriter keeps itself, so it does not
   /// depend on a [`Spinner`](crate::dds::Spinner) processing discovery events.
   /// `my_node` is not used. The parameter is kept for compatibility, and
-  /// because the Zenoh backend needs it.
+  /// because the Zenoh backend needs it. See
+  /// [`matched_subscription_count`](Self::matched_subscription_count) for the
+  /// same count without it.
   pub fn get_subscription_count(&self, _my_node: &Node) -> usize {
+    self.matched_subscription_count()
+  }
+
+  /// Returns the count of currently matched subscribers, like
+  /// [`get_subscription_count`](Self::get_subscription_count), without
+  /// needing the Node.
+  ///
+  /// It takes no lock, so it is cheap enough to call before every `publish`,
+  /// for example to not build a message that nobody would receive.
+  pub fn matched_subscription_count(&self) -> usize {
     let matched = self.datawriter.get_publication_matched_status();
     usize::try_from(matched.current.count()).unwrap_or(0)
   }
@@ -175,8 +187,17 @@ where
   /// This is the count the underlying DataReader keeps itself, so it does not
   /// depend on a [`Spinner`](crate::dds::Spinner) processing discovery events.
   /// `my_node` is not used. The parameter is kept for compatibility, and
-  /// because the Zenoh backend needs it.
+  /// because the Zenoh backend needs it. See
+  /// [`matched_publisher_count`](Self::matched_publisher_count) for the same
+  /// count without it.
   pub fn get_publisher_count(&self, _my_node: &Node) -> usize {
+    self.matched_publisher_count()
+  }
+
+  /// Returns the count of currently matched Publishers, like
+  /// [`get_publisher_count`](Self::get_publisher_count), without needing the
+  /// Node.
+  pub fn matched_publisher_count(&self) -> usize {
     let matched = self.datareader.get_subscription_matched_status();
     usize::try_from(matched.current.count()).unwrap_or(0)
   }

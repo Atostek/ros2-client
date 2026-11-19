@@ -105,3 +105,24 @@ fn subscription_count_drops_when_the_subscription_is_gone() {
     "the publisher still counts the subscription that is gone"
   );
 }
+
+// The same counts, for code that holds the Publisher or the Subscription but
+// not the Node.
+#[test]
+fn matched_counts_need_no_node() {
+  let (talker_context, listener_context) = (context(), context());
+  let mut talker = node(&talker_context, "count_no_node_talker");
+  let publisher = publisher(&mut talker, "count_no_node_topic");
+  let mut listener = node(&listener_context, "count_no_node_listener");
+  let subscription = subscription(&mut listener, "count_no_node_topic");
+  assert_eq!(publisher.matched_subscription_count(), 0);
+
+  assert!(
+    wait_for(|| publisher.matched_subscription_count() == 1),
+    "the publisher never counted the subscription"
+  );
+  assert!(
+    wait_for(|| subscription.matched_publisher_count() == 1),
+    "the subscription never counted the publisher"
+  );
+}
