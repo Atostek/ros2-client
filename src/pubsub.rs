@@ -183,6 +183,26 @@ where
   pub fn wait_for_publisher(&self, my_node: &Node) -> impl Future<Output = ()> + Send {
     my_node.wait_for_writer(self.guid())
   }
+
+  /// Like [`wait_for_publisher`](Self::wait_for_publisher), and for a
+  /// reliable Subscription also until the Publisher has matched it on its
+  /// side, so the Publisher's next samples reach it.
+  pub(crate) fn wait_for_confirmed_publisher(
+    &self,
+    my_node: &Node,
+  ) -> impl Future<Output = ()> + Send {
+    let matched = my_node.wait_for_writer(self.guid());
+    let reliable = crate::confirmations::is_reliable(self.datareader.qos());
+    let guid = self.guid();
+    async move {
+      matched.await;
+      // Start the bounded confirmation wait only now; a confirmation that
+      // came earlier is recorded and still counts.
+      if reliable {
+        my_node.wait_for_confirmation(guid).await
+      }
+    }
+  }
 }
 
 // helper

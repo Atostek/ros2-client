@@ -7,7 +7,8 @@ use std::{
 };
 
 use futures::{
-  Future, FutureExt, Stream, StreamExt, pin_mut, stream, stream::FusedStream, task, task::Poll,
+  Future, FutureExt, Stream, StreamExt, future, pin_mut, stream, stream::FusedStream, task,
+  task::Poll,
 };
 use async_channel::Receiver;
 #[allow(unused_imports)]
@@ -18,6 +19,7 @@ use rustdds::*;
 use crate::{
   action::*,
   action_msgs, builtin_interfaces,
+  confirmations::Confirmations,
   context::{Context, DEFAULT_SUBSCRIPTION_QOS},
   entities_info::{NodeEntitiesInfo, ParticipantEntitiesInfo},
   error::{CreateError, CreateResult},
@@ -116,6 +118,11 @@ fn publish_parameter_changes(
 
 // ----------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------
+/// How long [`Node::wait_for_confirmation`] waits for the remote side of a
+/// match, measured from when it is called. The two sides of a match are
+/// normally confirmed within milliseconds of each other.
+const CONFIRMATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+
 /// Spinner implements Node's background event loop.
 ///
 /// At the moment there are only Discovery (DDS and ROS 2 Graph) event
@@ -127,6 +134,7 @@ pub struct Spinner {
 
   readers_to_remote_writers: Arc<Mutex<BTreeMap<GUID, BTreeSet<GUID>>>>,
   writers_to_remote_readers: Arc<Mutex<BTreeMap<GUID, BTreeSet<GUID>>>>,
+  confirmations: Confirmations,
   // Keep track of ros_discovery_info
   external_nodes: Arc<Mutex<BTreeMap<Gid, Vec<NodeEntitiesInfo>>>>,
   status_event_senders: Arc<Mutex<Vec<async_channel::Sender<NodeEvent>>>>,
@@ -366,7 +374,16 @@ impl Spinner {
                 .or_insert(BTreeSet::from([remote_writer]));
               Some(GraphEvent::EntityDeclared(guid_entity(EntityKind::Publisher, remote_writer)))
             }
+            DomainParticipantStatusEvent::RemoteWriterConfirmed { local_reader, remote_writer } => {
+              self.confirmations.confirm(local_reader, remote_writer);
+              None
+            }
+            DomainParticipantStatusEvent::RemoteReaderConfirmed { local_writer, remote_reader } => {
+              self.confirmations.confirm(local_writer, remote_reader);
+              None
+            }
             DomainParticipantStatusEvent::ReaderLost {guid, ..} => {
+              self.confirmations.lost(guid);
               for readers
               in self.writers_to_remote_readers.lock().unwrap().values_mut() {
                 readers.remove(&guid);
@@ -374,6 +391,7 @@ impl Spinner {
               Some(GraphEvent::EntityUndeclared(guid_entity(EntityKind::Subscription, guid)))
             }
             DomainParticipantStatusEvent::WriterLost {guid, ..} => {
+              self.confirmations.lost(guid);
               for writers
               in self.readers_to_remote_writers.lock().unwrap().values_mut() {
                 writers.remove(&guid);
@@ -529,6 +547,8 @@ pub struct Node {
   // Map values are lists of matched Publishers / Subscriptions.
   readers_to_remote_writers: Arc<Mutex<BTreeMap<GUID, BTreeSet<GUID>>>>,
   writers_to_remote_readers: Arc<Mutex<BTreeMap<GUID, BTreeSet<GUID>>>>,
+  // ...and which remote endpoints have matched ours on their side too.
+  confirmations: Confirmations,
 
   // Keep track of ros_discovery_info
   external_nodes: Arc<Mutex<BTreeMap<Gid, Vec<NodeEntitiesInfo>>>>,
@@ -583,6 +603,7 @@ impl Node {
       writers: BTreeSet::new(),
       readers_to_remote_writers: Arc::new(Mutex::new(BTreeMap::new())),
       writers_to_remote_readers: Arc::new(Mutex::new(BTreeMap::new())),
+      confirmations: Confirmations::default(),
       external_nodes: Arc::new(Mutex::new(BTreeMap::new())),
       suppress_node_info_updates: false,
       stop_spin_sender: None,
@@ -724,6 +745,7 @@ impl Node {
       stop_spin_receiver,
       readers_to_remote_writers: Arc::clone(&self.readers_to_remote_writers),
       writers_to_remote_readers: Arc::clone(&self.writers_to_remote_readers),
+      confirmations: self.confirmations.clone(),
       external_nodes: Arc::clone(&self.external_nodes),
       status_event_senders: Arc::clone(&self.status_event_senders),
       sim_time: Arc::clone(&self.sim_time),
@@ -930,6 +952,37 @@ impl Node {
         );
         ReaderWait::Ready
       }
+    }
+  }
+
+  /// Resolves once a remote endpoint has matched the local endpoint `local`
+  /// on its side too, as reported by RustDDS (`RemoteWriterConfirmed` for a
+  /// local Reader, `RemoteReaderConfirmed` for a local Writer). Matching is
+  /// asymmetric: `wait_for_writer` / `wait_for_reader` only cover our side.
+  ///
+  /// Only reliable endpoints get confirmed. A confirmation event can be lost,
+  /// so this gives up after [`CONFIRMATION_TIMEOUT`], which is what waiting
+  /// for the local match alone used to give. Without a Spinner nothing is
+  /// tracked, so this resolves immediately (an error is logged).
+  pub(crate) fn wait_for_confirmation(
+    &self,
+    local: GUID,
+  ) -> impl Future<Output = ()> + Send + 'static {
+    if self.have_spinner() {
+      let confirmed = self.confirmations.wait_at_most(local, CONFIRMATION_TIMEOUT);
+      future::Either::Left(async move {
+        if !confirmed.await {
+          info!(
+            "{local:?}: the remote side has not confirmed the match after {CONFIRMATION_TIMEOUT:?}; \
+             going on"
+          );
+        }
+      })
+    } else {
+      error!(
+        "wait_for_confirmation requires a running Spinner (see Node::spinner); resolving immediately."
+      );
+      future::Either::Right(future::ready(()))
     }
   }
 

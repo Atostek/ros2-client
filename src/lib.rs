@@ -158,6 +158,8 @@ pub mod service;
 pub mod steady_time;
 mod wide_string;
 
+#[cfg(feature = "dds")]
+pub(crate) mod confirmations;
 #[doc(hidden)]
 #[cfg(feature = "dds")]
 pub(crate) mod node;
