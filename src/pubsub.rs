@@ -22,19 +22,50 @@ use crate::error::{ReadError, ReadResult, WriteResult};
 /// DDS
 pub struct Publisher<M: Serialize> {
   datawriter: no_key::DataWriterCdr<M>,
+  // Whether a message may be left unwritten while no subscription is matched.
+  // See `publish`.
+  skip_unmatched: bool,
 }
 
 impl<M: Serialize> Publisher<M> {
   // These must be created from Node
   pub(crate) fn new(datawriter: no_key::DataWriterCdr<M>) -> Publisher<M> {
-    Publisher { datawriter }
+    let qos = rustdds::qos::HasQoSPolicy::qos(&datawriter);
+    // A volatile topic keeps nothing for subscriptions that match later, so a
+    // message written while none is matched reaches nobody. Any other
+    // durability does keep it. And a write is what asserts manual liveliness,
+    // so a publisher with that always writes.
+    let volatile = matches!(qos.durability(), None | Some(policy::Durability::Volatile));
+    let automatic_liveliness = matches!(
+      qos.liveliness(),
+      None | Some(policy::Liveliness::Automatic { .. })
+    );
+    Publisher {
+      datawriter,
+      skip_unmatched: volatile && automatic_liveliness,
+    }
   }
 
+  /// Publishes `message`.
+  ///
+  /// A message that would reach nobody is not written: while no subscription
+  /// is matched, a message for a volatile topic is dropped here, before it is
+  /// serialized, and the call returns `Ok`. A transient-local topic keeps its
+  /// messages for later subscriptions, so they are always written, and so are
+  /// those of a publisher with manual liveliness.
   pub fn publish(&self, message: M) -> WriteResult<(), M> {
+    if self.nobody_would_receive() {
+      return Ok(());
+    }
     self
       .datawriter
       .write(message, Some(Timestamp::now()))
       .map_err(Into::into)
+  }
+
+  // True if a message published now would reach nobody. See `publish`.
+  fn nobody_would_receive(&self) -> bool {
+    self.skip_unmatched && self.matched_subscription_count() == 0
   }
 
   pub fn assert_liveliness(&self) -> WriteResult<(), ()> {
@@ -51,10 +82,29 @@ impl<M: Serialize> Publisher<M> {
 
   /// Returns the count of currently matched subscribers.
   ///
-  /// `my_node` must be the Node that created this Publisher, or the result is
-  /// undefined.
-  pub fn get_subscription_count(&self, my_node: &Node) -> usize {
-    my_node.get_subscription_count(self.guid())
+  /// This is the count the underlying DataWriter keeps itself, so it does not
+  /// depend on a [`Spinner`](crate::dds::Spinner) processing discovery events.
+  /// `my_node` is not used. The parameter is kept for compatibility, and
+  /// because the Zenoh backend needs it. See
+  /// [`matched_subscription_count`](Self::matched_subscription_count) for the
+  /// same count without it.
+  pub fn get_subscription_count(&self, _my_node: &Node) -> usize {
+    self.matched_subscription_count()
+  }
+
+  /// Returns the count of currently matched subscribers, like
+  /// [`get_subscription_count`](Self::get_subscription_count), without
+  /// needing the Node.
+  ///
+  /// It is cheap enough to call before every `publish`, for example to not
+  /// even build a message that nobody would receive. Leaving a message out on
+  /// a count of zero is right only where [`publish`](Self::publish) would drop
+  /// it too: on a volatile topic, for a publisher with automatic liveliness. A
+  /// transient-local topic keeps the message for subscriptions that match
+  /// later, and with manual liveliness a write is what asserts it.
+  pub fn matched_subscription_count(&self) -> usize {
+    let matched = self.datawriter.get_publication_matched_status();
+    usize::try_from(matched.current.count()).unwrap_or(0)
   }
 
   /// Waits until there is at least one matched subscription on this topic,
@@ -66,7 +116,12 @@ impl<M: Serialize> Publisher<M> {
     my_node.wait_for_reader(self.guid())
   }
 
+  /// Publishes `message`, like [`publish`](Self::publish), and waits if the
+  /// DataWriter cannot take it at once.
   pub async fn async_publish(&self, message: M) -> WriteResult<(), M> {
+    if self.nobody_would_receive() {
+      return Ok(());
+    }
     self
       .datawriter
       .async_write(message, Some(Timestamp::now()))
@@ -169,10 +224,22 @@ where
 
   /// Returns the count of currently matched Publishers.
   ///
-  /// `my_node` must be the Node that created this Subscription, or the result
-  /// is undefined.
-  pub fn get_publisher_count(&self, my_node: &Node) -> usize {
-    my_node.get_publisher_count(self.guid())
+  /// This is the count the underlying DataReader keeps itself, so it does not
+  /// depend on a [`Spinner`](crate::dds::Spinner) processing discovery events.
+  /// `my_node` is not used. The parameter is kept for compatibility, and
+  /// because the Zenoh backend needs it. See
+  /// [`matched_publisher_count`](Self::matched_publisher_count) for the same
+  /// count without it.
+  pub fn get_publisher_count(&self, _my_node: &Node) -> usize {
+    self.matched_publisher_count()
+  }
+
+  /// Returns the count of currently matched Publishers, like
+  /// [`get_publisher_count`](Self::get_publisher_count), without needing the
+  /// Node.
+  pub fn matched_publisher_count(&self) -> usize {
+    let matched = self.datareader.get_subscription_matched_status();
+    usize::try_from(matched.current.count()).unwrap_or(0)
   }
 
   /// Waits until there is at least one matched publisher on this topic,
