@@ -22,19 +22,50 @@ use crate::error::{ReadError, ReadResult, WriteResult};
 /// DDS
 pub struct Publisher<M: Serialize> {
   datawriter: no_key::DataWriterCdr<M>,
+  // Whether a message may be left unwritten while no subscription is matched.
+  // See `publish`.
+  skip_unmatched: bool,
 }
 
 impl<M: Serialize> Publisher<M> {
   // These must be created from Node
   pub(crate) fn new(datawriter: no_key::DataWriterCdr<M>) -> Publisher<M> {
-    Publisher { datawriter }
+    let qos = rustdds::qos::HasQoSPolicy::qos(&datawriter);
+    // A volatile topic keeps nothing for subscriptions that match later, so a
+    // message written while none is matched reaches nobody. Any other
+    // durability does keep it. And a write is what asserts manual liveliness,
+    // so a publisher with that always writes.
+    let volatile = matches!(qos.durability(), None | Some(policy::Durability::Volatile));
+    let automatic_liveliness = matches!(
+      qos.liveliness(),
+      None | Some(policy::Liveliness::Automatic { .. })
+    );
+    Publisher {
+      datawriter,
+      skip_unmatched: volatile && automatic_liveliness,
+    }
   }
 
+  /// Publishes `message`.
+  ///
+  /// A message that would reach nobody is not written: while no subscription
+  /// is matched, a message for a volatile topic is dropped here, before it is
+  /// serialized, and the call returns `Ok`. A transient-local topic keeps its
+  /// messages for later subscriptions, so they are always written, and so are
+  /// those of a publisher with manual liveliness.
   pub fn publish(&self, message: M) -> WriteResult<(), M> {
+    if self.nobody_would_receive() {
+      return Ok(());
+    }
     self
       .datawriter
       .write(message, Some(Timestamp::now()))
       .map_err(Into::into)
+  }
+
+  // True if a message published now would reach nobody. See `publish`.
+  fn nobody_would_receive(&self) -> bool {
+    self.skip_unmatched && self.matched_subscription_count() == 0
   }
 
   pub fn assert_liveliness(&self) -> WriteResult<(), ()> {
@@ -81,7 +112,12 @@ impl<M: Serialize> Publisher<M> {
     my_node.wait_for_reader(self.guid())
   }
 
+  /// Publishes `message`, like [`publish`](Self::publish), and waits if the
+  /// DataWriter cannot take it at once.
   pub async fn async_publish(&self, message: M) -> WriteResult<(), M> {
+    if self.nobody_would_receive() {
+      return Ok(());
+    }
     self
       .datawriter
       .async_write(message, Some(Timestamp::now()))
