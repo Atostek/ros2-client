@@ -13,6 +13,7 @@ use crate::{
   error::{ReadResult, WriteResult},
   message::Message,
   names::Name,
+  node::Node,
   pubsub::Subscription,
   service::{CallServiceError, Client, request_id::RmwRequestId},
   unique_identifier_msgs,
@@ -68,6 +69,34 @@ where
   }
   pub fn status_subscription(&self) -> &Subscription<action_msgs::GoalStatusArray> {
     &self.my_status_subscription
+  }
+
+  /// Waits until an Action Server is available, as rcl decides it
+  /// (`rcl_action_server_is_available`): its goal, cancel and result services
+  /// are (see [`Client::wait_for_service`]), and its feedback and status
+  /// Publishers have matched this client. Matches are awaited on both sides,
+  /// so a goal sent afterwards is not dropped, and its response, feedback and
+  /// status are not lost to discovery.
+  ///
+  /// Possibly waits forever; without a Spinner on `my_node` it resolves at
+  /// once.
+  pub async fn wait_for_action_server(&self, my_node: &Node)
+  where
+    G: 'static,
+    R: 'static,
+    F: 'static,
+  {
+    futures::join!(
+      self.my_goal_client.wait_for_service(my_node),
+      self.my_cancel_client.wait_for_service(my_node),
+      self.my_result_client.wait_for_service(my_node),
+      self
+        .my_feedback_subscription
+        .wait_for_confirmed_publisher(my_node),
+      self
+        .my_status_subscription
+        .wait_for_confirmed_publisher(my_node),
+    );
   }
 
   /// Returns and id of the Request and id for the Goal.

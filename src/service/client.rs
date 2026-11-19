@@ -6,12 +6,13 @@ use std::sync::atomic;
 use rustdds::mio::{Evented, Poll, PollOpt, Ready, Token};
 #[cfg(feature = "mio_1")]
 use rustdds::mio1;
-use rustdds::{rpc::*, *};
+use rustdds::{qos::HasQoSPolicy, rpc::*, *};
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 use futures::{StreamExt, join, pin_mut};
 
 use crate::{
+  confirmations::is_reliable,
   error::{CreateResult, ReadError, ReadResult, WriteError, WriteResult},
   gid::Gid,
   message::Message,
@@ -218,6 +219,10 @@ where
   /// It is enough that someone has subscribed the Requests, and someone is
   /// a publisher for Responses.
   ///
+  /// For reliable Request and Response topics it also waits until the Server
+  /// side has matched this Client: discovery is asymmetric, and a request
+  /// sent before then can be dropped, or its response lost.
+  ///
   /// If the Node has no background Spinner running, this resolves immediately
   /// (an error is logged), since without a Spinner no match events are
   /// delivered.
@@ -225,6 +230,26 @@ where
     join!(
       my_node.wait_for_reader(self.request_sender.guid()),
       my_node.wait_for_writer(self.response_receiver.guid())
+    );
+    // Matching is asymmetric: the Server may not have matched our Request
+    // Writer (and would drop the request) or our Response Reader (and the
+    // response would be lost) yet. Wait until it has, for the reliable ones;
+    // only those get confirmed.
+    let request_writer = is_reliable(&self.request_sender.qos())
+      .then(|| my_node.wait_for_confirmation(self.request_sender.guid()));
+    let response_reader = is_reliable(self.response_receiver.qos())
+      .then(|| my_node.wait_for_confirmation(self.response_receiver.guid()));
+    join!(
+      async {
+        if let Some(wait) = request_writer {
+          wait.await
+        }
+      },
+      async {
+        if let Some(wait) = response_reader {
+          wait.await
+        }
+      }
     );
   }
 
