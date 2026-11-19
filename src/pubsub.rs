@@ -96,8 +96,12 @@ impl<M: Serialize> Publisher<M> {
   /// [`get_subscription_count`](Self::get_subscription_count), without
   /// needing the Node.
   ///
-  /// It takes no lock, so it is cheap enough to call before every `publish`,
-  /// for example to not build a message that nobody would receive.
+  /// It is cheap enough to call before every `publish`, for example to not
+  /// even build a message that nobody would receive. Leaving a message out on
+  /// a count of zero is right only where [`publish`](Self::publish) would drop
+  /// it too: on a volatile topic, for a publisher with automatic liveliness. A
+  /// transient-local topic keeps the message for subscriptions that match
+  /// later, and with manual liveliness a write is what asserts it.
   pub fn matched_subscription_count(&self) -> usize {
     let matched = self.datawriter.get_publication_matched_status();
     usize::try_from(matched.current.count()).unwrap_or(0)
