@@ -121,10 +121,10 @@ fn matched_counts_need_no_node() {
   let (talker_context, listener_context) = (context(), context());
   let mut talker = node(&talker_context, "count_no_node_talker");
   let publisher = publisher(&mut talker, "count_no_node_topic");
-  let mut listener = node(&listener_context, "count_no_node_listener");
-  let subscription = subscription(&mut listener, "count_no_node_topic");
   assert_eq!(publisher.matched_subscription_count(), 0);
 
+  let mut listener = node(&listener_context, "count_no_node_listener");
+  let subscription = subscription(&mut listener, "count_no_node_topic");
   assert!(
     wait_for(|| publisher.matched_subscription_count() == 1),
     "the publisher never counted the subscription"
