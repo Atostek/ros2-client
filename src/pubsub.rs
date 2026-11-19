@@ -51,10 +51,13 @@ impl<M: Serialize> Publisher<M> {
 
   /// Returns the count of currently matched subscribers.
   ///
-  /// `my_node` must be the Node that created this Publisher, or the result is
-  /// undefined.
-  pub fn get_subscription_count(&self, my_node: &Node) -> usize {
-    my_node.get_subscription_count(self.guid())
+  /// This is the count the underlying DataWriter keeps itself, so it does not
+  /// depend on a [`Spinner`](crate::dds::Spinner) processing discovery events.
+  /// `my_node` is not used. The parameter is kept for compatibility, and
+  /// because the Zenoh backend needs it.
+  pub fn get_subscription_count(&self, _my_node: &Node) -> usize {
+    let matched = self.datawriter.get_publication_matched_status();
+    usize::try_from(matched.current.count()).unwrap_or(0)
   }
 
   /// Waits until there is at least one matched subscription on this topic,
@@ -169,10 +172,13 @@ where
 
   /// Returns the count of currently matched Publishers.
   ///
-  /// `my_node` must be the Node that created this Subscription, or the result
-  /// is undefined.
-  pub fn get_publisher_count(&self, my_node: &Node) -> usize {
-    my_node.get_publisher_count(self.guid())
+  /// This is the count the underlying DataReader keeps itself, so it does not
+  /// depend on a [`Spinner`](crate::dds::Spinner) processing discovery events.
+  /// `my_node` is not used. The parameter is kept for compatibility, and
+  /// because the Zenoh backend needs it.
+  pub fn get_publisher_count(&self, _my_node: &Node) -> usize {
+    let matched = self.datareader.get_subscription_matched_status();
+    usize::try_from(matched.current.count()).unwrap_or(0)
   }
 
   /// Waits until there is at least one matched publisher on this topic,

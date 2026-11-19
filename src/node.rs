@@ -933,41 +933,15 @@ impl Node {
     }
   }
 
-  pub(crate) fn get_publisher_count(&self, subscription_guid: GUID) -> usize {
-    self
-      .readers_to_remote_writers
-      .lock()
-      .unwrap()
-      .get(&subscription_guid)
-      .map(BTreeSet::len)
-      .unwrap_or_else(|| {
-        error!("get_publisher_count: Subscriber {subscription_guid:?} not known to node.");
-        0
-      })
-  }
-
-  pub(crate) fn get_subscription_count(&self, publisher_guid: GUID) -> usize {
-    self
-      .writers_to_remote_readers
-      .lock()
-      .unwrap()
-      .get(&publisher_guid)
-      .map(BTreeSet::len)
-      .unwrap_or_else(|| {
-        error!("get_subscription_count: Publisher {publisher_guid:?} not known to node.");
-        0
-      })
-  }
-
   /// Number of publishers currently discovered on `topic` (a fully-qualified
   /// ROS 2 topic name, e.g. `/chatter`). API parity with the Zenoh backend's
   /// `Node`/`Context::publisher_count`.
   ///
   /// **Best-effort / limitation:** this is a different (and less exact)
-  /// mechanism than the GUID-keyed
-  /// `get_publisher_count`/`get_subscription_count` used internally by
+  /// mechanism than the matched counts of
   /// [`Publisher::get_subscription_count`](crate::Publisher::get_subscription_count)
-  /// and friends: it counts DDS SEDP-discovered writers
+  /// and friends, which the DDS endpoints keep themselves: it counts DDS
+  /// SEDP-discovered writers
   /// ([`rustdds::discovery::DiscoveredWriterData`]) whose (DDS-mangled) topic
   /// name matches `topic`, via
   /// [`rustdds::DomainParticipant::discovered_writers`]. It only recognizes
