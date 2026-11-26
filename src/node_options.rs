@@ -37,6 +37,8 @@ pub struct NodeOptions {
   pub(crate) allow_undeclared_parameters: bool,
   pub(crate) parameter_validator: Option<Box<ParameterFunc>>,
   pub(crate) parameter_set_action: Option<Box<ParameterFunc>>,
+  #[cfg(feature = "dds")]
+  pub(crate) parameter_service_mapping: crate::service::ServiceMapping,
 }
 
 impl NodeOptions {
@@ -52,6 +54,8 @@ impl NodeOptions {
       allow_undeclared_parameters: false,
       parameter_validator: None,
       parameter_set_action: None,
+      #[cfg(feature = "dds")]
+      parameter_service_mapping: crate::service::ServiceMapping::Enhanced,
     }
   }
   pub fn enable_rosout(self, enable_rosout: bool) -> NodeOptions {
@@ -114,6 +118,21 @@ impl NodeOptions {
   pub fn parameter_set_action(mut self, action: Box<ParameterFunc>) -> NodeOptions {
     self.parameter_set_action = Some(action);
     self
+  }
+
+  /// The [`ServiceMapping`](crate::service::ServiceMapping) of the six
+  /// parameter services (DDS only). The default is `Enhanced`, which Fast DDS
+  /// uses; clients on CycloneDDS (`rmw_cyclonedds_cpp`) expect `Cyclone`, so a
+  /// node they should reach sets it to match the RMW it runs with.
+  #[cfg(feature = "dds")]
+  pub fn parameter_service_mapping(
+    self,
+    parameter_service_mapping: crate::service::ServiceMapping,
+  ) -> NodeOptions {
+    NodeOptions {
+      parameter_service_mapping,
+      ..self
+    }
   }
 }
 
