@@ -655,7 +655,7 @@ impl Node {
     self.suppress_node_info_updates(true);
 
     let parameter_servers = if self.options.start_parameter_services {
-      let service_mapping = ServiceMapping::Enhanced; //TODO: parameterize
+      let service_mapping = self.options.parameter_service_mapping;
       let get_parameters_server = self.create_server(
         service_mapping,
         &Name::new(&node_name, "get_parameters").unwrap(),
@@ -1733,6 +1733,71 @@ mod tests {
         .set_parameter("q", ParameterValue::String("x".into()))
         .is_ok()
     );
+  }
+
+  /// The parameter services use the mapping set in `NodeOptions`, so a
+  /// client with the same mapping (here CycloneDDS's) gets answers.
+  #[test]
+  fn parameter_services_use_the_configured_service_mapping() {
+    use std::time::Duration;
+
+    use crate::{
+      ContextOptions, Name, ServiceMapping, ServiceTypeName,
+      parameters::raw::ParameterType,
+      rcl_interfaces::{GetParametersRequest, GetParametersResponse},
+    };
+
+    let context = || Context::with_options(ContextOptions::new().domain_id(57)).unwrap();
+    let mut host = Node::new(
+      NodeName::new("/", "cyclone_params").unwrap(),
+      NodeOptions::new()
+        .parameter_service_mapping(ServiceMapping::Cyclone)
+        .declare_parameter("rate_hz", ParameterValue::Integer(5)),
+      context(),
+    )
+    .unwrap();
+    let spinner = host.spinner().unwrap();
+    std::thread::spawn(move || futures::executor::block_on(spinner.spin()));
+
+    let mut client_node = Node::new(
+      NodeName::new("/", "cyclone_param_client").unwrap(),
+      NodeOptions::new().start_parameter_services(false),
+      context(),
+    )
+    .unwrap();
+    let qos = crate::QosProfile::publisher_default();
+    let client = client_node
+      .create_client::<GetParametersRequest, GetParametersResponse>(
+        ServiceMapping::Cyclone,
+        &Name::new("/cyclone_params", "get_parameters").unwrap(),
+        &ServiceTypeName::new("rcl_interfaces", "GetParameters"),
+        qos.clone(),
+        qos,
+      )
+      .unwrap();
+
+    // Resent until answered: the first request can go out before the
+    // endpoints have matched.
+    let answer = (0..40)
+      .find_map(|_| {
+        let id = client
+          .send_request(GetParametersRequest {
+            names: vec!["rate_hz".to_owned()],
+          })
+          .ok()?;
+        let deadline = std::time::Instant::now() + Duration::from_millis(500);
+        while std::time::Instant::now() < deadline {
+          match client.receive_response() {
+            Ok(Some((answered, response))) if answered == id => return Some(response),
+            _ => std::thread::sleep(Duration::from_millis(10)),
+          }
+        }
+        None
+      })
+      .expect("no answer from the Cyclone-mapped parameter service");
+    assert_eq!(answer.values.len(), 1);
+    assert_eq!(answer.values[0].ptype, ParameterType::INTEGER);
+    assert_eq!(answer.values[0].int_value, 5);
   }
 
   #[test]
