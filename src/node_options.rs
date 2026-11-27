@@ -12,6 +12,8 @@
 //! `src/zenoh_backend/node.rs`). Fields not honored by a backend are
 //! documented as no-ops there (logged once at `debug` level).
 
+use std::sync::Arc;
+
 use crate::parameters::{Parameter, ParameterValue, SetParametersResult};
 
 /// Signature of a user-supplied parameter validator / set-action callback
@@ -22,6 +24,10 @@ use crate::parameters::{Parameter, ParameterValue, SetParametersResult};
 /// stores it (for API parity) but does not yet call it (logged once at
 /// `debug` level if set).
 pub(crate) type ParameterFunc = dyn Fn(&str, &ParameterValue) -> SetParametersResult + Send + Sync;
+
+/// Signature of a type hash resolver (see
+/// [`NodeOptions::type_hash_resolver`]): DDS type name to REP-2016 type hash.
+pub(crate) type TypeHashFunc = dyn Fn(&str) -> Option<String> + Send + Sync;
 
 /// Configuration of a [`Node`](crate::Node). This is a builder-like struct.
 ///
@@ -37,6 +43,7 @@ pub struct NodeOptions {
   pub(crate) allow_undeclared_parameters: bool,
   pub(crate) parameter_validator: Option<Box<ParameterFunc>>,
   pub(crate) parameter_set_action: Option<Box<ParameterFunc>>,
+  pub(crate) type_hash_resolver: Option<Arc<TypeHashFunc>>,
 }
 
 impl NodeOptions {
@@ -52,6 +59,7 @@ impl NodeOptions {
       allow_undeclared_parameters: false,
       parameter_validator: None,
       parameter_set_action: None,
+      type_hash_resolver: None,
     }
   }
   pub fn enable_rosout(self, enable_rosout: bool) -> NodeOptions {
@@ -113,6 +121,30 @@ impl NodeOptions {
 
   pub fn parameter_set_action(mut self, action: Box<ParameterFunc>) -> NodeOptions {
     self.parameter_set_action = Some(action);
+    self
+  }
+
+  /// Announce the REP-2016 type hash of the node's DDS endpoints.
+  ///
+  /// From Iron on, rmw puts `typehash=RIHS01_<hash>;` in the USER_DATA QoS of
+  /// every DDS reader and writer, and ROS 2 tools such as `ros2 topic info -v`
+  /// show it. The node calls `resolver` with the DDS type name of each
+  /// endpoint it creates, for example `std_msgs::msg::dds_::String_` or
+  /// `example_interfaces::srv::dds_::AddTwoInts_Request_`, including its
+  /// `/rosout` and `/parameter_events` writers and its parameter services.
+  /// `resolver` returns the hash of that type (`RIHS01_…`), or `None` to
+  /// announce no hash for it.
+  ///
+  /// The default is no resolver: endpoints announce no type hash, as on
+  /// Humble.
+  ///
+  /// Only the DDS backend uses this. The Zenoh backend puts its own type
+  /// hashes in its key expressions.
+  pub fn type_hash_resolver(
+    mut self,
+    resolver: impl Fn(&str) -> Option<String> + Send + Sync + 'static,
+  ) -> NodeOptions {
+    self.type_hash_resolver = Some(Arc::new(resolver));
     self
   }
 }

@@ -26,7 +26,7 @@ use crate::{
   log::Log,
   message::Message,
   names::*,
-  node_options::NodeOptions,
+  node_options::{NodeOptions, TypeHashFunc},
   parameters::*,
   pubsub::{Publisher, Subscription},
   qos::{History, QosProfile},
@@ -138,6 +138,7 @@ pub struct Spinner {
   parameter_events_writer: Arc<Publisher<raw::ParameterEvent>>,
   parameters: Arc<ParameterStore>,
   fully_qualified_node_name: String,
+  type_hash_resolver: Option<Arc<TypeHashFunc>>,
 }
 
 async fn next_if_some<S>(s: &mut Option<S>) -> S::Item
@@ -160,13 +161,21 @@ impl Spinner {
     let ros_discovery_topic = self.ros_context.ros_discovery_topic();
     let ros_discovery_reader = self
       .ros_context
-      .create_subscription::<ParticipantEntitiesInfo>(&ros_discovery_topic, None)?;
+      .create_subscription::<ParticipantEntitiesInfo>(
+        &ros_discovery_topic,
+        None,
+        self.type_hash_resolver.as_deref(),
+      )?;
     let ros_discovery_stream = ros_discovery_reader.async_stream();
     pin_mut!(ros_discovery_stream);
 
     let ros_clock_reader = self
       .ros_context
-      .create_subscription::<builtin_interfaces::Time>(&self.clock_topic, None)?;
+      .create_subscription::<builtin_interfaces::Time>(
+        &self.clock_topic,
+        None,
+        self.type_hash_resolver.as_deref(),
+      )?;
     let ros_clock_stream = ros_clock_reader.async_stream();
     pin_mut!(ros_clock_stream);
 
@@ -564,7 +573,8 @@ impl Node {
     let enable_rosout = options.enable_rosout;
     let rosout_reader = options.enable_rosout_reading;
 
-    let parameter_events_writer = ros_context.create_publisher(&paramtopic, None)?;
+    let parameter_events_writer =
+      ros_context.create_publisher(&paramtopic, None, options.type_hash_resolver.as_deref())?;
 
     // Returns `Err` if some declared parameter does not validate.
     let parameters = ParameterStore::new(
@@ -732,6 +742,7 @@ impl Node {
       parameter_events_writer: Arc::clone(&self.parameter_events_writer),
       parameters: Arc::clone(&self.parameters),
       fully_qualified_node_name: self.fully_qualified_name(),
+      type_hash_resolver: self.options.type_hash_resolver.clone(),
     })
   }
 
@@ -1120,7 +1131,11 @@ impl Node {
     topic: &Topic,
     qos: Option<QosProfile>,
   ) -> CreateResult<Subscription<D>> {
-    let sub = self.ros_context.create_subscription(topic, qos)?;
+    let sub = self.ros_context.create_subscription(
+      topic,
+      qos,
+      self.options.type_hash_resolver.as_deref(),
+    )?;
     self.add_reader(sub.guid().into());
     Ok(sub)
   }
@@ -1137,7 +1152,10 @@ impl Node {
     topic: &Topic,
     qos: Option<QosProfile>,
   ) -> CreateResult<Publisher<D>> {
-    let p = self.ros_context.create_publisher(topic, qos)?;
+    let p =
+      self
+        .ros_context
+        .create_publisher(topic, qos, self.options.type_hash_resolver.as_deref())?;
     self.add_writer(p.guid().into());
     Ok(p)
   }
@@ -1151,7 +1169,11 @@ impl Node {
     D: 'static,
     DA: rustdds::no_key::DeserializerAdapter<D> + 'static,
   {
-    let r = self.ros_context.create_simpledatareader(topic, qos)?;
+    let r = self.ros_context.create_simpledatareader(
+      topic,
+      qos,
+      self.options.type_hash_resolver.as_deref(),
+    )?;
     self.add_reader(r.guid().into());
     Ok(r)
   }
@@ -1164,7 +1186,10 @@ impl Node {
   where
     SA: rustdds::no_key::SerializerAdapter<D>,
   {
-    let w = self.ros_context.create_datawriter(topic, qos)?;
+    let w =
+      self
+        .ros_context
+        .create_datawriter(topic, qos, self.options.type_hash_resolver.as_deref())?;
     self.add_writer(w.guid().into());
     Ok(w)
   }
