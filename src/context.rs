@@ -23,6 +23,7 @@ use crate::{
   graph::DiscoveredTopic,
   names::*,
   node::{Node, NodeCreateError},
+  node_options::TypeHashFunc,
   pubsub::{Publisher, Subscription},
   qos::QosProfile,
 };
@@ -242,11 +243,12 @@ impl Context {
     &self,
     topic: &Topic,
     qos: Option<QosProfile>,
+    type_hash: Option<&TypeHashFunc>,
   ) -> CreateResult<Publisher<M>>
   where
     M: Serialize,
   {
-    let dds_qos = qos.map(QosPolicies::from);
+    let dds_qos = endpoint_qos(topic, qos, type_hash);
     let datawriter = self
       .get_ros_default_publisher()
       .create_datawriter_no_key(topic, dds_qos)?;
@@ -258,11 +260,12 @@ impl Context {
     &self,
     topic: &Topic,
     qos: Option<QosProfile>,
+    type_hash: Option<&TypeHashFunc>,
   ) -> CreateResult<Subscription<M>>
   where
     M: 'static,
   {
-    let dds_qos = qos.map(QosPolicies::from);
+    let dds_qos = endpoint_qos(topic, qos, type_hash);
     let datareader = self
       .get_ros_default_subscriber()
       .create_simple_datareader_no_key(topic, dds_qos)?;
@@ -273,11 +276,12 @@ impl Context {
     &self,
     topic: &Topic,
     qos: Option<QosProfile>,
+    type_hash: Option<&TypeHashFunc>,
   ) -> CreateResult<no_key::DataWriter<M, SA>>
   where
     SA: SerializerAdapter<M>,
   {
-    let dds_qos = qos.map(QosPolicies::from);
+    let dds_qos = endpoint_qos(topic, qos, type_hash);
     Ok(
       self
         .get_ros_default_publisher()
@@ -289,12 +293,13 @@ impl Context {
     &self,
     topic: &Topic,
     qos: Option<QosProfile>,
+    type_hash: Option<&TypeHashFunc>,
   ) -> CreateResult<no_key::SimpleDataReader<M, DA>>
   where
     M: 'static,
     DA: 'static + DeserializerAdapter<M>,
   {
-    let dds_qos = qos.map(QosPolicies::from);
+    let dds_qos = endpoint_qos(topic, qos, type_hash);
     Ok(
       self
         .get_ros_default_subscriber()
@@ -320,6 +325,24 @@ impl Context {
 
   pub(crate) fn ros_discovery_topic(&self) -> Topic {
     self.inner.lock().unwrap().ros_discovery_topic.clone()
+  }
+}
+
+/// The DDS QoS of an endpoint on `topic`: `qos`, plus the REP-2016 type hash
+/// that `type_hash` gives for the topic's type, as USER_DATA.
+fn endpoint_qos(
+  topic: &Topic,
+  qos: Option<QosProfile>,
+  type_hash: Option<&TypeHashFunc>,
+) -> Option<QosPolicies> {
+  let qos = qos.map(QosPolicies::from);
+  match type_hash.and_then(|resolve| resolve(topic.get_type().name())) {
+    None => qos,
+    Some(hash) => Some(qos.unwrap_or_else(QosPolicies::qos_none).with_user_data(
+      policy::UserData {
+        value: format!("typehash={hash};").into_bytes(),
+      },
+    )),
   }
 }
 
